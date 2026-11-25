@@ -5,13 +5,15 @@
 //
 // 流程：claim_notifications(50) → 每条按 channel 发 → complete_notification；推送失效的 token → remove_device_tokens。
 // 一直领到没得领（或领到的不满一批），或快到时间预算（DISPATCH_TIME_BUDGET_MS，默认 100 秒）。一条出错不会影响其他条。
-// 时间预算每条开始之前都看：剩下不到 15 秒（一个请求最多等的时间）就不再开始发，领到但还没发的标 failed + 重试
-// （2 分钟后再发；不标的话会卡在「发送中」10 分钟）；每个请求最多等到预算用完为止。回传 JSON 统计。
+// 时间预算每条开始之前都看：剩下不到 15 秒（一个请求最多等的时间）就不再开始发，领到但还没发的用
+// release_notification 放回队列（不算失败，下一次叫马上再领；不放的话会卡在「发送中」10 分钟、还算失败一次）；
+// 放不回去（数据库出错）才退回旧的做法：标 failed + 重试（DISPATCH_TIME_BUDGET，2 分钟后再发）。
+// 每个请求最多等到预算用完为止。回传 JSON 统计。
 // complete_notification 暂时失败 → 隔 0.5 / 2（已经发出去的再加 5）秒再试：没记到「已发」的话 10 分钟后会重发一次。
 // 平台的总时间（免费 150 秒、付费 400 秒，WORKER_WALL_CLOCK_MS）是按 worker 算的，一个 worker 会接很多个请求
 // （每分钟的 cron、每个 trigger）：期限也不能超过「worker 开始 + 总时间 - 写结果的宽限」，不然晚进来的请求
 // 会在发到一半时被平台杀掉（Meta 已经收下、还没记「已发」的，10 分钟后会再发一次）。
-// worker 要被关掉（beforeunload）→ 不再领、不再开始发。
+// worker 要被关掉（beforeunload）→ 不再领、不再开始发，领到了还没开始发的马上放回队列（不等正在发的那几条）。
 
 import {
   type FcmServiceAccount,
@@ -74,9 +76,10 @@ export function dispatchDeadline(
   worker.stopping = true;
   const detail = (ev as CustomEvent<{ reason?: unknown } | undefined>).detail;
   log("warn", "dispatch_worker_shutdown", { reason: String(detail?.reason ?? "unknown") });
+  releaseWaiting();
 });
 
-/** 时间不够、没开始发的那条：标 failed + 重试（2 分钟后再领） */
+/** 时间不够、没开始发的那条放不回队列时（release_notification 出错）：标 failed + 重试（2 分钟后再领） */
 export const BUDGET_EXCEEDED = "DISPATCH_TIME_BUDGET";
 
 type Channel = "push" | "whatsapp";
@@ -100,7 +103,7 @@ export interface Summary {
   retry_scheduled: number;
   skipped: number;
   tokens_removed: number;
-  /** 时间不够、领到了但没发（标 failed + 重试） */
+  /** 时间不够 / worker 要被关掉、领到了但没发（放回队列；放不回去才标 failed + 重试） */
   deferred: number;
   errors: number;
   duration_ms: number;
@@ -267,6 +270,49 @@ async function complete(admin: SupabaseClient, id: string, o: Outcome, stopAt: n
   }
 }
 
+/** 正在处理的一批（claim_notifications 领到的） */
+interface Round {
+  admin: SupabaseClient;
+  stopAt: number;
+  s: Summary;
+  /** 领到了、还没开始发的（id → 那条）。开始发、放回去之前先从这里拿掉，所以每条只处理一次 */
+  waiting: Map<string, NotificationItem>;
+  /** worker 要被关掉时放回去的那几条（这一批做完之前要等它们） */
+  releases: Promise<void>[];
+}
+
+/** 这个 worker 里正在处理的每一批（beforeunload 时要处理） */
+const ROUNDS = new Set<Round>();
+
+/**
+ * 领到了、但不发的那条放回队列（release_notification：sending → queued，不算失败、attempts 不变，下一次马上再领）。
+ * 回 false = 已经不是「发送中」（被别人处理了），不用管。叫不到（数据库出错）→ 退回旧的做法：
+ * 标 failed + 重试（2 分钟后再领），不然会卡在「发送中」10 分钟、之后还算失败一次。
+ */
+async function release(round: Round, item: NotificationItem & { channel: Channel }): Promise<void> {
+  round.s.deferred++;
+  try {
+    await rpc<boolean>(round.admin, "release_notification", { p_id: item.id });
+    return;
+  } catch (e) {
+    log("warn", "release_notification_failed", { notification_id: item.id, error: errorMessage(e) });
+  }
+  if (!(await complete(round.admin, item.id, failed(item.channel, BUDGET_EXCEEDED, true), round.stopAt))) {
+    round.s.errors++;
+  }
+}
+
+/** worker 要被关掉：每一批领到了、还没开始发的马上放回队列（不等正在发的那几条发完）。没渠道的照样标 skipped（不用发） */
+export function releaseWaiting(): void {
+  for (const round of ROUNDS) {
+    for (const item of [...round.waiting.values()]) {
+      if (item.channel === null) continue;
+      round.waiting.delete(item.id);
+      round.releases.push(release(round, { ...item, channel: item.channel }));
+    }
+  }
+}
+
 export async function dispatch(): Promise<Summary> {
   const started = Date.now();
   const budgetMs = intEnv("DISPATCH_TIME_BUDGET_MS", 100_000, 1_000, 380_000);
@@ -290,7 +336,7 @@ export async function dispatch(): Promise<Summary> {
   const admin = adminClient();
   const services: Services = { fcm: fcmServiceAccount(), whatsapp: whatsappConfig(), deadline };
 
-  // 领之前就要留够一个请求的时间（领到了发不了也要算失败一次）
+  // 领之前就要留够一个请求的时间（领到了发不了还要放回去）
   while (timeLeft() >= DISPATCH_TIMING.itemMinMs) {
     let claimed: unknown;
     try {
@@ -308,28 +354,37 @@ export async function dispatch(): Promise<Summary> {
     s.claimed += raw.length;
 
     const dead = new Set<string>();
-    await mapLimit(raw, ITEM_CONCURRENCY, async (r) => {
+    const items: NotificationItem[] = [];
+    for (const r of raw) {
       const item = toItem(r);
-      if (!item) {
+      if (item) items.push(item);
+      else {
         s.errors++;
         log("error", "invalid_claimed_item", {});
-        return;
       }
-      let o: Outcome;
-      if (item.channel !== null && timeLeft() < DISPATCH_TIMING.itemMinMs) {
-        // 时间不够了：不开始发（发到一半被平台杀掉，就不知道发出去没有）
-        o = failed(item.channel, BUDGET_EXCEEDED, true);
-        s.deferred++;
-      } else {
-        o = await processItem(item, services);
+    }
+    const round: Round = { admin, stopAt, s, waiting: new Map(items.map((i) => [i.id, i])), releases: [] };
+    ROUNDS.add(round);
+    try {
+      await mapLimit(items, ITEM_CONCURRENCY, async (item) => {
+        if (!round.waiting.delete(item.id)) return; // worker 要被关掉时已经放回去了
+        if (item.channel !== null && timeLeft() < DISPATCH_TIMING.itemMinMs) {
+          // 时间不够了：不开始发（发到一半被平台杀掉，就不知道发出去没有），放回队列
+          await release(round, { ...item, channel: item.channel });
+          return;
+        }
+        const o = await processItem(item, services);
         o.deadTokens.forEach((t) => dead.add(t));
         if (o.status === "sent") s.sent++;
         else if (o.status === "skipped") s.skipped++;
         else if (o.retry) s.retry_scheduled++;
         else s.failed++;
-      }
-      if (!(await complete(admin, item.id, o, stopAt))) s.errors++;
-    });
+        if (!(await complete(admin, item.id, o, stopAt))) s.errors++;
+      });
+      await Promise.all(round.releases);
+    } finally {
+      ROUNDS.delete(round);
+    }
 
     if (dead.size > 0) {
       try {
@@ -342,6 +397,7 @@ export async function dispatch(): Promise<Summary> {
     }
     // 领到的不满一批 = 能发的都发了。同一个 WhatsApp 号码排着的下一条留给下一次叫（trigger / 每分钟），
     // 不要在这里马上再领，免得同一个人几秒内连收几条（Meta 大约每 6 秒 1 条）。
+    // 有放回去的（时间不够）也停：那几条留给下一次叫，不要在这次马上又领回来。
     if (raw.length < CLAIM_LIMIT || s.deferred > 0) break;
   }
   s.duration_ms = Date.now() - started;

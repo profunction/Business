@@ -7,12 +7,15 @@ import fn, {
   isolate,
   jobDeadline,
   JobError,
+  MAX_BUDGET_MS,
   PDF_PAGES_PER_CALL,
+  refusalResponse,
   shutdownCode,
   storagePath,
+  timeBudgetMs,
   TIMING,
 } from "../parse-price-list/index.ts";
-import { QUOTA } from "../parse-price-list/quota.ts";
+import { UUID_RE } from "../_shared/http.ts";
 import { pageRanges, pdfPageCount, splitRange } from "../_shared/pdf.ts";
 import { DEFAULT_CHUNK, SpreadsheetError } from "../_shared/spreadsheet.ts";
 import { DbError } from "../_shared/supabase.ts";
@@ -27,6 +30,7 @@ import {
   hang,
   isAnthropic,
   isService,
+  pgError,
   PUBLISHABLE,
   rpcName,
   SB_URL,
@@ -40,6 +44,9 @@ const W = "aaaaaaaa-0000-4000-8000-000000000001";
 const OTHER_W = "bbbbbbbb-0000-4000-8000-000000000002";
 const IMP = "cccccccc-0000-4000-8000-000000000003";
 const USER_JWT = "user.jwt.token";
+/** 登录的人（auth.getUser 回的 id） */
+const USER_ID = "dddddddd-0000-4000-8000-000000000004";
+const MIN = 60_000;
 const URL_ = `${SB_URL}/functions/v1/parse-price-list`;
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, ...new Array(60).fill(1)]);
 
@@ -53,8 +60,19 @@ interface ImportRow {
   ai_raw: Record<string, unknown> | null;
 }
 
+/** price_list_runs 的一行（只有 reserve_price_list_run 写） */
+interface Run {
+  wholesaler_id: string;
+  import_id: string | null;
+  run_id: string;
+  user_id: string;
+  /** epoch 毫秒 */
+  created_at: number;
+}
+
 interface State {
   imp: ImportRow;
+  /** RLS：用户身份读得到这份导入 */
   visible: boolean;
   files: Record<string, Uint8Array>;
   rows: Record<string, unknown>[];
@@ -66,17 +84,88 @@ interface State {
   inserted: number;
   /** suggest_import_matches 回 500 */
   suggestError?: boolean;
-  /** wholesalers.status（服务器身份读） */
+  /** wholesalers.status（reserve_price_list_run 看） */
   wholesalerStatus: string;
-  /** Storage 里 _runs/ 的用量记录：路径 → 内容 */
-  runs: Map<string, string>;
-  /** Storage 的 list / upload 回 500 */
-  storageDown?: boolean;
+  /** wholesaler_members（W 的 owner / staff 的 user_id） */
+  members: string[];
+  /** profiles.role = admin 的 user_id */
+  admins: string[];
+  /** price_list_runs */
+  runs: Run[];
+  /** reserve_price_list_run 收到的参数 */
+  reserveCalls: Record<string, unknown>[];
+  /** reserve_price_list_run 叫不到：500、断线、函数还没建（PostgREST 404） */
+  reserveDown?: "http" | "network" | "missing";
+  /** reserve_price_list_run 回这个（迁移跟代码对不上） */
+  reserveResult?: unknown;
+  /** RLS 读到之后、reserve 之前被删掉了 */
+  importGone?: boolean;
+  /** price_list_imports 的 PATCH（服务器身份）的条件 */
+  patches: URLSearchParams[];
   /** 这时候 PostgREST 全部回 503（数据库暂时连不上） */
   restDown?: (c: Call) => boolean;
 }
 
-/** 假的 Supabase（Auth、PostgREST、Storage）+ Anthropic */
+/** 照 _price_list_run_limits（20261127000200_seller_hardening.sql）：[段, 长度, active 上限, pending 上限] */
+const LIMITS = [["burst", 10 * MIN, 3, 2], ["hour", 60 * MIN, 10, 4], ["day", 24 * 60 * MIN, 30, 8]] as const;
+
+/** jsonb 里的 timestamptz 长这样：2026-11-25T21:06:06.326696+00:00 */
+const pgTime = (ms: number) => new Date(ms).toISOString().replace(/\.(\d{3})Z$/, ".$1000+00:00");
+
+/**
+ * 假的 reserve_price_list_run：检查的顺序、回传的样子都照 SQL（20261127000200_seller_hardening.sql）。
+ * 只有一家批发商（W）、一份导入（s.imp）。不跑的结果什么都不改。
+ */
+function reserve(s: State, p: Record<string, unknown>): Response {
+  const uuidOrNull = (v: unknown) => v == null || (typeof v === "string" && UUID_RE.test(v));
+  if (![p.p_import_id, p.p_user_id, p.p_run_id].every(uuidOrNull)) {
+    return pgError("invalid input syntax for type uuid", "22P02");
+  }
+  if (p.p_run_id == null) return pgError("INVALID_RUN_ID");
+  if (s.runs.some((r) => r.run_id === p.p_run_id)) return pgError("RUN_ID_USED");
+  const now = Date.now();
+  const imp = !s.importGone && p.p_import_id === s.imp.id && s.imp.wholesaler_id === W ? s.imp : null;
+  if (!imp) return Response.json({ result: "not_found" });
+  const user = p.p_user_id as string | null;
+  if (!user || !(s.members.includes(user) || s.admins.includes(user))) return Response.json({ result: "not_member" });
+  if (s.wholesalerStatus !== "active" && s.wholesalerStatus !== "pending") {
+    return Response.json({ result: "suspended" });
+  }
+  if (imp.status !== "processing") return Response.json({ result: "not_processing", status: imp.status });
+  // 在跑而且 claimed_at 10 分钟内；读不懂的时间（NaN）当成死掉了
+  if (imp.ai_raw?.state === "running" && Date.parse(String(imp.ai_raw.claimed_at)) > now - 10 * MIN) {
+    return Response.json({ result: "already_running" });
+  }
+  let window: string | null = null;
+  let retry = 0;
+  for (const [name, len, active, pending] of LIMITS) {
+    const max = s.wholesalerStatus === "active" ? active : pending;
+    const times = s.runs.filter((r) => r.wholesaler_id === W && r.created_at > now - len).map((r) => r.created_at)
+      .sort((a, b) => a - b);
+    if (times.length >= max) {
+      // 第 (已跑 - 上限 + 1) 旧的那一次离开这段时间就有位置；几段都满 → 要等最久的那段
+      const wait = Math.max(1, Math.ceil((times[times.length - max] + len - now) / 1000));
+      if (window === null || wait > retry) [window, retry] = [name, wait];
+    }
+  }
+  if (window) return Response.json({ result: "quota", window, retry_after_sec: retry });
+  const claimedAt = pgTime(now);
+  imp.ai_raw = { version: 1, state: "running", run_id: p.p_run_id, claimed_at: claimedAt, claimed_by: user };
+  imp.error_message = null;
+  s.runs.push({ wholesaler_id: W, import_id: imp.id, run_id: p.p_run_id as string, user_id: user, created_at: now });
+  return Response.json({
+    result: "ok",
+    run_id: p.p_run_id,
+    claimed_at: claimedAt,
+    wholesaler_id: W,
+    wholesaler_status: s.wholesalerStatus,
+    import_id: imp.id,
+    file_path: imp.file_path,
+    file_type: imp.file_type,
+  });
+}
+
+/** 假的 Supabase（Auth、PostgREST、Storage 的价目表档案）+ Anthropic。没对到的请求（例如以前 Storage 的用量记录）都算 unexpected */
 function backend(s: State) {
   return (c: Call): Response | Promise<Response> | undefined => {
     const p = c.url.pathname;
@@ -88,40 +177,27 @@ function backend(s: State) {
     if (p.startsWith("/rest/v1/") && s.restDown?.(c)) {
       return Response.json({ message: "upstream unavailable", code: "" }, { status: 503 });
     }
-    if (p === "/rest/v1/wholesalers" && c.method === "GET") {
-      assert(isService(c)); // 批发商的状态用服务器身份读（批发商自己改不了）
-      return Response.json(c.url.searchParams.get("id") === `eq.${W}` ? [{ status: s.wholesalerStatus }] : []);
-    }
-    if (p === "/storage/v1/object/list/price-lists") {
-      assert(isService(c));
-      if (s.storageDown) {
-        return Response.json({ statusCode: "500", error: "x", message: "storage down" }, { status: 500 });
+    if (rpcName(c) === "reserve_price_list_run") {
+      // 只给服务器（revoke 了 authenticated）
+      if (!isService(c)) return pgError("permission denied for function reserve_price_list_run", "42501", 401);
+      const params = c.json();
+      s.reserveCalls.push(params);
+      assertEquals(Object.keys(params).sort(), ["p_import_id", "p_run_id", "p_user_id"]);
+      if (s.reserveDown === "network") return Promise.reject(new TypeError("connection reset"));
+      if (s.reserveDown === "http") return pgError("canceling statement due to statement timeout", "57014", 500);
+      if (s.reserveDown === "missing") {
+        return Response.json({ code: "PGRST202", message: "Could not find the function", details: null, hint: null }, {
+          status: 404,
+        });
       }
-      const prefix = `${c.json().prefix}/`;
-      const names = [...s.runs.keys()].filter((k) => k.startsWith(prefix)).map((k) => k.slice(prefix.length));
-      names.sort().reverse();
-      return Response.json(names.map((name) => ({ name, id: name, created_at: new Date().toISOString() })));
-    }
-    if (p === "/storage/v1/object/price-lists" && c.method === "DELETE") {
-      assert(isService(c));
-      for (const k of c.json().prefixes as string[]) s.runs.delete(k);
-      return Response.json([]);
-    }
-    if (p.startsWith("/storage/v1/object/price-lists/_runs/") && c.method === "POST") {
-      assert(isService(c));
-      if (s.storageDown) {
-        return Response.json({ statusCode: "500", error: "x", message: "storage down" }, { status: 500 });
-      }
-      const key = decodeURIComponent(p.slice("/storage/v1/object/price-lists/".length));
-      assertEquals(c.headers.get("x-upsert"), "false");
-      s.runs.set(key, c.text);
-      return Response.json({ Id: key, Key: `price-lists/${key}` });
+      if ("reserveResult" in s) return Response.json(s.reserveResult ?? null);
+      return reserve(s, params);
     }
     if (p === "/auth/v1/user") {
       if (c.headers.get("authorization") !== `Bearer ${USER_JWT}`) {
         return Response.json({ code: 401, error_code: "bad_jwt", msg: "invalid JWT" }, { status: 401 });
       }
-      return Response.json({ id: "user-1", aud: "authenticated", role: "authenticated", email: "w@x.my" });
+      return Response.json({ id: USER_ID, aud: "authenticated", role: "authenticated", email: "w@x.my" });
     }
     if (p === "/rest/v1/price_list_imports" && c.method === "GET") {
       // 用户身份：publishable key + 用户 JWT；RLS 只看得到自己的
@@ -133,16 +209,14 @@ function backend(s: State) {
     if (p === "/rest/v1/price_list_imports" && c.method === "PATCH") {
       assert(isService(c));
       const q = c.url.searchParams;
+      s.patches.push(q);
+      // 占位只在 reserve_price_list_run 里；之后的写回都要还是 processing、而且是这一次的 run_id
+      assert(!q.has("or"), "claim PATCH");
+      assertEquals(q.get("status"), "eq.processing");
+      assert(q.has("ai_raw->>run_id"), "write without run_id");
       if (q.get("id") !== `eq.${s.imp.id}`) return Response.json([]);
-      if (q.get("status") && q.get("status") !== `eq.${s.imp.status}`) return Response.json([]);
-      if (q.get("or")) {
-        // 占位：ai_raw 是空的，或 claimed_at 太旧
-        const m = /ai_raw->>claimed_at\.lt\."([^"]+)"/.exec(q.get("or")!);
-        const claimedAt = s.imp.ai_raw?.claimed_at as string | undefined;
-        if (s.imp.ai_raw && !(claimedAt && m && claimedAt < m[1])) return Response.json([]);
-      }
-      const runFilter = q.get("ai_raw->>run_id");
-      if (runFilter && runFilter !== `eq.${s.imp.ai_raw?.run_id}`) return Response.json([]);
+      if (s.imp.status !== "processing") return Response.json([]);
+      if (q.get("ai_raw->>run_id") !== `eq.${s.imp.ai_raw?.run_id}`) return Response.json([]);
       Object.assign(s.imp, c.json());
       return Response.json([{ id: s.imp.id }]);
     }
@@ -196,7 +270,11 @@ function setup(over: Partial<State> = {}, env: Record<string, string | undefined
     deletes: 0,
     inserted: 0,
     wholesalerStatus: "active",
-    runs: new Map(),
+    members: [USER_ID],
+    admins: [],
+    runs: [],
+    reserveCalls: [],
+    patches: [],
     claude: () =>
       claudeStream({
         blocks: [{ type: "thinking" }, {
@@ -238,12 +316,22 @@ const call = (body: unknown = { import_id: IMP }, auth: string | null = `Bearer 
     }),
   );
 
-Deno.test("parse-price-list：身份、参数、找不到、状态不对、已经在跑", async () => {
+/** price_list_runs 的一笔：minutesAgo 分钟前跑的 */
+const pastRun = (minutesAgo: number): Run => ({
+  wholesaler_id: W,
+  import_id: null,
+  run_id: crypto.randomUUID(),
+  user_id: USER_ID,
+  created_at: Date.now() - minutesAgo * MIN,
+});
+
+Deno.test("parse-price-list：身份、参数、设定不全、RLS 读不到 → 404（都不叫 reserve_price_list_run）", async () => {
   const t = setup();
   try {
     const opt = await fn.fetch(new Request(URL_, { method: "OPTIONS" }));
     assertEquals(opt.status, 204);
     assertEquals(opt.headers.get("access-control-allow-origin"), "*");
+    assertEquals((await fn.fetch(new Request(URL_))).status, 405);
     assertEquals((await call(undefined, null)).status, 401);
     assertEquals((await call(undefined, "Bearer someone.else")).status, 401);
     const bad = await call({ import_id: "../../etc" });
@@ -251,18 +339,128 @@ Deno.test("parse-price-list：身份、参数、找不到、状态不对、已�
     t.s.visible = false; // RLS：别家的 import 看不到
     const nf = await call();
     assertEquals([nf.status, (await nf.json()).error], [404, "IMPORT_NOT_FOUND"]);
-    t.s.visible = true;
-    t.s.imp.status = "review";
-    const conflict = await call();
-    assertEquals([conflict.status, await conflict.json()], [409, { error: "IMPORT_NOT_PROCESSING", status: "review" }]);
-    t.s.imp.status = "processing";
-    t.s.imp.ai_raw = { state: "running", run_id: "other", claimed_at: new Date().toISOString() };
-    const running = await call();
-    assertEquals([running.status, (await running.json()).error], [409, "IMPORT_ALREADY_RUNNING"]);
-    assertEquals(t.s.claudeCalls.length, 0);
+    assertEquals([t.s.reserveCalls.length, t.s.runs.length, t.s.claudeCalls.length], [0, 0, 0]);
   } finally {
     t.restore();
   }
+  // 设定不全：什么都还没碰就回 500（不会占了位才发现）
+  const c = setup({}, { SUPABASE_PUBLISHABLE_KEYS: undefined });
+  try {
+    const res = await call();
+    assertEquals([res.status, (await res.json()).error], [500, "CONFIG_MISSING"]);
+    assertEquals(c.net.calls.length, 0);
+  } finally {
+    c.restore();
+  }
+});
+
+Deno.test("reserve_price_list_run 的每一种「不跑」→ HTTP；顺序照 SQL；都没占位、没算次数、不叫 Claude", async () => {
+  const running = () => ({ version: 1, state: "running", run_id: crypto.randomUUID(), claimed_at: pgTime(Date.now()) });
+  const cases: [string, (s: State) => void, number, Record<string, unknown>][] = [
+    ["RLS 读到之后被删掉了", (s) => (s.importGone = true), 404, { error: "IMPORT_NOT_FOUND" }],
+    ["不是这家的成员（也不是客服）", (s) => (s.members = []), 404, { error: "IMPORT_NOT_FOUND" }],
+    ["停权", (s) => (s.wholesalerStatus = "suspended"), 403, { error: "WHOLESALER_SUSPENDED" }],
+    ["不是 processing", (s) => (s.imp.status = "review"), 409, { error: "IMPORT_NOT_PROCESSING", status: "review" }],
+    ["有人在跑（10 分钟内）", (s) => (s.imp.ai_raw = running()), 409, { error: "IMPORT_ALREADY_RUNNING" }],
+    // 几样都不对：回第一个（成员 → 停权 → 状态 → 在跑 → 用量）
+    [
+      "不是成员 + 停权",
+      (s) => {
+        s.members = [];
+        s.wholesalerStatus = "suspended";
+      },
+      404,
+      { error: "IMPORT_NOT_FOUND" },
+    ],
+    [
+      "停权 + 已经上架",
+      (s) => {
+        s.wholesalerStatus = "suspended";
+        s.imp.status = "applied";
+      },
+      403,
+      { error: "WHOLESALER_SUSPENDED" },
+    ],
+    [
+      "failed + 还写着在跑",
+      (s) => {
+        s.imp.status = "failed";
+        s.imp.ai_raw = running();
+      },
+      409,
+      { error: "IMPORT_NOT_PROCESSING", status: "failed" },
+    ],
+    [
+      "在跑 + 用量满了（不算次数）",
+      (s) => {
+        s.imp.ai_raw = running();
+        s.runs = [1, 2, 3].map(pastRun);
+      },
+      409,
+      { error: "IMPORT_ALREADY_RUNNING" },
+    ],
+  ];
+  for (const [name, arrange, status, body] of cases) {
+    const t = setup();
+    arrange(t.s);
+    const before = structuredClone({ imp: t.s.imp, runs: t.s.runs });
+    try {
+      const res = await call();
+      assertEquals([res.status, await res.json()], [status, body], name);
+      assertEquals(res.headers.get("access-control-allow-origin"), "*", name);
+      assertEquals(t.s.reserveCalls.length, 1, name);
+      assertEquals({ imp: t.s.imp, runs: t.s.runs }, before, name); // 什么都没改
+      assertEquals([t.s.claudeCalls.length, t.s.patches.length], [0, 0], name);
+      assertEquals(t.net.unexpected, [], name);
+    } finally {
+      t.restore();
+    }
+  }
+  // 客服（不是成员）可以代操作：一样算这家批发商的次数
+  const a = setup({ members: [], admins: [USER_ID] });
+  try {
+    assertEquals((await call()).status, 202);
+    assertEquals([a.s.imp.status, a.s.runs.length, a.s.runs[0].wholesaler_id], ["review", 1, W]);
+  } finally {
+    a.restore();
+  }
+});
+
+Deno.test("叫不到 reserve_price_list_run（数据库出错、断线、函数还没建、回传认不得）→ 503 QUOTA_UNAVAILABLE，不跑", async () => {
+  const cases: [string, (s: State) => void][] = [
+    ["500", (s) => (s.reserveDown = "http")],
+    ["断线", (s) => (s.reserveDown = "network")],
+    ["迁移还没跑", (s) => (s.reserveDown = "missing")],
+    ["认不得的结果", (s) => (s.reserveResult = { result: "maybe" })],
+    ["null", (s) => (s.reserveResult = null)],
+  ];
+  for (const [name, arrange] of cases) {
+    const t = setup();
+    arrange(t.s);
+    try {
+      const res = await call();
+      assertEquals([res.status, await res.json()], [503, { error: "QUOTA_UNAVAILABLE" }], name);
+      assertEquals(res.headers.get("retry-after"), null, name);
+      assertEquals(
+        [t.s.imp.ai_raw, t.s.runs.length, t.s.claudeCalls.length, t.s.patches.length],
+        [null, 0, 0, 0],
+        name,
+      );
+      assertEquals(t.net.unexpected, [], name);
+    } finally {
+      t.restore();
+    }
+  }
+  // 回应的样子
+  const q = refusalResponse({ result: "quota", window: "day", retry_after_sec: 12.2 });
+  assertEquals([q.status, q.headers.get("retry-after"), await q.json()], [429, "13", {
+    error: "TOO_MANY_IMPORTS",
+    retry_after: 13,
+    window: "day",
+  }]);
+  const odd = refusalResponse({ result: "quota", retry_after_sec: "soon" });
+  assertEquals([odd.headers.get("retry-after"), (await odd.json()).retry_after], ["60", 60]);
+  assertEquals(refusalResponse({}).status, 503);
 });
 
 Deno.test("parse-price-list：照片 → 202，背景跑 Claude → 写行（看不清的 = skip）→ suggest_import_matches → review", async () => {
@@ -274,7 +472,14 @@ Deno.test("parse-price-list：照片 → 202，背景跑 Claude → 写行（看
     assertEquals(await res.json(), { import_id: IMP, status: "processing" });
     assertEquals(res.headers.get("access-control-allow-origin"), "*");
     assertEquals(rt.pending.length, 1);
-    assertEquals(t.s.imp.ai_raw?.state, "running"); // 先占位才回 202
+    // 先占位才回 202：只用 reserve_price_list_run（服务器身份），这次新的 run_id、验过的用户
+    assertEquals(t.s.reserveCalls.length, 1);
+    const rc = t.s.reserveCalls[0] as Record<string, string>;
+    assertEquals([rc.p_import_id, rc.p_user_id], [IMP, USER_ID]);
+    assert(UUID_RE.test(rc.p_run_id), rc.p_run_id);
+    assertEquals(t.s.runs.map((r) => [r.run_id, r.import_id, r.user_id]), [[rc.p_run_id, IMP, USER_ID]]);
+    const claim = { ...t.s.imp.ai_raw };
+    assertEquals([claim.state, claim.run_id, claim.claimed_by], ["running", rc.p_run_id, USER_ID]);
     await Promise.all(rt.pending);
 
     assertEquals(t.net.unexpected, []);
@@ -305,6 +510,11 @@ Deno.test("parse-price-list：照片 → 202，背景跑 Claude → 写行（看
     assertEquals(t.s.suggestCalls, [{ p_import_id: IMP }]);
     const ai = t.s.imp.ai_raw!;
     assertEquals(ai.state, "done");
+    // run_id、claimed_at 照数据库占位时写的（claimed_at 是 Postgres 的格式，不是这里的时间）
+    assertEquals([ai.run_id, ai.claimed_at], [claim.run_id, claim.claimed_at]);
+    assertStringIncludes(String(ai.claimed_at), "+00:00");
+    // 写回：还是 processing、同一个 run_id
+    assertEquals(t.s.patches.map((q) => q.get("ai_raw->>run_id")), [`eq.${rc.p_run_id}`]);
     assertEquals((ai.file as Record<string, unknown>).kind, "jpeg");
     assertEquals((ai.document as Record<string, unknown>).supplier_name, "JB Packaging Supply");
     assertEquals((ai.rows as Record<string, unknown>[])[1], {
@@ -602,20 +812,69 @@ Deno.test("parse-price-list 失败：行写进去之后 suggest_import_matches �
   assertEquals(t.s.deletes, 2); // 写之前清一次、失败后清一次
 });
 
-Deno.test("parse-price-list：之前跑到一半死掉（占位超过 10 分钟）→ 可以重跑", async () => {
+Deno.test("parse-price-list：之前跑到一半死掉（占位超过 10 分钟、claimed_at 读不懂）→ 可以重跑", async () => {
+  for (const claimed_at of [new Date(Date.now() - 11 * MIN).toISOString(), "not a time"]) {
+    const t = setup();
+    t.s.imp.ai_raw = { state: "running", run_id: "dead-run", claimed_at };
+    try {
+      assertEquals((await call()).status, 202, claimed_at);
+      assertEquals(t.s.imp.status, "review");
+      assertEquals(t.s.imp.ai_raw?.run_id, t.s.runs[0].run_id);
+      assertEquals(t.s.rows.length, 3);
+    } finally {
+      t.restore();
+    }
+  }
+});
+
+Deno.test("定时任务已经把卡住的标成 AI_TIMEOUT：很晚才失败的 worker 不会盖掉（写回都要 processing + 同一个 run_id）", async () => {
   const t = setup();
-  t.s.imp.ai_raw = {
-    state: "running",
-    run_id: "dead-run",
-    claimed_at: new Date(Date.now() - 11 * 60_000).toISOString(),
-  };
+  let answer: (r: Response) => void = () => {};
+  t.s.claude = () => new Promise<Response>((r) => (answer = r));
+  const rt = fakeEdgeRuntime();
   try {
     assertEquals((await call()).status, 202);
-    assertEquals(t.s.imp.status, "review");
-    assert(t.s.imp.ai_raw?.run_id !== "dead-run");
-    assertEquals(t.s.rows.length, 3);
+    await waitFor(() => t.s.claudeCalls.length === 1);
+    // fail_stuck_price_list_imports：failed + AI_TIMEOUT，ai_raw 留着 run_id、claimed_at
+    const runId = t.s.imp.ai_raw!.run_id;
+    Object.assign(t.s.imp, {
+      status: "failed",
+      error_message: "AI_TIMEOUT",
+      ai_raw: { ...t.s.imp.ai_raw, state: "failed", error: "AI_TIMEOUT", interrupted: "sweep" },
+    });
+    answer(claudeStream({ blocks: [], stopReason: "refusal", stopDetails: { type: "refusal", category: "cyber" } }));
+    await Promise.all(rt.pending);
+    assertEquals([t.s.imp.status, t.s.imp.error_message, t.s.imp.ai_raw?.interrupted], [
+      "failed",
+      "AI_TIMEOUT",
+      "sweep",
+    ]);
+    assertEquals(t.s.patches.length, 1); // worker 想标 AI_REFUSED，但条件对不上
+    assertEquals(t.s.patches[0].get("ai_raw->>run_id"), `eq.${runId}`);
   } finally {
+    rt.restore();
     t.restore();
+  }
+});
+
+Deno.test("PRICE_LIST_TIME_BUDGET_MS 最多 9 分钟（比「在跑超过 10 分钟可以重新占位」短）：超过就用默认的 380 秒", () => {
+  assert(MAX_BUDGET_MS < 10 * MIN);
+  for (
+    const [v, want] of [
+      [undefined, 380_000],
+      ["140000", 140_000],
+      ["540000", 540_000],
+      ["600000", 380_000],
+      ["900000", 380_000],
+      ["abc", 380_000],
+    ] as const
+  ) {
+    const restore = setEnv({ PRICE_LIST_TIME_BUDGET_MS: v });
+    try {
+      assertEquals(timeBudgetMs(), want, String(v));
+    } finally {
+      restore();
+    }
   }
 });
 
@@ -867,94 +1126,70 @@ Deno.test("数据库暂时连不上（写行失败，接着改状态也失败）
   });
 });
 
-Deno.test("用量：一直把 import 改回 processing / ai_raw = null 再叫 → 超过就 429；被挡的、409 的不算次数；还没审核的更少；停权 → 403", async () => {
+Deno.test("用量：批发商一直新建导入再叫 → 第 4 次 429（Retry-After）；挡下来的不算次数；10 分钟后又可以；一小时 / 一天；几段都满回要等最久的", async () => {
   const t = setup();
+  let n = 0;
+  // 批发商自己做得到的：上传、新建一份 processing 的导入（保护 trigger 只让它这样建，旧的改不回 processing），再叫
   const again = () => {
-    t.s.imp.status = "processing"; // 批发商自己改得到这两栏，所以次数不能看这里
-    t.s.imp.ai_raw = null;
-    return call();
+    const id = `cccccccc-0000-4000-8000-${String(++n).padStart(12, "0")}`;
+    t.s.imp = { ...t.s.imp, id, status: "processing", error_message: null, ai_raw: null };
+    return call({ import_id: id });
   };
-  try {
-    for (let i = 0; i < QUOTA.active.burst; i++) assertEquals((await again()).status, 202);
-    assertEquals(t.s.runs.size, QUOTA.active.burst);
-    assert([...t.s.runs.keys()].every((k) => k.startsWith(`_runs/${W}/`)), "ledger outside the wholesaler's folder");
-    const claudeBefore = t.s.claudeCalls.length;
+  const blocked = async (window: string, min: number, max: number) => {
+    const runs = t.s.runs.length;
+    const claude = t.s.claudeCalls.length;
     const res = await again();
     const body = await res.json();
-    assertEquals([res.status, body.error], [429, "TOO_MANY_IMPORTS"]);
-    assert(body.retry_after > 0 && body.retry_after <= 600, String(body.retry_after));
+    assertEquals([res.status, body.error, body.window], [429, "TOO_MANY_IMPORTS", window]);
+    assert(body.retry_after >= min && body.retry_after <= max, `${window}: ${body.retry_after}`);
     assertEquals(res.headers.get("retry-after"), String(body.retry_after));
-    assertEquals(t.s.claudeCalls.length, claudeBefore);
-    assertEquals(t.s.runs.size, QUOTA.active.burst); // 被挡的那一笔删掉了
+    // 被挡的：不占位、不算次数、不叫 Claude
+    assertEquals([t.s.imp.ai_raw, t.s.runs.length, t.s.claudeCalls.length], [null, runs, claude]);
+  };
+  try {
+    for (let i = 0; i < 3; i++) assertEquals((await again()).status, 202);
+    assertEquals(t.s.runs.length, 3);
+    assertEquals(new Set(t.s.runs.map((r) => r.run_id)).size, 3); // 每次新的 run_id
+    await blocked("burst", 590, 600); // 刚跑的那一次 10 分钟后离开
     // 10 分钟以前的不算「同时」
-    const age = (
-      ms: number,
-    ) => (t.s.runs = new Map(
-      [...t.s.runs].map(([k, v]) => [k.replace(/\/(\d{13})-/, (_, x) => `/${Number(x) - ms}-`), v]),
-    ));
-    age(11 * 60_000);
+    for (const r of t.s.runs) r.created_at -= 11 * MIN;
     assertEquals((await again()).status, 202);
     // 已经在跑 → 409，不算次数
     t.s.imp.status = "processing";
     t.s.imp.ai_raw = { state: "running", run_id: "x", claimed_at: new Date().toISOString() };
-    const size = t.s.runs.size;
-    assertEquals((await call()).status, 409);
-    assertEquals(t.s.runs.size, size);
-    // 一小时、一天的上限（10 分钟以前的）
-    const seed = (n: number, minutesAgo: (i: number) => number) => (t.s.runs = new Map(
-      Array.from({ length: n }, (_, i) => [`_runs/${W}/${Date.now() - minutesAgo(i) * 60_000}-r${i}.csv`, "x"]),
-    ));
-    for (
-      const [n, ago, min] of [[QUOTA.active.hour, (i: number) => 15 + i / 2, 2000], [
-        QUOTA.active.day,
-        (i: number) => 120 + 30 * i,
-        3600,
-      ]] as const
-    ) {
-      seed(n, ago);
-      const r = await again();
-      assertEquals(r.status, 429);
-      assert((await r.json()).retry_after > min);
-      assertEquals(t.s.runs.size, n);
-    }
-    // 超过两天的记录会顺手删掉
-    seed(5, (i) => 3 * 24 * 60 + i);
+    const size = t.s.runs.length;
+    assertEquals((await call({ import_id: t.s.imp.id })).status, 409);
+    assertEquals(t.s.runs.length, size);
+    // 一小时 10 次：最旧的 19.5 分钟前 → 40.5 分钟后
+    t.s.runs = Array.from({ length: 10 }, (_, i) => pastRun(15 + i / 2));
+    await blocked("hour", 2429, 2430);
+    // 一天 30 次：最旧的 16.5 小时前 → 7.5 小时后
+    t.s.runs = Array.from({ length: 30 }, (_, i) => pastRun(120 + 30 * i));
+    await blocked("day", 26_999, 27_000);
+    // 10 分钟、一小时都满：回要等最久的那段（7 分钟后 burst 有位置，但一小时的要 39 分钟）
+    t.s.runs = [1, 2, 3, ...Array.from({ length: 7 }, (_, i) => 15 + i)].map(pastRun);
+    await blocked("hour", 2339, 2340);
+    // 超过一天的不算
+    t.s.runs = Array.from({ length: 30 }, (_, i) => pastRun(24 * 60 + 1 + i));
     assertEquals((await again()).status, 202);
-    assertEquals(t.s.runs.size, 1);
   } finally {
     t.restore();
   }
-  // 还没审核（pending）的批发商
-  const p = setup();
-  p.s.wholesalerStatus = "pending";
+  // 还没审核（pending）的批发商：10 分钟 2 次、一小时 4 次
+  const p = setup({ wholesalerStatus: "pending" });
   try {
-    for (let i = 0; i < QUOTA.pending.burst; i++) {
-      p.s.imp.status = "processing";
-      p.s.imp.ai_raw = null;
+    for (let i = 0; i < 2; i++) {
+      p.s.imp = { ...p.s.imp, status: "processing", ai_raw: null };
       assertEquals((await call()).status, 202);
     }
-    p.s.imp.status = "processing";
-    p.s.imp.ai_raw = null;
-    assertEquals((await call()).status, 429);
+    p.s.imp = { ...p.s.imp, status: "processing", ai_raw: null };
+    const r = await call();
+    assertEquals([r.status, (await r.json()).window], [429, "burst"]);
+    p.s.runs = [15, 20, 25, 30].map(pastRun);
+    const h = await call();
+    assertEquals([h.status, (await h.json()).window], [429, "hour"]);
   } finally {
     p.restore();
-  }
-  // 停权 → 403，不记次数、不叫 Claude；Storage 坏掉 → 503，不占位
-  for (
-    const [arrange, status, error] of [
-      [(x: ReturnType<typeof setup>) => (x.s.wholesalerStatus = "suspended"), 403, "WHOLESALER_SUSPENDED"],
-      [(x: ReturnType<typeof setup>) => (x.s.storageDown = true), 503, "QUOTA_UNAVAILABLE"],
-    ] as const
-  ) {
-    const x = setup();
-    arrange(x);
-    try {
-      const r = await call();
-      assertEquals([r.status, (await r.json()).error], [status, error]);
-      assertEquals([x.s.runs.size, x.s.claudeCalls.length, x.s.imp.ai_raw], [0, 0, null]);
-    } finally {
-      x.restore();
-    }
   }
 });
 

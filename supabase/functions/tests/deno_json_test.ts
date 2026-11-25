@@ -104,6 +104,9 @@ Deno.test("部署的是照 frozen lock 打包好的单一档案：config.toml �
   const cfg = JSON.parse(await Deno.readTextFile(new URL("deno.json", root)));
   assert(String(cfg.tasks.bundle).includes("bundle.ts"));
   assert(String(cfg.tasks.deploy).startsWith("deno task bundle && "), "deploy must bundle first");
+  // 本机：_dist/ 不进 git，新 clone 的没有打包好的档案；serve 也要先打包
+  assert(String(cfg.tasks.serve).startsWith("deno task bundle && "), "serve must bundle first");
+  assert(String(cfg.tasks.serve).includes("functions serve"), "serve runs supabase functions serve");
   for (const fn of FUNCTIONS) assert(String(cfg.tasks.deploy).includes(fn), `deploy ${fn}`);
   assert((cfg.exclude ?? []).includes(`${DIST}/`), "bundles are not linted / formatted");
   assert((await Deno.readTextFile(new URL(".gitignore", root))).includes(`${DIST}/`), "bundles are not committed");

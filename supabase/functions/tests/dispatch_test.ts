@@ -20,6 +20,7 @@ import {
   SECRET,
   setEnv,
   SUPABASE_ENV,
+  waitFor,
 } from "./_helpers.ts";
 import { googleTokenEndpoint, testServiceAccount } from "./_google.ts";
 
@@ -61,7 +62,13 @@ interface Backend {
   completes: Record<string, Record<string, unknown>>;
   removed: string[][];
   templates: Record<string, unknown>[];
+  /** release_notification 收到的 id（照顺序，包括回 false 的） */
+  releases: string[];
+  /** 每条通知现在的状态：claim → sending；complete → sent / failed / skipped；release → queued */
+  status: Map<string, string>;
   claimError?: boolean;
+  /** release_notification 回 500 */
+  releaseError?: boolean;
 }
 
 /** PostgREST RPC + Google OAuth + FCM + Graph API */
@@ -73,12 +80,31 @@ function backend(b: Backend, publicKey: CryptoKey) {
       if (name === "claim_notifications") {
         assertEquals(c.json(), { p_limit: 50 });
         if (b.claimError) return pgError("boom", "XX000", 500);
-        return Response.json(b.batches.shift() ?? []);
+        const batch = b.batches.shift() ?? [];
+        for (const r of batch) {
+          const id = (r as { id?: unknown }).id;
+          if (typeof id === "string") b.status.set(id, "sending");
+        }
+        return Response.json(batch);
       }
       if (name === "complete_notification") {
         const p = c.json();
         assertEquals(Object.keys(p).sort(), ["p_channel", "p_error", "p_id", "p_retry", "p_status", "p_wa_message_id"]);
         b.completes[p.p_id] = p;
+        // 照 SQL：只改「发送中」的那条（true）；不是发送中就不改（false）
+        if (b.status.get(p.p_id) !== "sending") return Response.json(false);
+        b.status.set(p.p_id, p.p_status);
+        return Response.json(true);
+      }
+      if (name === "release_notification") {
+        const p = c.json();
+        assertEquals(Object.keys(p), ["p_id"]);
+        b.releases.push(p.p_id);
+        if (b.releaseError) return pgError("canceling statement due to statement timeout", "57014", 500);
+        // 照 SQL：没有这条 → NOTIFICATION_NOT_FOUND；只放「发送中」的（true），其他不改（false）
+        if (!b.status.has(p.p_id)) return pgError("NOTIFICATION_NOT_FOUND");
+        if (b.status.get(p.p_id) !== "sending") return Response.json(false);
+        b.status.set(p.p_id, "queued");
         return Response.json(true);
       }
       if (name === "remove_device_tokens") {
@@ -137,7 +163,7 @@ async function setup(extra: Record<string, string | undefined> = {}) {
     WHATSAPP_GRAPH_VERSION: undefined,
     ...extra,
   });
-  const b: Backend = { batches: [], completes: {}, removed: [], templates: [] };
+  const b: Backend = { batches: [], completes: {}, removed: [], templates: [], releases: [], status: new Map() };
   const net = fakeFetch(backend(b, publicKey));
   return {
     b,
@@ -347,7 +373,7 @@ Deno.test("dispatch：claim 失败 → 502；complete 失败一次会再试", as
   }
 });
 
-Deno.test("dispatch：一批里面也看时间预算——剩下不到 15 秒就不再开始发，没发的标 failed + 重试；不再领下一批", async () => {
+Deno.test("dispatch：一批里面也看时间预算——剩下不到 15 秒就不再开始发，没发的放回队列（release_notification）；不再领下一批", async () => {
   const t = await setup();
   t.b.batches.push(
     Array.from({ length: 50 }, (_, i) => claimed(400 + i, { channel: "whatsapp", whatsapp_phone: "60111" })),
@@ -376,12 +402,95 @@ Deno.test("dispatch：一批里面也看时间预算——剩下不到 15 秒就
     assertEquals(t.b.templates.length, s.sent);
     // 每个请求开始的时候都还剩至少 15 秒（100 秒预算）
     assert(Math.max(...starts) <= 100_000 - DISPATCH_TIMING.itemMinMs, starts.join(","));
-    const deferred = Object.values(t.b.completes).filter((c) => c.p_error === BUDGET_EXCEEDED);
-    assertEquals(deferred.length, s.deferred);
-    for (const c of deferred) assertEquals([c.p_status, c.p_retry, c.p_channel], ["failed", true, "whatsapp"]);
-    assertEquals(Object.keys(t.b.completes).length, 50); // 每条都有记（不会卡在「发送中」）
+    // 没发的放回队列（排队中，下一次马上再领；不算失败、不标 failed）
+    assertEquals(t.b.releases.length, s.deferred);
+    assertEquals(Object.values(t.b.completes).filter((c) => c.p_error === BUDGET_EXCEEDED), []);
+    assertEquals(Object.keys(t.b.completes).length, s.sent);
+    assertEquals(new Set([...t.b.releases, ...Object.keys(t.b.completes)]).size, 50); // 每条都处理了、只处理一次
+    for (const r of t.b.releases) assertEquals(t.b.status.get(r), "queued");
+    assertEquals([...t.b.status.values()].filter((x) => x === "sending"), []); // 没有卡在「发送中」的
+    assertEquals(s.errors, 0);
   } finally {
     Date.now = realNow;
+    globalThis.fetch = inner;
+    t.restore();
+  }
+});
+
+Deno.test("时间不够、放不回队列（release_notification 出错）→ 退回旧的做法：标 failed + 重试；回 false（已经不是发送中）不用管", async () => {
+  const batch = (from: number) =>
+    Array.from({ length: 50 }, (_, i) => claimed(from + i, { channel: "whatsapp", whatsapp_phone: "60111" }));
+  const t = await setup();
+  t.b.releaseError = true;
+  t.b.batches.push(batch(900));
+  const clock = fakeClock();
+  try {
+    const s = await (await fn.fetch(post())).json();
+    assert(s.deferred > 0 && s.sent > 0, JSON.stringify(s));
+    assertEquals(t.b.releases.length, s.deferred); // 先试过放回去
+    const fallback = Object.values(t.b.completes).filter((c) => c.p_error === BUDGET_EXCEEDED);
+    assertEquals(fallback.length, s.deferred);
+    for (const c of fallback) assertEquals([c.p_status, c.p_retry, c.p_channel], ["failed", true, "whatsapp"]);
+    assertEquals(Object.keys(t.b.completes).length, 50); // 不会卡在「发送中」
+    assertEquals([...t.b.status.values()].filter((x) => x === "sending"), []);
+    assertEquals(s.errors, 0);
+  } finally {
+    clock.restore();
+    t.restore();
+  }
+
+  // 回 false：那条已经不是「发送中」（例如被当成卡住、别的 dispatcher 领走发完了）→ 不再 complete，也不算错误
+  const t2 = await setup();
+  t2.b.batches.push(batch(950));
+  const clock2 = fakeClock();
+  const inner = globalThis.fetch;
+  globalThis.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes("graph.facebook.com")) t2.b.status.set(id(999), "sent");
+    return inner(input, init);
+  }) as typeof fetch;
+  try {
+    const s = await (await fn.fetch(post())).json();
+    assert(t2.b.releases.includes(id(999)), JSON.stringify(s));
+    assertEquals(t2.b.status.get(id(999)), "sent");
+    assert(!(id(999) in t2.b.completes));
+    assertEquals(Object.keys(t2.b.completes).length + t2.b.releases.length, 50);
+    assertEquals([s.deferred, s.errors], [t2.b.releases.length, 0]);
+  } finally {
+    globalThis.fetch = inner;
+    clock2.restore();
+    t2.restore();
+  }
+});
+
+Deno.test("worker 要被关掉（beforeunload）：领到了、还没开始发的马上放回队列，不等正在发的那几条；每条只处理一次", async () => {
+  const t = await setup();
+  t.b.batches.push(
+    Array.from({ length: 12 }, (_, i) => claimed(1000 + i, { channel: "whatsapp", whatsapp_phone: "60111" })),
+  );
+  t.b.batches.push([claimed(1100, { channel: "whatsapp", whatsapp_phone: "60111" })]);
+  // Meta 一直不回，直到 finish：同时最多 5 条在发
+  const inner = globalThis.fetch;
+  const inFlight: (() => void)[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes("graph.facebook.com")) await new Promise<void>((r) => inFlight.push(r));
+    return await inner(input, init);
+  }) as typeof fetch;
+  try {
+    const res = fn.fetch(post());
+    await waitFor(() => inFlight.length === 5);
+    globalThis.dispatchEvent(new CustomEvent("beforeunload", { detail: { reason: "WallClockTime" } }));
+    // 正在发的 5 条还没回来，没开始的 7 条已经放回去了
+    await waitFor(() => t.b.releases.length === 7);
+    assertEquals([...t.b.releases].sort(), Array.from({ length: 7 }, (_, i) => id(1005 + i)));
+    for (const r of t.b.releases) assertEquals(t.b.status.get(r), "queued");
+    assertEquals(Object.keys(t.b.completes), []);
+    inFlight.forEach((finish) => finish());
+    const s = await (await res).json();
+    assertEquals([s.rounds, s.sent, s.deferred, s.errors], [1, 5, 7, 0]);
+    assertEquals(t.b.releases.length, 7);
+    assertEquals(Object.keys(t.b.completes).sort(), Array.from({ length: 5 }, (_, i) => id(1000 + i)));
+    assertEquals(t.b.batches.length, 1); // 不再领
+  } finally {
     globalThis.fetch = inner;
     t.restore();
   }
@@ -575,7 +684,8 @@ Deno.test("dispatch 的期限也不能超过 worker 的总时间（一个 worker
           lastStart - DISPATCH_TIMING.itemMinMs - 10_000,
         clock.starts.join(","),
       );
-      assertEquals(Object.keys(t.b.completes).length, 50);
+      assertEquals(Object.keys(t.b.completes).length + t.b.releases.length, 50);
+      assertEquals(t.b.releases.length, s.deferred);
     } finally {
       clock.restore();
       t.restore();

@@ -76,6 +76,18 @@ Flutter 里用 `supabase.rpc('函数名', params: {...})` 调用。每个函数�
 
 客服也可以用上面买家和批发商的函数「代操作」，例如替任何一家店调用 `place_order`。
 
+### 服务器（Edge Functions、定时任务；第四步加固 `…20261127000200_seller_hardening.sql`）
+
+只给 `service_role`（函数第一行检查 `is_service_call()`），App 不能调用。详细规则见 [`04-seller-spec.md`](04-seller-spec.md) 2.5、2.6。
+
+| 函数 | 做什么 |
+|---|---|
+| `reserve_price_list_run(p_import_id, p_user_id, p_run_id)` | parse-price-list 开始跑之前：检查成员、停权、状态、有没有人在跑、用量（`price_list_runs`；审核通过 10 分钟 3 次 / 1 小时 10 次 / 1 天 30 次，待审核 2 / 4 / 8），都通过才占位。回传 `{"result": "ok" \| "not_found" \| "not_member" \| "suspended" \| "not_processing" \| "already_running" \| "quota", …}` |
+| `fail_stuck_price_list_imports()` | 每 5 分钟（定时任务 `fail-stuck-price-list-imports`）：卡在 processing 超过 15 分钟的导入标成失败（在跑的 `AI_TIMEOUT`，没开始的 `START_FAILED`），删掉跑到一半的行和两天前的用量记录 |
+| `release_notification(p_id)` | dispatcher 领了但来不及发的通知放回队列（不算失败、不用掉一次） |
+
+`price_list_imports` 有保护（trigger）：批发商只能新增 processing 的导入、只能把 processing 标成 failed（App 的代码 `START_FAILED` / `NETWORK` / `AUTH`），其他栏位（档案、`ai_raw`……）都不能改，否则 `COLUMN_PROTECTED`。`price_list_runs` 只有服务器碰得到。
+
 ## 4. 错误代码
 
 函数出错时返回英文代码，App 按代码显示三语提示（第三步会做）。
@@ -85,7 +97,9 @@ Flutter 里用 `supabase.rpc('函数名', params: {...})` 调用。每个函数�
 | `NOT_LOGGED_IN` | 没登录 |
 | `NOT_ALLOWED` | 没有权限（例如用别家店的身份） |
 | `ROLE_MISMATCH` | 买家账号不能注册批发商，反过来也一样 |
-| `COLUMN_PROTECTED` | 这个字段只有客服能改 |
+| `COLUMN_PROTECTED` | 这个字段只有客服能改（`detail` 是哪一栏）；价目表导入：批发商不能改档案、`ai_raw`，状态只能 processing → failed |
+| `INVALID_RUN_ID` / `RUN_ID_USED` | （服务器）`reserve_price_list_run` 没给 run_id / run_id 用过了 |
+| `NOTIFICATION_NOT_FOUND` | （服务器）`complete_notification`、`release_notification` 找不到这条通知 |
 | `INVALID_ZONE` | 送货区不存在 |
 | `TOO_MANY_WHOLESALERS` | 免费只能选 3 家 |
 | `UNLOCK_COOLDOWN` | 30 天内不能再换（`detail` 是可以再换的时间） |

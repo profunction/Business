@@ -299,7 +299,8 @@ deno_version = 1
 # （新的 sb_secret_ / sb_publishable_ 钥匙不是 JWT，平台检查对它们不可靠）。
 # 部署的是 `deno task bundle`（在 supabase/functions 里）照 deno.lock 打包好的单一档案 _dist/<函数>/index.js：
 # 间接用到的 npm 套件版本、SheetJS 的 hash 都在本机锁住，部署时不会重新解析（部署用 `deno task deploy`）。
-# 本机 `supabase functions serve` 之前也要先 `deno task bundle`。
+# 本机 `supabase start` / `supabase functions serve` 之前也要先 `deno task bundle`（_dist/ 不进 git，新 clone 的没有；
+# `deno task serve` = 打包 + supabase functions serve）。
 
 # pg_cron / trigger 用 pg_net 叫：代码检查 apikey 头 = secret key（固定时间比较）
 [functions.dispatch-notifications]

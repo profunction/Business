@@ -288,7 +288,7 @@ select throws_ok(
 select throws_ok(
   format('update public.price_list_imports set file_path = %L where id = %L',
          tests.uid('W1') || '/..\' || tests.uid('W2') || '/5b0f2c1e-8a7d-4c1e-9a3b-2f6d1e0c9a11.jpg', :'imp'),
-  '23514', null, '改成有 .. 和反斜线的路径也不行'
+  '42501', 'COLUMN_PROTECTED', '改成有 .. 和反斜线的路径也不行（20261127000200 起批发商根本不能改 file_path）'
 );
 select throws_ok(format('select public.apply_price_list_import(%L)', :'imp'), 'P0001', 'IMPORT_NOT_IN_REVIEW',
   'AI 还没处理完（processing）不能上架');

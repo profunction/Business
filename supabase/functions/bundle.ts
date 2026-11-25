@@ -4,6 +4,7 @@
 // （例如 @anthropic-ai/sdk 的 standardwebhooks、json-schema-to-ts 是 ^ 范围，部署时会拿到刚发布的版本）。
 //
 //   deno task bundle          打包 + 检查（只剩 node: 内建模组、载入得了、有 default.fetch）
+//   deno task serve           打包之后 supabase functions serve（本机；_dist/ 不进 git，新 clone 的要先打包）
 //   deno task deploy          打包之后部署三个函数
 
 export const FUNCTIONS = ["dispatch-notifications", "whatsapp-webhook", "parse-price-list"] as const;

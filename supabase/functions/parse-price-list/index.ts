@@ -1,11 +1,16 @@
 // parse-price-list：把上传的价目表（照片 / PDF / Excel / CSV）交给 Claude，写成待确认的行。
 // App：supabase.functions.invoke('parse-price-list', body: {import_id})（自动带用户 JWT）。
 // config.toml 里 verify_jwt = false；这里自己验：auth.getUser(jwt)，再用用户身份读 import（RLS 保证是自己的）。
+// 然后叫数据库函数 reserve_price_list_run（服务器身份）：成员、停权、状态、在跑、用量在一个交易里检查完再占位
+// （20261127000200_seller_hardening.sql；用量记在 price_list_runs，批发商碰不到）。
 //
 //   回应：202 {import_id, status}（之后 App 每 3 秒查 price_list_imports.status）
-//         401 UNAUTHORIZED、400 INVALID_IMPORT_ID、404 IMPORT_NOT_FOUND、403 WHOLESALER_SUSPENDED、
-//         409 IMPORT_NOT_PROCESSING（status 不是 processing）/ IMPORT_ALREADY_RUNNING（已经在跑）、
-//         429 TOO_MANY_IMPORTS（retry_after 秒、Retry-After 头）、503 QUOTA_UNAVAILABLE
+//         400 INVALID_IMPORT_ID、401 UNAUTHORIZED、
+//         404 IMPORT_NOT_FOUND（RLS 读不到 / not_found / not_member）、403 WHOLESALER_SUSPENDED（suspended）、
+//         409 IMPORT_NOT_PROCESSING（not_processing，带 status）/ IMPORT_ALREADY_RUNNING（already_running）、
+//         429 TOO_MANY_IMPORTS（quota；retry_after 秒、window、Retry-After 头）、
+//         503 QUOTA_UNAVAILABLE（叫不到 reserve_price_list_run：暂时的，import 没动）、
+//         500 CONFIG_MISSING / DB_ERROR / INTERNAL_ERROR、405 METHOD_NOT_ALLOWED
 //   背景（EdgeRuntime.waitUntil；Opus 读一份价目表可能超过 150 秒）：
 //     下载（服务器身份，最多 10 MB）→ 魔术字节判断格式 → 图片 / PDF 直接给 Claude；
 //     Excel / CSV → 带行号文字 → 分段给 Claude → 写 price_list_import_rows（row_no 从 1）→
@@ -16,7 +21,9 @@
 //         Excel 每段 50 行、PDF 每段 4 页，最多同时 8 段；开始叫 Claude 之前先估计跑得完跑不完
 //         （一段估 90 秒）：整个预算都不够 → TOO_MANY_ROWS，这个 worker 剩下的不够 → AI_TIMEOUT，不白花钱。
 //         失败时写数据库暂时失败 → 隔 0.5 / 2 / 5 秒再试（不然会一直卡在 processing）。
-//   用量：每家批发商 10 分钟 / 1 小时 / 1 天最多跑几次（quota.ts；还没审核的更少），超过 → 429；停权 → 403。
+//   用量：每家批发商 10 分钟 / 1 小时 / 1 天最多跑几次（数字在数据库的 _price_list_run_limits；还没审核的更少），
+//         超过 → 429；停权 → 403。之后写回 import 都要 status = processing、ai_raw->>run_id = 这一次的 run_id。
+//         卡住的（worker 被杀掉、beforeunload 也没跑到）由定时任务 fail_stuck_price_list_imports 收拾（15 分钟）。
 //
 // error_message 代码（App 按这个显示三语原因）：
 //   档案问题：UNSUPPORTED_FILE、FILE_TOO_LARGE、EMPTY_FILE、FILE_NOT_FOUND、INVALID_FILE_PATH、
@@ -41,7 +48,6 @@ import {
 import { adminClient, DbError, rpc, unwrap, userClient } from "../_shared/supabase.ts";
 import { type FileKind, IMAGE_MEDIA_TYPES, isImage, isSpreadsheet, sniffFileType } from "../_shared/filetype.ts";
 import { type PageRange, pageRanges, pdfPageCount, splitRange } from "../_shared/pdf.ts";
-import { QUOTA, releaseRun, reserveRun } from "./quota.ts";
 import {
   type Chunk,
   chunkLines,
@@ -71,8 +77,11 @@ export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 7_000_000;
 /** PDF 超过这么多页就分段读（每段这么多页） */
 export const PDF_PAGES_PER_CALL = 4;
-/** 「在跑」超过 10 分钟当成已经死掉（付费方案总时间 400 秒），可以重新跑 */
-const STALE_CLAIM_MS = 10 * 60_000;
+/**
+ * 时间预算（PRICE_LIST_TIME_BUDGET_MS）最多 9 分钟：reserve_price_list_run 把「在跑」超过 10 分钟的当成死掉
+ * （可以重新占位，两个 worker 会一起跑），定时任务 15 分钟标 AI_TIMEOUT。再大就用默认值。
+ */
+export const MAX_BUDGET_MS = 540_000;
 const INSERT_BATCH = 500;
 
 export const TIMING = {
@@ -110,7 +119,6 @@ interface ImportRecord {
   wholesaler_id: string;
   file_path: string;
   file_type: string;
-  status: string;
 }
 
 interface CallLog extends CallMeta {
@@ -689,7 +697,8 @@ async function runImport(job: Job): Promise<"review" | "failed"> {
                 calls: job.calls,
               },
             })
-            .eq("id", imp.id).eq("ai_raw->>run_id", job.runId),
+            // 还是 processing 才改：定时任务已经标了 AI_TIMEOUT、App 已经标了失败的，不要盖掉
+            .eq("id", imp.id).eq("status", "processing").eq("ai_raw->>run_id", job.runId),
         ));
     } catch (e2) {
       log("error", "price_list_mark_failed_failed", { import_id: imp.id, error: errorMessage(e2) });
@@ -711,6 +720,41 @@ async function runImport(job: Job): Promise<"review" | "failed"> {
 // HTTP
 // ---------------------------------------------------------------------------
 
+/** 时间预算：PRICE_LIST_TIME_BUDGET_MS（30 秒到 MAX_BUDGET_MS），没设或超过范围就用 380 秒（付费方案 400 秒） */
+export function timeBudgetMs(): number {
+  return intEnv("PRICE_LIST_TIME_BUDGET_MS", 380_000, 30_000, MAX_BUDGET_MS);
+}
+
+/** reserve_price_list_run 会回的「不跑」结果 */
+const REFUSALS = new Set(["not_found", "not_member", "suspended", "not_processing", "already_running", "quota"]);
+
+/**
+ * reserve_price_list_run 不是 ok 的结果 → HTTP 回应（数据库什么都没改：没占位、没算次数）。
+ * 认不得的结果（迁移跟代码对不上）当成叫不到 → 503。
+ */
+export function refusalResponse(r: Record<string, unknown>): Response {
+  switch (r.result) {
+    case "not_found":
+    case "not_member": // 不是这家的成员：跟读不到一样，不说有没有这份导入
+      return json({ error: "IMPORT_NOT_FOUND" }, 404);
+    case "suspended":
+      return json({ error: "WHOLESALER_SUSPENDED" }, 403);
+    case "not_processing":
+      return json({ error: "IMPORT_NOT_PROCESSING", status: typeof r.status === "string" ? r.status : null }, 409);
+    case "already_running":
+      return json({ error: "IMPORT_ALREADY_RUNNING" }, 409);
+    case "quota": {
+      const n = Number(r.retry_after_sec);
+      const sec = Number.isFinite(n) && n >= 1 ? Math.ceil(n) : 60;
+      const window = typeof r.window === "string" ? r.window : null;
+      return json({ error: "TOO_MANY_IMPORTS", retry_after: sec, window }, 429, { "Retry-After": String(sec) });
+    }
+  }
+  return json({ error: "QUOTA_UNAVAILABLE" }, 503);
+}
+
+const str = (v: unknown): string | null => (typeof v === "string" && v !== "" ? v : null);
+
 export async function handler(req: Request): Promise<Response> {
   if (req.method === "OPTIONS") return withCors(new Response(null, { status: 204 }));
   if (req.method !== "POST") return withCors(json({ error: "METHOD_NOT_ALLOWED" }, 405));
@@ -718,13 +762,18 @@ export async function handler(req: Request): Promise<Response> {
   const jwt = bearerToken(req);
   if (!jwt) return withCors(json({ error: "UNAUTHORIZED" }, 401));
 
+  // 设定全部先读好：占位之后才出错的话，import 会卡在「在跑」、还算掉一次用量
   let env: SupabaseEnv;
   let uc: SupabaseClient;
   let admin: SupabaseClient;
+  let budgetMs: number;
+  let apiKey: string | null;
   try {
     env = supabaseEnv();
     uc = userClient(jwt, env);
     admin = adminClient(env);
+    budgetMs = timeBudgetMs();
+    apiKey = anthropicApiKey(); // 没设：照样占位、背景标 failed AI_NOT_CONFIGURED（App 显示原因）
   } catch (e) {
     log("error", "parse_price_list_not_configured", { error: errorMessage(e) });
     return withCors(json({ error: "CONFIG_MISSING" }, 500));
@@ -740,90 +789,71 @@ export async function handler(req: Request): Promise<Response> {
     const importId = typeof body?.import_id === "string" ? body.import_id.trim() : "";
     if (!UUID_RE.test(importId)) return withCors(json({ error: "INVALID_IMPORT_ID" }, 400));
 
-    // 3. 用用户身份读（RLS：只看得到自己批发商的；客服全部）
+    // 3. 用用户身份读（RLS：只看得到自己批发商的；客服全部）。读不到 → 404，不叫 reserve
     const res = await uc.from("price_list_imports")
-      .select("id, wholesaler_id, file_path, file_type, status")
+      .select("id, wholesaler_id, file_path, file_type")
       .eq("id", importId)
       .maybeSingle();
     if (res.error) {
       if (res.status === 401 || res.status === 403) return withCors(json({ error: "UNAUTHORIZED" }, 401));
       throw new DbError("read import", res.error.message, res.error.code ?? "", res.status);
     }
-    const imp = res.data as ImportRecord | null;
-    if (!imp) return withCors(json({ error: "IMPORT_NOT_FOUND" }, 404));
-    if (imp.status !== "processing") return withCors(json({ error: "IMPORT_NOT_PROCESSING", status: imp.status }, 409));
+    const seen = res.data as ImportRecord | null;
+    if (!seen) return withCors(json({ error: "IMPORT_NOT_FOUND" }, 404));
 
-    // 4. 批发商的状态（批发商自己改不了）：停权的不能跑；还没审核的用量限制比较紧
-    const w = await admin.from("wholesalers").select("status").eq("id", imp.wholesaler_id).maybeSingle();
-    if (w.error) throw new DbError("read wholesaler", w.error.message, w.error.code ?? "", w.status);
-    const wstatus = (w.data as { status?: string } | null)?.status;
-    if (!wstatus) return withCors(json({ error: "IMPORT_NOT_FOUND" }, 404));
-    if (wstatus === "suspended") return withCors(json({ error: "WHOLESALER_SUSPENDED" }, 403));
-
-    // 5. 用量：每跑一次都记在批发商碰不到的地方（price_list_imports 批发商自己可以改，不能拿来算）
+    // 4. 占位 + 用量：一个数据库函数、一个交易（服务器身份；price_list_runs 批发商碰不到）。
+    //    状态不对、已经在跑、停权、用量满了都在这里挡（顺序照 SQL），挡下来的什么都没改
     const runId = crypto.randomUUID();
-    let quota;
+    let r: Record<string, unknown>;
     try {
-      quota = await reserveRun(
-        admin,
-        BUCKET,
-        imp.wholesaler_id,
-        wstatus === "active" ? QUOTA.active : QUOTA.pending,
-        { runId, userId: auth.user.id, importId: imp.id },
-      );
+      const out = await rpc<unknown>(admin, "reserve_price_list_run", {
+        p_import_id: seen.id,
+        p_user_id: auth.user.id,
+        p_run_id: runId,
+      });
+      r = out && typeof out === "object" ? out as Record<string, unknown> : {};
     } catch (e) {
-      log("error", "price_list_quota_failed", { import_id: imp.id, error: errorMessage(e) });
+      log("error", "price_list_reserve_failed", { import_id: seen.id, error: errorMessage(e) });
       return withCors(json({ error: "QUOTA_UNAVAILABLE" }, 503));
     }
-    if (!quota.ok) {
-      log("warn", "price_list_quota_exceeded", {
-        import_id: imp.id,
-        wholesaler_id: imp.wholesaler_id,
-        window: quota.window,
-      });
-      return withCors(
-        json({ error: "TOO_MANY_IMPORTS", retry_after: quota.retryAfterSec }, 429, {
-          "Retry-After": String(quota.retryAfterSec),
-        }),
+    if (r.result !== "ok") {
+      const known = REFUSALS.has(String(r.result));
+      log(
+        known ? (r.result === "quota" ? "warn" : "info") : "error",
+        known ? "price_list_not_started" : "price_list_reserve_unexpected",
+        {
+          import_id: seen.id,
+          wholesaler_id: seen.wholesaler_id,
+          result: r.result ?? null,
+          window: r.window,
+          retry_after_sec: r.retry_after_sec,
+        },
       );
+      return withCors(refusalResponse(r));
     }
 
-    // 6. 占位（同一份 import 只跑一次；「在跑」超过 10 分钟的当成死掉，可以重跑）
-    const claimedAt = new Date().toISOString();
-    const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
-    const claimed = unwrap(
-      "claim import",
-      await admin.from("price_list_imports")
-        .update({
-          ai_raw: { version: 1, state: "running", run_id: runId, claimed_at: claimedAt, claimed_by: auth.user.id },
-        })
-        .eq("id", imp.id)
-        .eq("status", "processing")
-        .or(`ai_raw.is.null,ai_raw->>claimed_at.lt."${staleBefore}"`)
-        .select("id"),
-    ) as unknown[] | null;
-    if (!claimed || claimed.length === 0) {
-      await releaseRun(admin, BUCKET, quota.path); // 没有真的跑：不算次数
-      return withCors(json({ error: "IMPORT_ALREADY_RUNNING" }, 409));
-    }
-
-    // 7. 背景处理，先回 202
-    const budgetMs = intEnv("PRICE_LIST_TIME_BUDGET_MS", 380_000, 30_000, 900_000);
+    // 5. 背景处理，先回 202。档案路径、批发商用 reserve 锁住时读到的（RLS 读的当备用）；
+    //    run_id、claimed_at 照数据库写进 ai_raw 的，之后写回都用 run_id 过滤
     const job: Job = {
       admin,
-      imp,
-      runId,
-      claimedAt,
+      imp: {
+        id: seen.id,
+        wholesaler_id: str(r.wholesaler_id) ?? seen.wholesaler_id,
+        file_path: str(r.file_path) ?? seen.file_path,
+        file_type: str(r.file_type) ?? seen.file_type,
+      },
+      runId: str(r.run_id) ?? runId,
+      claimedAt: str(r.claimed_at) ?? new Date().toISOString(),
       deadline: jobDeadline(Date.now(), budgetMs),
       budgetMs,
-      apiKey: anthropicApiKey(),
+      apiKey,
       abort: new AbortController(),
       calls: [],
       file: {},
     };
     const work = processImport(job);
     if (!runInBackground(work)) await work;
-    return withCors(json({ import_id: imp.id, status: "processing" }, 202));
+    return withCors(json({ import_id: seen.id, status: "processing" }, 202));
   } catch (e) {
     log("error", "parse_price_list_error", { error: errorMessage(e) });
     return withCors(json({ error: e instanceof DbError ? "DB_ERROR" : "INTERNAL_ERROR" }, 500));
