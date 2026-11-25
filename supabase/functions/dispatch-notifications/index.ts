@@ -4,10 +4,14 @@
 // 身份：只接受 apikey 头等于 secret key（固定时间比较）。config.toml 里 verify_jwt = false。
 //
 // 流程：claim_notifications(50) → 每条按 channel 发 → complete_notification；推送失效的 token → remove_device_tokens。
+// 每次 dispatch 带一个自己的 claim id（p_claim_id，每次新的 uuid）：claim 记在通知上，release / complete 都带同一个，
+// 数据库只改「还是这次领的」那条（别的 dispatcher 已经重新领走的不会被这次改到）。
 // 一直领到没得领（或领到的不满一批），或快到时间预算（DISPATCH_TIME_BUDGET_MS，默认 100 秒）。一条出错不会影响其他条。
 // 时间预算每条开始之前都看：剩下不到 15 秒（一个请求最多等的时间）就不再开始发，领到但还没发的用
 // release_notification 放回队列（不算失败，下一次叫马上再领；不放的话会卡在「发送中」10 分钟、还算失败一次）；
 // 放不回去（数据库出错）才退回旧的做法：标 failed + 重试（DISPATCH_TIME_BUDGET，2 分钟后再发）。
+// 出错也可能其实已经放回去了（回应在路上断了），那条可能马上被别的 dispatcher 领走在发：标失败时带着 claim id，
+// 已经不是这次领的就不会被改到（不会变成 failed、之后又重发一次）。
 // 每个请求最多等到预算用完为止。回传 JSON 统计。
 // complete_notification 暂时失败 → 隔 0.5 / 2（已经发出去的再加 5）秒再试：没记到「已发」的话 10 分钟后会重发一次。
 // 平台的总时间（免费 150 秒、付费 400 秒，WORKER_WALL_CLOCK_MS）是按 worker 算的，一个 worker 会接很多个请求
@@ -236,7 +240,13 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * 把结果记进数据库。暂时失败（网络、5xx……）→ 隔一下再试（DISPATCH_TIMING）；不会超过 stopAt。
  * 「已经发出去」的多试一次：没记到的话 10 分钟后会被重新领、再发一次（对方收到两张一样的单）。
  */
-async function complete(admin: SupabaseClient, id: string, o: Outcome, stopAt: number): Promise<boolean> {
+async function complete(
+  admin: SupabaseClient,
+  claimId: string,
+  id: string,
+  o: Outcome,
+  stopAt: number,
+): Promise<boolean> {
   const params = {
     p_id: id,
     p_status: o.status,
@@ -244,6 +254,8 @@ async function complete(admin: SupabaseClient, id: string, o: Outcome, stopAt: n
     p_error: o.error,
     p_wa_message_id: o.waMessageId,
     p_retry: o.retry,
+    // failed / skipped 只有领着这条的 dispatcher 才记得进去（sent 不看）
+    p_claim_id: claimId,
   };
   const waits = o.status === "sent" ? DISPATCH_TIMING.sentRetryMs : DISPATCH_TIMING.retryMs;
   for (let attempt = 0;; attempt++) {
@@ -273,6 +285,8 @@ async function complete(admin: SupabaseClient, id: string, o: Outcome, stopAt: n
 /** 正在处理的一批（claim_notifications 领到的） */
 interface Round {
   admin: SupabaseClient;
+  /** 这次 dispatch 的 claim id（claim / release / complete 都带） */
+  claimId: string;
   stopAt: number;
   s: Summary;
   /** 领到了、还没开始发的（id → 那条）。开始发、放回去之前先从这里拿掉，所以每条只处理一次 */
@@ -286,18 +300,21 @@ const ROUNDS = new Set<Round>();
 
 /**
  * 领到了、但不发的那条放回队列（release_notification：sending → queued，不算失败、attempts 不变，下一次马上再领）。
- * 回 false = 已经不是「发送中」（被别人处理了），不用管。叫不到（数据库出错）→ 退回旧的做法：
+ * 回 false = 已经不是这次领的「发送中」（被别人处理了），不用管。叫不到（数据库出错）→ 退回旧的做法：
  * 标 failed + 重试（2 分钟后再领），不然会卡在「发送中」10 分钟、之后还算失败一次。
+ * 出错时其实可能已经放回去、又被别的 dispatcher 领走了：标失败也带 claim id，数据库对不上就不改（回 false）。
  */
 async function release(round: Round, item: NotificationItem & { channel: Channel }): Promise<void> {
   round.s.deferred++;
   try {
-    await rpc<boolean>(round.admin, "release_notification", { p_id: item.id });
+    await rpc<boolean>(round.admin, "release_notification", { p_id: item.id, p_claim_id: round.claimId });
     return;
   } catch (e) {
     log("warn", "release_notification_failed", { notification_id: item.id, error: errorMessage(e) });
   }
-  if (!(await complete(round.admin, item.id, failed(item.channel, BUDGET_EXCEEDED, true), round.stopAt))) {
+  if (
+    !(await complete(round.admin, round.claimId, item.id, failed(item.channel, BUDGET_EXCEEDED, true), round.stopAt))
+  ) {
     round.s.errors++;
   }
 }
@@ -335,12 +352,13 @@ export async function dispatch(): Promise<Summary> {
   };
   const admin = adminClient();
   const services: Services = { fcm: fcmServiceAccount(), whatsapp: whatsappConfig(), deadline };
+  const claimId = crypto.randomUUID();
 
   // 领之前就要留够一个请求的时间（领到了发不了还要放回去）
   while (timeLeft() >= DISPATCH_TIMING.itemMinMs) {
     let claimed: unknown;
     try {
-      claimed = await rpc<unknown>(admin, "claim_notifications", { p_limit: CLAIM_LIMIT });
+      claimed = await rpc<unknown>(admin, "claim_notifications", { p_limit: CLAIM_LIMIT, p_claim_id: claimId });
     } catch (e) {
       log("error", "claim_notifications_failed", { error: errorMessage(e) });
       s.ok = false;
@@ -363,7 +381,7 @@ export async function dispatch(): Promise<Summary> {
         log("error", "invalid_claimed_item", {});
       }
     }
-    const round: Round = { admin, stopAt, s, waiting: new Map(items.map((i) => [i.id, i])), releases: [] };
+    const round: Round = { admin, claimId, stopAt, s, waiting: new Map(items.map((i) => [i.id, i])), releases: [] };
     ROUNDS.add(round);
     try {
       await mapLimit(items, ITEM_CONCURRENCY, async (item) => {
@@ -379,7 +397,7 @@ export async function dispatch(): Promise<Summary> {
         else if (o.status === "skipped") s.skipped++;
         else if (o.retry) s.retry_scheduled++;
         else s.failed++;
-        if (!(await complete(admin, item.id, o, stopAt))) s.errors++;
+        if (!(await complete(admin, claimId, item.id, o, stopAt))) s.errors++;
       });
       await Promise.all(round.releases);
     } finally {

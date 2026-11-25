@@ -47,7 +47,10 @@ bundle.ts     deno task bundle：照 deno.lock 打包成 _dist/<函数>/index.js
 领到但没发的用 `release_notification` 放回队列（不算失败、`attempts` 不变，下一次叫马上再领；放不回去才标 failed + 重试
 `DISPATCH_TIME_BUDGET`，2 分钟后再发），每个对外请求也最多等到预算用完。 dispatcher 的期限也不超过「worker 开始 +
 `WORKER_WALL_CLOCK_MS` - 15 秒」（晚进来的请求少发一点，不会发到一半被 平台杀掉、10 分钟后重发一次）；`beforeunload`
-之后不再领、不再开始发，领到还没开始发的马上放回队列（不等正在发的那几条）。
+之后不再领、不再开始发，领到还没开始发的马上放回队列（不等正在发的那几条；回应要等放回去的都做完）。每次 dispatch 带一个
+新的 claim id（`claim_notifications` / `release_notification` / `complete_notification` 的 `p_claim_id`）：数据库只让
+领着的那个 dispatcher 放回、记 failed / skipped（`sent` 不看），所以「放回去其实成功了、回应在路上断了、那条马上又被别的
+dispatcher 领走」时，退回的标失败对不上、不会改到别人的（不会变成 failed、之后又重发一次）。
 
 价目表的时间：Excel / CSV 每段 50 行、PDF 超过 4 页就每段 4 页（同一个 document block + `cache_control`，第一段
 开始回应、快取写好之后别段才送），最多同时 8 段；max_tokens → 那一段切两半**同时**再读一次。开始叫 Claude
@@ -58,12 +61,14 @@ failed、删行）暂时失败 → 隔 0.5 / 2 / 5 秒再试。
 价目表的占位和用量：只用一个数据库函数 `reserve_price_list_run(import_id, user.id, 新的 run_id)`（服务器身份，迁移
 `20261127000200_seller_hardening.sql`），一个交易里照顺序检查成员 → 停权 → 状态 → 在跑 → 用量，都通过才占位
 （`ai_raw.state = running`）、记一笔
-`price_list_runs`（只有服务器碰得到，批发商删不掉）。挡下来的什么都没改、不算次数（HTTP 见下面的表）。用量：每家批发商
-10 分钟 3 次、1 小时 10 次、1 天 30 次（还没审核的 `pending`：2 / 4 / 8；数字只在数据库的
-`_price_list_run_limits()`）。之后写回 import 都要 `status = processing` 而且 `ai_raw->>run_id` 是这一次的。卡在
-processing 的由定时任务 `fail_stuck_price_list_imports`（每 5 分钟）收拾：在跑超过 15 分钟 → `AI_TIMEOUT`，App
-建好导入后没叫到 AI 15 分钟 → `START_FAILED`。「在跑」超过 10 分钟别人可以重新占位，所以 `PRICE_LIST_TIME_BUDGET_MS`
-最多 540000（9 分钟，再大就用默认值）。
+`price_list_runs`（只有服务器碰得到，批发商删不掉；删掉导入用量也留着）。挡下来的什么都没改、不算次数（HTTP
+见下面的表）。 用量：10 分钟 3 次、1 小时 10 次、1 天 30 次（还没审核的 `pending`：2 / 4 / 8；数字只在数据库的
+`_price_list_run_limits()`）。每家批发商各算各的，**每个人也一样**：叫的人在每一家跑的加起来、建这家批发商的人建的每一家
+加起来，哪一份满了都挡（客服不算）；停权批发商的老板（或建的人）在别家也不能跑。`register_wholesaler`
+一个人同时只能有一家 待审核的。所以一直注册新的批发商不会多出用量。之后写回 import 都要 `status = processing` 而且
+`ai_raw->>run_id` 是这一次的。卡在 processing 的由定时任务 `fail_stuck_price_list_imports`（每 5 分钟）收拾：在跑超过 15
+分钟 → `AI_TIMEOUT`，App 建好导入后没叫到 AI 15 分钟 → `START_FAILED`。「在跑」超过 10 分钟别人可以重新占位，所以
+`PRICE_LIST_TIME_BUDGET_MS` 最多 540000（9 分钟，再大就用默认值）。
 
 大小限制：价目表档案 10 MB；xlsx 解压后合计 32 MB（工作表 / XML 16 MB，单一 entry 压缩比超过 100:1 也不收）→
 `FILE_TOO_LARGE`；zip 的 entry 资料重叠 / 指同一个 header、deflate block 比正常的编码器多太多 →
@@ -115,19 +120,20 @@ deno task deploy   # = deno task bundle，再 supabase functions deploy dispatch
 
 ## parse-price-list 的 HTTP 回应
 
-| HTTP | `error`                                                                                      | 什么时候                                                                 | import                                      |
-| ---- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------- |
-| 202  | （回 `{import_id, status: "processing"}`）                                                   | 占位成功，背景在读                                                       | `ai_raw.state = running`；App 每 3 秒查状态 |
-| 400  | `INVALID_IMPORT_ID`                                                                          | `import_id` 不是 uuid                                                    | 没动                                        |
-| 401  | `UNAUTHORIZED`                                                                               | 没有 / 错的 JWT                                                          | 没动                                        |
-| 403  | `WHOLESALER_SUSPENDED`                                                                       | `suspended`：批发商停权                                                  | 没动                                        |
-| 404  | `IMPORT_NOT_FOUND`                                                                           | 用户身份（RLS）读不到；`not_found`（刚被删掉）；`not_member`（不是成员） | 没动                                        |
-| 405  | `METHOD_NOT_ALLOWED`                                                                         | 不是 POST / OPTIONS                                                      | 没动                                        |
-| 409  | `IMPORT_NOT_PROCESSING`（加 `status`：现在的状态）                                           | `not_processing`：已经读完 / 失败 / 上架                                 | 没动                                        |
-| 409  | `IMPORT_ALREADY_RUNNING`                                                                     | `already_running`：有人在读（10 分钟内占的位）                           | 没动（不算失败，继续等）                    |
-| 429  | `TOO_MANY_IMPORTS`（`retry_after` 秒、`window`：`burst` / `hour` / `day`；`Retry-After` 头） | `quota`：用量满了；等 `retry_after` 秒再叫就不会被别段挡住               | 没动、不算次数                              |
-| 500  | `CONFIG_MISSING`、`DB_ERROR`、`INTERNAL_ERROR`                                               | 函数没设定好；用户身份读 import 出错；程式错误                           | 没动（`CONFIG_MISSING` 时什么都还没碰）     |
-| 503  | `QUOTA_UNAVAILABLE`                                                                          | 叫不到 `reserve_price_list_run`（数据库暂时出错、断线、迁移还没跑）      | 没动：暂时的，等一下再叫一样可以            |
+| HTTP | `error`                                                                                      | 什么时候                                                                      | import                                       |
+| ---- | -------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | -------------------------------------------- |
+| 202  | （回 `{import_id, status: "processing"}`）                                                   | 占位成功，背景在读                                                            | `ai_raw.state = running`；App 每 3 秒查状态  |
+| 400  | `INVALID_IMPORT_ID`                                                                          | `import_id` 不是 uuid                                                         | 没动                                         |
+| 401  | `UNAUTHORIZED`                                                                               | 没有 / 错的 JWT（Auth 说 JWT 不对、用户 / session 不在了）                    | 没动                                         |
+| 403  | `WHOLESALER_SUSPENDED`                                                                       | `suspended`：批发商停权；或叫的人、建这家的人是一家停权批发商的老板（或建的） | 没动                                         |
+| 404  | `IMPORT_NOT_FOUND`                                                                           | 用户身份（RLS）读不到；`not_found`（刚被删掉）；`not_member`（不是成员）      | 没动                                         |
+| 405  | `METHOD_NOT_ALLOWED`                                                                         | 不是 POST / OPTIONS                                                           | 没动                                         |
+| 409  | `IMPORT_NOT_PROCESSING`（加 `status`：现在的状态）                                           | `not_processing`：已经读完 / 失败 / 上架                                      | 没动                                         |
+| 409  | `IMPORT_ALREADY_RUNNING`                                                                     | `already_running`：有人在读（10 分钟内占的位）                                | 没动（不算失败，继续等）                     |
+| 429  | `TOO_MANY_IMPORTS`（`retry_after` 秒、`window`：`burst` / `hour` / `day`；`Retry-After` 头） | `quota`：用量满了；等 `retry_after` 秒再叫就不会被别段挡住                    | 没动、不算次数                               |
+| 500  | `CONFIG_MISSING`、`DB_ERROR`、`INTERNAL_ERROR`                                               | 函数没设定好；用户身份读 import 出错；程式错误                                | 没动（`CONFIG_MISSING` 时什么都还没碰）      |
+| 503  | `QUOTA_UNAVAILABLE`                                                                          | 叫不到 `reserve_price_list_run`（数据库暂时出错、断线、迁移还没跑）           | 没动：暂时的，等一下再叫一样可以             |
+| 503  | `AUTH_UNAVAILABLE`                                                                           | Auth 服务暂时出错（断线、逾时、5xx、429、回的不是 JSON），验不了 JWT          | 没动：暂时的（**不是**登录过期），等一下再叫 |
 
 极少数：数据库已经占好位、回应在路上断了 → 503，但 import 是「在跑」又没人在读：10 分钟后再叫可以重新占位，15
 分钟后定时任务标 `AI_TIMEOUT`。

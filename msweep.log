@@ -1,0 +1,2 @@
+bash: msweep/scripts/test-db.sh: No such file or directory
+msweep exit 127

@@ -54,7 +54,7 @@ Flutter 里用 `supabase.rpc('函数名', params: {...})` 调用。每个函数�
 
 | 函数 | 做什么 |
 |---|---|
-| `register_wholesaler(p_name, p_region_id, p_industry_id, …)` | 自己注册，状态「待审核」 |
+| `register_wholesaler(p_name, p_region_id, p_industry_id, …)` | 自己注册，状态「待审核」。一个人同时只能有一家待审核的（自己建的或是老板的；客服不限制），否则 `WHOLESALER_ALREADY_PENDING` |
 | `confirm_order(p_order_id, p_out_of_stock_item_ids)` | 一键「确认」，可以顺便标出哪几样缺货；全部缺货就变成「缺货」 |
 | `set_order_status(p_order_id, 'out_of_stock' / 'delivering' / 'delivered')` | 整单缺货、送货中、已送达 |
 
@@ -82,11 +82,12 @@ Flutter 里用 `supabase.rpc('函数名', params: {...})` 调用。每个函数�
 
 | 函数 | 做什么 |
 |---|---|
-| `reserve_price_list_run(p_import_id, p_user_id, p_run_id)` | parse-price-list 开始跑之前：检查成员、停权、状态、有没有人在跑、用量（`price_list_runs`；审核通过 10 分钟 3 次 / 1 小时 10 次 / 1 天 30 次，待审核 2 / 4 / 8），都通过才占位。回传 `{"result": "ok" \| "not_found" \| "not_member" \| "suspended" \| "not_processing" \| "already_running" \| "quota", …}` |
+| `reserve_price_list_run(p_import_id, p_user_id, p_run_id)` | parse-price-list 开始跑之前：检查成员、停权、状态、有没有人在跑、用量（`price_list_runs`；审核通过 10 分钟 3 次 / 1 小时 10 次 / 1 天 30 次，待审核 2 / 4 / 8），都通过才占位。用量按批发商算，也按人算（叫的人在每一家跑的、建这家批发商的人建的每一家，各自加起来也是这个上限；客服不算）；叫的人或建这家的人是停权批发商的老板（或建的）→ `suspended`。回传 `{"result": "ok" \| "not_found" \| "not_member" \| "suspended" \| "not_processing" \| "already_running" \| "quota", …}` |
 | `fail_stuck_price_list_imports()` | 每 5 分钟（定时任务 `fail-stuck-price-list-imports`）：卡在 processing 超过 15 分钟的导入标成失败（在跑的 `AI_TIMEOUT`，没开始的 `START_FAILED`），删掉跑到一半的行和两天前的用量记录 |
-| `release_notification(p_id)` | dispatcher 领了但来不及发的通知放回队列（不算失败、不用掉一次） |
+| `release_notification(p_id, p_claim_id)` | dispatcher 领了但来不及发的通知放回队列（不算失败、不用掉一次）；要是同一个 claim id 领的才放 |
+| `claim_notifications(p_limit, p_claim_id)`、`complete_notification(…, p_claim_id)` | 第四步的函数加了 `p_claim_id`（dispatcher 每次一个新的 uuid，领的时候记在 `notifications.claim_id`）：failed / skipped 只有领着的那个 dispatcher 记得进去（`sent` 照样记），别人已经重新领走的不会被改到 |
 
-`price_list_imports` 有保护（trigger）：批发商只能新增 processing 的导入、只能把 processing 标成 failed（App 的代码 `START_FAILED` / `NETWORK` / `AUTH`），其他栏位（档案、`ai_raw`……）都不能改，否则 `COLUMN_PROTECTED`。`price_list_runs` 只有服务器碰得到。
+`price_list_imports` 有保护（trigger）：批发商只能新增 processing 的导入、只能把 processing 标成 failed（App 的代码 `START_FAILED` / `NETWORK` / `AUTH`），其他栏位（档案、`ai_raw`……）都不能改，否则 `COLUMN_PROTECTED`。`price_list_runs` 只有服务器碰得到（批发商删掉自己的导入，用量记录也留着）。
 
 ## 4. 错误代码
 
@@ -100,6 +101,7 @@ Flutter 里用 `supabase.rpc('函数名', params: {...})` 调用。每个函数�
 | `COLUMN_PROTECTED` | 这个字段只有客服能改（`detail` 是哪一栏）；价目表导入：批发商不能改档案、`ai_raw`，状态只能 processing → failed |
 | `INVALID_RUN_ID` / `RUN_ID_USED` | （服务器）`reserve_price_list_run` 没给 run_id / run_id 用过了 |
 | `NOTIFICATION_NOT_FOUND` | （服务器）`complete_notification`、`release_notification` 找不到这条通知 |
+| `WHOLESALER_ALREADY_PENDING` | 已经有一家待审核的批发商（`detail` 是那一家的 id），审核之后才能再注册 |
 | `INVALID_ZONE` | 送货区不存在 |
 | `TOO_MANY_WHOLESALERS` | 免费只能选 3 家 |
 | `UNLOCK_COOLDOWN` | 30 天内不能再换（`detail` 是可以再换的时间） |

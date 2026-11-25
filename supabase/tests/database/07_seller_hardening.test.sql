@@ -2,7 +2,7 @@
 -- fail_stuck_price_list_imports（卡住的导入）、release_notification、定时任务、权限
 begin;
 \ir _helpers.psql
-select plan(133);
+select plan(211);
 select tests.setup_world();
 
 -- W4（待审核）加一个员工（staff）：测「还没审核的用量比较少」，也测 staff 一样算成员
@@ -73,6 +73,16 @@ begin
 end;
 $$;
 
+-- 跟 new_import / try_reserve 一样，但批发商用 id（register_wholesaler 新建的、测试里另外建的）
+create function tests.new_import_for(p_wholesaler uuid) returns uuid language sql as $$
+  insert into public.price_list_imports (wholesaler_id, file_path, file_type)
+  values (p_wholesaler, p_wholesaler || '/' || gen_random_uuid() || '.jpg', 'image')
+  returning id;
+$$;
+create function tests.try_reserve_for(p_wholesaler uuid, p_user uuid) returns jsonb language sql as $$
+  select public.reserve_price_list_run(tests.new_import_for(p_wholesaler), p_user, gen_random_uuid());
+$$;
+
 -- =============================================================================
 -- 权限
 -- =============================================================================
@@ -87,7 +97,7 @@ select is(has_table_privilege('anon', 'public.price_list_runs', 'select,insert,u
   'anon 对 price_list_runs 没有任何权限');
 select ok(has_table_privilege('service_role', 'public.price_list_runs', 'select'), 'service_role 读得到 price_list_runs');
 
-\set new_fns '''_price_list_run_limits'', ''_try_timestamptz'', ''reserve_price_list_run'', ''price_list_imports_guard'', ''fail_stuck_price_list_imports'', ''release_notification'', ''_schedule_seller_hardening_jobs'''
+\set new_fns '''_price_list_run_limits'', ''_try_timestamptz'', ''reserve_price_list_run'', ''price_list_imports_guard'', ''fail_stuck_price_list_imports'', ''_claim_notifications_batch'', ''claim_notifications'', ''complete_notification'', ''release_notification'', ''_schedule_seller_hardening_jobs'''
 select is(
   (select coalesce(string_agg(p.proname, ',' order by p.proname), '')
    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -100,14 +110,25 @@ select is(
   (select string_agg(p.proname, ',' order by p.proname)
    from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname in (:new_fns) and has_function_privilege('service_role', p.oid, 'execute')),
-  '_price_list_run_limits,_try_timestamptz,fail_stuck_price_list_imports,release_notification,reserve_price_list_run',
-  'service_role 只能调用服务器用的函数（trigger 函数、建定时任务的不行）'
+  '_price_list_run_limits,_try_timestamptz,claim_notifications,complete_notification,fail_stuck_price_list_imports,release_notification,reserve_price_list_run',
+  'service_role 只能调用服务器用的函数（trigger 函数、建定时任务的、旧的 claim_notifications 不行）'
 );
 select is(
   (select count(*)::int from pg_proc p join pg_namespace n on n.oid = p.pronamespace
    where n.nspname = 'public' and p.proname in (:new_fns)),
-  7, '（上面检查的函数都存在）'
+  10, '（上面检查的函数都存在）'
 );
+select is(
+  (select string_agg(p.oid::regprocedure::text, ', ' order by p.proname)
+   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+   where n.nspname = 'public' and p.proname in ('claim_notifications', 'complete_notification', 'release_notification')),
+  'claim_notifications(integer,uuid), '
+  || 'complete_notification(uuid,notification_status,notification_channel,text,text,boolean,uuid), '
+  || 'release_notification(uuid,uuid)',
+  '通知的三个函数都多了 claim id（旧的参数版本删掉了，不会重载混乱）'
+);
+select ok(has_function_privilege('authenticated', 'public.register_wholesaler(text, uuid, uuid, text, text, text)', 'execute'),
+  'register_wholesaler 照样给 App 叫（改过之后权限没变）');
 
 select tests.new_import('W1') as imp_priv \gset
 select tests.login_as(tests.uid('seller1'));
@@ -304,6 +325,122 @@ select is(
   '停权：没有可以用的次数'
 );
 
+-- ---------- 检查的顺序、retry_after_sec 进位（Edge Function 测试的假 reserve 照这个顺序） ----------
+select tests.new_import('W3', 'review') as imp_s_review \gset
+select is(public.reserve_price_list_run(:'imp_s_review', tests.uid('seller3'), gen_random_uuid()),
+  '{"result": "suspended"}'::jsonb, '停权 + 已经不是 processing → 先回 suspended');
+delete from public.price_list_runs where wholesaler_id = tests.uid('W2');
+select tests.add_runs('W2', array['1 minute', '2 minutes', '3 minutes']::interval[]);
+select tests.new_import('W2', 'processing', jsonb_build_object('version', 1, 'state', 'running', 'run_id', gen_random_uuid(),
+  'claimed_at', now())) as imp_running_full \gset
+select is(public.reserve_price_list_run(:'imp_running_full', tests.uid('seller2'), gen_random_uuid()),
+  '{"result": "already_running"}'::jsonb, '在跑 + 用量满了 → 先回 already_running');
+select is(tests.try_reserve('W2', tests.uid('seller2')) ->> 'window', 'burst', '（W2 的 10 分钟真的满了）');
+delete from public.price_list_runs where wholesaler_id = tests.uid('W2');
+select tests.add_runs('W2', array['9 minutes 58.5 seconds', '1 minute', '2 minutes']::interval[]);
+select is(tests.try_reserve('W2', tests.uid('seller2')) ->> 'retry_after_sec', '2',
+  '还要 1.5 秒才有位置 → 2（进位；等 N 秒再叫才不会又被挡）');
+
+-- ---------- 用量也按「人」算：叫的人、建这家批发商的人（一直注册新的批发商不会多出用量） ----------
+delete from public.price_list_runs;
+\set reg_region 'bbbbbbbb-0000-4000-8000-000000000001'
+\set reg_industry 'bbbbbbbb-0000-4000-8000-000000000021'
+select tests.login_as(tests.uid('seller1'));
+select public.register_wholesaler('W5 seller1 新注册的', :'reg_region', :'reg_industry') as w5 \gset
+select is(tests.error_of(format('select public.register_wholesaler(%L, %L, %L)', 'W5b 再注册一家', :'reg_region', :'reg_industry')),
+  'WHOLESALER_ALREADY_PENDING:' || :'w5', '已经有一家待审核的：不能再注册（detail 是那一家）');
+select tests.logout();
+select is(
+  (select w.status || '/' || w.created_by || '/' || m.member_role
+   from public.wholesalers w join public.wholesaler_members m on m.wholesaler_id = w.id and m.user_id = tests.uid('seller1')
+   where w.id = :'w5'),
+  'pending/' || tests.uid('seller1') || '/owner', '（W5：待审核，seller1 建的、是老板；只有一家）'
+);
+select is(tests.try_reserve_for(:'w5', tests.uid('seller1')) ->> 'result', 'ok', 'W5（待审核）第 1 次');
+select is(tests.try_reserve_for(:'w5', tests.uid('seller1')) ->> 'result', 'ok', 'W5 第 2 次');
+select is(tests.try_reserve_for(:'w5', tests.uid('seller1')) ->> 'window', 'burst', 'W5 第 3 次 → 待审核的 10 分钟 2 次满了');
+select is(tests.try_reserve('W1', tests.uid('seller1')) ->> 'result', 'ok', 'seller1 回到 W1（审核通过，3 次）：加起来第 3 次，可以');
+select is(tests.try_reserve('W1', tests.uid('seller1')),
+  '{"result": "quota", "window": "burst", "retry_after_sec": 600}'::jsonb,
+  '叫的人在别家跑的也算：W1 才 1 次，seller1 加起来已经 3 次 → quota');
+select is(tests.try_reserve('W1', tests.uid('admin')) ->> 'result', 'ok', '客服不算「人」的用量（W1 自己才 1 次）');
+
+-- seller1 以前建的另一家（已经审核通过）W6，员工 seller5 来叫：seller1 建的每一家加起来算
+\set seller5 'aaaaaaaa-0000-4000-8000-000000000015'
+\set w6 'cccccccc-0000-4000-8000-000000000006'
+insert into auth.users (id, phone) values (:'seller5', '60111000015');
+update public.profiles set role = 'seller' where id = :'seller5';
+insert into public.wholesalers (id, name, industry_id, region_id, status, created_by)
+values (:'w6', 'W6 seller1 以前建的', :'reg_industry', :'reg_region', 'active', tests.uid('seller1'));
+insert into public.wholesaler_members (wholesaler_id, user_id, member_role) values (:'w6', :'seller5', 'staff');
+select is(tests.try_reserve_for(:'w6', :'seller5'::uuid) ->> 'result', 'ok', '员工在 W6：seller1 建的 W5、W6 加起来第 3 次，可以');
+select is(tests.try_reserve_for(:'w6', :'seller5'::uuid),
+  '{"result": "quota", "window": "burst", "retry_after_sec": 600}'::jsonb,
+  '同一个人建的批发商加起来算：W6 才 1 次、员工自己才 1 次，seller1 建的已经 3 次 → quota');
+select is((select count(*)::int from public.price_list_runs), 5, '（挡下来的都没算次数：W5 2 次、W1 2 次、W6 1 次）');
+
+-- 审核通过之后才能再注册；客服不限制
+update public.wholesalers set status = 'active' where id = :'w5';
+select tests.login_as(tests.uid('seller1'));
+select is(tests.error_of(format('select public.register_wholesaler(%L, %L, %L)', 'W7 seller1 第二家', :'reg_region', :'reg_industry')),
+  null, 'W5 审核通过之后可以再注册一家');
+select tests.login_as(tests.uid('admin'));
+select is(
+  coalesce(tests.error_of(format('select public.register_wholesaler(%L, %L, %L)', '客服建的 1', :'reg_region', :'reg_industry')), '-')
+  || '/' || coalesce(tests.error_of(format('select public.register_wholesaler(%L, %L, %L)', '客服建的 2', :'reg_region', :'reg_industry')), '-'),
+  '-/-', '客服不限制待审核的家数'
+);
+select tests.logout();
+select is(
+  (select count(*)::int from public.wholesalers where created_by = tests.uid('admin') and status = 'pending'), 2,
+  '（客服建了两家待审核的）'
+);
+
+-- 停权的老板注册一家新的：一样不能跑；新的那家的员工也不能跑
+select tests.login_as(tests.uid('seller3'));
+select public.register_wholesaler('W8 停权老板新注册的', :'reg_region', :'reg_industry') as w8 \gset
+select tests.logout();
+insert into public.wholesaler_members (wholesaler_id, user_id, member_role) values (:'w8', :'seller5', 'staff');
+select is(tests.try_reserve_for(:'w8', tests.uid('seller3')), '{"result": "suspended"}'::jsonb,
+  '停权批发商（W3）的老板注册一家新的（W8，待审核）：也是 suspended');
+select is(tests.try_reserve_for(:'w8', :'seller5'::uuid), '{"result": "suspended"}'::jsonb,
+  '员工替 W8 叫也不行（W8 是停权的老板建的）');
+-- 建过一家停权的（不是老板）也算
+\set w9 'cccccccc-0000-4000-8000-000000000009'
+insert into public.wholesalers (id, name, industry_id, region_id, status, created_by)
+values (:'w9', 'W9 seller2 建的（停权）', :'reg_industry', :'reg_region', 'suspended', tests.uid('seller2'));
+select is(tests.try_reserve('W2', tests.uid('seller2')), '{"result": "suspended"}'::jsonb,
+  '叫的人建过一家停权的批发商：在自己审核通过的 W2 也是 suspended');
+delete from public.wholesalers where id = :'w9';
+select is(tests.try_reserve('W2', tests.uid('seller2')) ->> 'result', 'ok', '（W9 删掉之后 W2 又可以）');
+select is(
+  (select count(*) filter (where wholesaler_id = :'w8') || '/' || count(*) filter (where wholesaler_id = tests.uid('W2'))
+   from public.price_list_runs),
+  '0/1', '停权挡下来的没算次数（W8 0 次；W2 只有最后那一次）'
+);
+
+-- ---------- 批发商删掉自己的导入：用量记录留着（不然删了再传就没有限制） ----------
+delete from public.price_list_runs;
+select tests.new_import('W1') as del_1 \gset
+select tests.new_import('W1') as del_2 \gset
+select tests.new_import('W1') as del_3 \gset
+select tests.new_import('W1') as del_4 \gset
+select is(
+  (select string_agg(public.reserve_price_list_run(t.x, tests.uid('seller1'), gen_random_uuid()) ->> 'result', ',' order by t.o)
+   from unnest(array[:'del_1', :'del_2', :'del_3']::uuid[]) with ordinality as t(x, o)),
+  'ok,ok,ok', '（W1 跑了 3 次）'
+);
+select tests.login_as(tests.uid('seller1'));
+select is(tests.row_count(format('delete from public.price_list_imports where id in (%L, %L, %L)', :'del_1', :'del_2', :'del_3')),
+  3, '批发商可以删掉自己的导入（RLS）');
+select tests.logout();
+select is(
+  (select count(*)::int || '/' || count(import_id) from public.price_list_runs where wholesaler_id = tests.uid('W1')), '3/0',
+  '用量记录留着（import_id 变成空的）'
+);
+select is(public.reserve_price_list_run(:'del_4', tests.uid('seller1'), gen_random_uuid()) ->> 'window', 'burst',
+  '删掉导入之后再叫：照样算之前的 3 次 → quota');
+
 -- =============================================================================
 -- price_list_imports 的保护
 -- =============================================================================
@@ -311,6 +448,8 @@ select is(
 \set imp702 '99999999-0000-4000-8000-000000000702'
 \set imp703 '99999999-0000-4000-8000-000000000703'
 \set imp704 '99999999-0000-4000-8000-000000000704'
+\set imp705 '99999999-0000-4000-8000-000000000705'
+\set imp706 '99999999-0000-4000-8000-000000000706'
 select tests.new_import('W1', 'processing', jsonb_build_object('version', 1, 'state', 'running', 'run_id', gen_random_uuid(),
   'claimed_at', now(), 'claimed_by', tests.uid('seller1'))) as imp_claimed \gset
 select tests.new_import('W1', 'review') as imp_review \gset
@@ -337,6 +476,14 @@ select is(
 select is(
   (select created_by || '/' || (created_at = now()) from public.price_list_imports where id = :'imp702'),
   tests.uid('seller1') || '/true', 'created_by 设成自己；created_at 不能自己填以前的时间（设成现在）'
+);
+select is(tests.app_insert(jsonb_build_object('id', :'imp705'::uuid, 'updated_at', now() - interval '1 day')), null,
+  '（自己填以前的 updated_at）');
+select is(tests.app_insert(jsonb_build_object('id', :'imp706'::uuid, 'updated_at', now() + interval '10 years')), null,
+  '（自己填以后的 updated_at）');
+select is(
+  (select string_agg((updated_at = now())::text, ',' order by id) from public.price_list_imports where id in (:'imp705', :'imp706')),
+  'true,true', 'updated_at 也设成现在（定时任务看它：不然可以让导入马上被标失败，或永远不会）'
 );
 select is(tests.app_insert(jsonb_build_object('created_by', tests.uid('seller2'))), 'COLUMN_PROTECTED:created_by',
   '新增：created_by 不能写别人');
@@ -475,6 +622,11 @@ insert into public.price_list_import_rows (import_id, row_no, name) values
   (:'sw_run_old', 1, '跑到一半的行 1'), (:'sw_run_old', 2, '跑到一半的行 2'), (:'sw_new_old', 1, '剩下的行'),
   (:'sw_run_fresh', 1, '正在跑的行'), (:'sw_review', 1, '等确认的行');
 select tests.add_runs('W1', array['3 days', '50 hours', '1 day']::interval[]);
+-- 客服把一天前的导入改回 processing（5 分钟前改的）：updated_at 是新的，created_at 是旧的
+insert into public.price_list_imports (wholesaler_id, file_path, file_type, status, created_at, updated_at)
+values (tests.uid('W2'), tests.uid('W2') || '/' || gen_random_uuid() || '.jpg', 'image', 'processing',
+        now() - interval '1 day', now() - interval '5 minutes')
+returning id as sw_reset \gset
 
 select is(public.fail_stuck_price_list_imports(), 3, '标成失败 3 份：在跑超过 15 分钟的、读不懂占位时间的、从来没开始又过了 15 分钟的');
 select is(
@@ -510,6 +662,8 @@ select is(
    where id in (:'sw_run_12', :'sw_run_fresh', :'sw_new_fresh') and status = 'processing' and error_message is null),
   3, '还没到 15 分钟的不动（12 分钟前开始跑的：可以重新占位，但还不标失败）'
 );
+select is((select status || '/' || coalesce(error_message, '-') from public.price_list_imports where id = :'sw_reset'),
+  'processing/-', '没人在跑的：看最后改的时间（updated_at），不是建的时间（客服刚改回 processing 的不会马上又被标失败）');
 select is(
   (select string_agg(status || '/' || coalesce(error_message, '-') || '/' || (ai_raw ? 'interrupted'), ',' order by status)
    from public.price_list_imports where id in (:'sw_review', :'sw_failed')),
@@ -582,6 +736,269 @@ select tests.login_as_service();
 select is(public.release_notification(:'ns'), true, 'service_role 可以叫');
 select tests.logout();
 
+-- ---------- claim id：放回去、记失败 / 跳过都要是领着的那个 dispatcher ----------
+\set claim_a '66666666-0000-4000-8000-00000000000a'
+\set claim_b '66666666-0000-4000-8000-00000000000b'
+\set nt '88888888-0000-4000-8000-000000000004'
+\set nt2 '88888888-0000-4000-8000-000000000005'
+\set nt3 '88888888-0000-4000-8000-000000000006'
+update public.notifications set status = 'sent' where status <> 'sent';   -- 上面的先当成发完了
+insert into public.notifications (id, wholesaler_id, event_type) values (:'nt', tests.uid('W1'), 'test');
+select is(
+  (select string_agg(e ->> 'id', ',') from jsonb_array_elements(public.claim_notifications(50, :'claim_a')) e), :'nt',
+  '（dispatcher A 带着 claim id 领走）'
+);
+select is((select claim_id from public.notifications where id = :'nt'), :'claim_a'::uuid, '领的时候记下 claim_id');
+select is(public.release_notification(:'nt', :'claim_b'), false, '别人的 claim id：不能放回');
+select is(public.release_notification(:'nt'), false, '没带 claim id 也不能放回（这条不是没带 id 领的）');
+select is(public.complete_notification(:'nt', 'failed', 'push', 'X', null, true, :'claim_b'), false, '别人的 claim id：不能记失败');
+select is(public.complete_notification(:'nt', 'skipped', null, 'X', null, true, :'claim_b'), false, '也不能记跳过');
+select is((select status || '/' || attempts || '/' || claim_id from public.notifications where id = :'nt'),
+  'sending/0/' || :'claim_a', '（上面那些都没改到）');
+select is(public.release_notification(:'nt', :'claim_a'), true, '自己领的可以放回');
+select is((select status || '/' || coalesce(claimed_at::text, '-') || '/' || coalesce(claim_id::text, '-') from public.notifications where id = :'nt'),
+  'queued/-/-', '放回去：claimed_at、claim_id 清掉');
+-- 修好的情况：A 放回去了（回应在路上断了），B 马上领走在发；A 以为没放回去，改用 complete 标失败 → 对不上，不改
+select is(jsonb_array_length(public.claim_notifications(50, :'claim_b')), 1, '（dispatcher B 马上又领走）');
+select is(public.complete_notification(:'nt', 'failed', 'push', 'DISPATCH_TIME_BUDGET', null, true, :'claim_a'), false,
+  'A 晚到的「标失败」：已经是 B 的了，不改');
+select is((select status || '/' || attempts || '/' || claim_id || '/' || coalesce(last_error, '-') from public.notifications where id = :'nt'),
+  'sending/0/' || :'claim_b' || '/-', '还是 B 在发（没有变成 failed、没有算一次失败）');
+select is(public.complete_notification(:'nt', 'sent', 'push', null, null, true, :'claim_b'), true, 'B 发完记得到');
+select is((select status || '/' || (sent_at is not null) || '/' || attempts from public.notifications where id = :'nt'), 'sent/true/1',
+  '记下「已发」（不会过几分钟又重发一次）');
+-- 卡住重新领：claim_id 换成新的；「已发」不看 claim id（真的发出去了就记下来）
+insert into public.notifications (id, wholesaler_id, event_type) values (:'nt2', tests.uid('W1'), 'test');
+insert into public.notifications (id, wholesaler_id, event_type, status, attempts, claimed_at, claim_id, channel)
+values (:'nt3', tests.uid('W1'), 'test', 'sending', 0, now() - interval '11 minutes', :'claim_a', 'push');
+select is(
+  (select string_agg(e ->> 'id', ',' order by e ->> 'id') from jsonb_array_elements(public.claim_notifications(50, :'claim_b')) e),
+  :'nt2' || ',' || :'nt3', '（B 领走：新的一条、A 卡住超过 10 分钟的那条）'
+);
+select is((select string_agg(claim_id::text, ',' order by id) from public.notifications where id in (:'nt2', :'nt3')),
+  :'claim_b' || ',' || :'claim_b', '卡住重新领的：claim_id 换成 B 的');
+select is(public.complete_notification(:'nt3', 'failed', 'push', 'late', null, true, :'claim_a'), false,
+  'A（卡住的那个）很晚才记失败：不改 B 的');
+select is(public.complete_notification(:'nt2', 'sent', 'push', null, null, true, :'claim_a'), true,
+  '「已发」不看 claim id：真的发出去了就记下来');
+select is(public.complete_notification(:'nt2', 'failed', 'push', 'x', null, true, :'claim_b'), false,
+  '（之后 B 的结果记不进去：已经不是发送中，也不会再重试）');
+select is((select status::text from public.notifications where id = :'nt2'), 'sent', '（还是 sent）');
+
+-- =============================================================================
+-- 同时进来的请求：另外开连线（dblink）测锁
+-- pgTAP 的测试只有一个连线、一个交易，测不到两个请求同时进来；这里另外开连线（c1、c2、c3），
+-- 测试资料要先提交（conc 连线建；固定的 id，开始和最后都删掉）。这个交易自己改过的行别的连线碰不到，
+-- 所以测试资料都是新的（批发商 CX、CY、CC1、CC2，用户 UA、UB、UC）。连线都设了 lock_timeout：
+-- 真的卡住会报错，不会一直等。只在本机跑（scripts/test-db.sh：超级用户、有 dblink）；真的 Supabase 跳过。
+-- =============================================================================
+select exists (select 1 from pg_available_extensions where name = 'dblink')
+       and coalesce((select r.rolsuper from pg_roles r where r.rolname = current_user), false) as can_conc \gset
+\if :can_conc
+create extension if not exists dblink with schema extensions;
+select format('host=%s port=%s dbname=%s user=%s options=''-c lock_timeout=10s -c statement_timeout=30s''',
+              coalesce(nullif(trim(split_part(current_setting('unix_socket_directories'), ',', 1)), ''), 'localhost'),
+              current_setting('port'), current_database(), current_user) as conninfo \gset
+select dblink_connect('conc', :'conninfo') as _ \gset
+select dblink_connect('c1', :'conninfo') as _ \gset
+select dblink_connect('c2', :'conninfo') as _ \gset
+select dblink_connect('c3', :'conninfo') as _ \gset
+
+-- 在另一个连线跑一句，回传第一行第一栏（文字）
+create function tests.remote(p_conn text, p_sql text) returns text language sql as $$
+  select t.v from dblink(p_conn, p_sql) as t(v text);
+$$;
+-- 送出去不等（之后用 remote_result 拿结果）
+create function tests.remote_send(p_conn text, p_sql text) returns int language sql as $$
+  select dblink_send_query(p_conn, p_sql);
+$$;
+create function tests.remote_result(p_conn text) returns text language plpgsql as $$
+declare
+  v text;
+begin
+  select t.v into v from dblink_get_result(p_conn) as t(v text);
+  perform 1 from dblink_get_result(p_conn) as t(v text);   -- dblink 要再读一次（空的）才算做完
+  return v;
+end;
+$$;
+-- 等连线 p_conn（pid p_pid）：被 p_holder 挡住（在等锁）→ waiting；已经做完 → done；10 秒都不是 → timeout
+create function tests.wait_remote(p_conn text, p_pid int, p_holder int) returns text language plpgsql as $$
+begin
+  for i in 1..200 loop
+    if p_holder = any (pg_catalog.pg_blocking_pids(p_pid)) then
+      return 'waiting';
+    end if;
+    if dblink_is_busy(p_conn) = 0 then
+      return 'done';
+    end if;
+    perform pg_sleep(0.05);
+  end loop;
+  return 'timeout';
+end;
+$$;
+create function tests.reserve_sql(p_import uuid, p_user uuid) returns text language sql as $$
+  select format('select public.reserve_price_list_run(%L, %L, gen_random_uuid())::text', p_import, p_user);
+$$;
+-- 测试资料（都用 conc 连线、马上提交）
+create function tests.conc_reset() returns text language sql as $$
+  select dblink_exec('conc', $q$
+    delete from public.wholesalers where id::text like 'cccccccc-0000-4000-8000-0000000000c%';
+    delete from auth.users where id::text like 'aaaaaaaa-0000-4000-8000-0000000000c%';
+    delete from public.regions where id = 'bbbbbbbb-0000-4000-8000-0000000000c1';
+    delete from public.industries where id = 'bbbbbbbb-0000-4000-8000-0000000000c2';
+  $q$);
+$$;
+create function tests.conc_clear() returns text language sql as $$
+  select dblink_exec('conc', $q$
+    delete from public.price_list_runs where wholesaler_id::text like 'cccccccc-0000-4000-8000-0000000000c%';
+    delete from public.price_list_imports where wholesaler_id::text like 'cccccccc-0000-4000-8000-0000000000c%';
+  $q$);
+$$;
+create function tests.conc_import(p_wholesaler uuid, p_age interval default '0 seconds') returns uuid language sql as $$
+  select tests.remote('conc', format(
+    'insert into public.price_list_imports (wholesaler_id, file_path, file_type, created_at, updated_at) '
+    'values (%L, %L, %L, now() - %L::interval, now() - %L::interval) returning id::text',
+    p_wholesaler, p_wholesaler || '/' || gen_random_uuid() || '.jpg', 'image', p_age, p_age))::uuid;
+$$;
+-- 1 分钟前跑过 p_n 次（p_user 叫的；空的 = 没记录）
+create function tests.conc_runs(p_wholesaler uuid, p_user uuid, p_n int) returns text language sql as $$
+  select dblink_exec('conc', format(
+    'insert into public.price_list_runs (wholesaler_id, user_id, run_id, created_at) '
+    'select %L, %L, gen_random_uuid(), now() - interval %L from generate_series(1, %s)',
+    p_wholesaler, p_user, '1 minute', p_n));
+$$;
+
+\set cx 'cccccccc-0000-4000-8000-0000000000c1'
+\set cy 'cccccccc-0000-4000-8000-0000000000c2'
+\set cc1 'cccccccc-0000-4000-8000-0000000000c3'
+\set cc2 'cccccccc-0000-4000-8000-0000000000c4'
+\set ua 'aaaaaaaa-0000-4000-8000-0000000000c1'
+\set ub 'aaaaaaaa-0000-4000-8000-0000000000c2'
+\set uc 'aaaaaaaa-0000-4000-8000-0000000000c3'
+\set cn '88888888-0000-4000-8000-0000000000c1'
+select tests.conc_reset() as _ \gset
+-- CX：UA 老板、UB 员工；CY：UA 老板；CC1、CC2：UC 建的（CC1 UA 员工，CC2 UB 员工）。都审核通过（3 / 10 / 30）
+select dblink_exec('conc', format($q$
+  insert into public.regions (id, code, name)
+  values ('bbbbbbbb-0000-4000-8000-0000000000c1', 'conc_test', '{"zh": "并发测试", "en": "Conc", "ms": "Conc"}');
+  insert into public.industries (id, code, name, default_commission_rate, founding_commission_rate)
+  values ('bbbbbbbb-0000-4000-8000-0000000000c2', 'conc_test', '{"zh": "并发测试", "en": "Conc", "ms": "Conc"}', 0.03, 0.015);
+  insert into auth.users (id, phone) values (%5$L, '60111000781'), (%6$L, '60111000782'), (%7$L, '60111000783');
+  update public.profiles set role = 'seller' where id in (%5$L, %6$L, %7$L);
+  insert into public.wholesalers (id, name, industry_id, region_id, status, created_by) values
+    (%1$L, 'CX', 'bbbbbbbb-0000-4000-8000-0000000000c2', 'bbbbbbbb-0000-4000-8000-0000000000c1', 'active', null),
+    (%2$L, 'CY', 'bbbbbbbb-0000-4000-8000-0000000000c2', 'bbbbbbbb-0000-4000-8000-0000000000c1', 'active', null),
+    (%3$L, 'CC1', 'bbbbbbbb-0000-4000-8000-0000000000c2', 'bbbbbbbb-0000-4000-8000-0000000000c1', 'active', %7$L),
+    (%4$L, 'CC2', 'bbbbbbbb-0000-4000-8000-0000000000c2', 'bbbbbbbb-0000-4000-8000-0000000000c1', 'active', %7$L);
+  insert into public.wholesaler_members (wholesaler_id, user_id, member_role) values
+    (%1$L, %5$L, 'owner'), (%1$L, %6$L, 'staff'), (%2$L, %5$L, 'owner'),
+    (%3$L, %7$L, 'owner'), (%3$L, %5$L, 'staff'), (%4$L, %6$L, 'staff');
+$q$, :'cx', :'cy', :'cc1', :'cc2', :'ua', :'ub', :'uc')) as _ \gset
+select tests.remote('c1', 'select pg_backend_pid()::text') as c1_pid \gset
+select tests.remote('c2', 'select pg_backend_pid()::text') as c2_pid \gset
+
+-- ---------- 同一家批发商、两个人同时叫：在批发商那一行排队（for no key update） ----------
+select tests.conc_clear() as _ \gset
+select tests.conc_runs(:'cx', null, 2) as _ \gset
+select tests.conc_import(:'cx') as q_i1 \gset
+select tests.conc_import(:'cx') as q_i2 \gset
+select dblink_exec('c1', 'begin') as _ \gset
+select is(tests.remote('c1', tests.reserve_sql(:'q_i1', :'ua'))::jsonb ->> 'result', 'ok',
+  '同时（同一家）：c1 占位，CX 10 分钟内第 3 次（还没提交）');
+select is(
+  dblink_exec('c3', format('set lock_timeout = %L; insert into public.price_list_imports (wholesaler_id, file_path, file_type) values (%L, %L, %L)',
+                           '500ms', :'cx', :'cx' || '/' || gen_random_uuid() || '.jpg', 'image'), false),
+  'INSERT 0 1', 'c1 锁着批发商的时候，这家照样可以新增导入（for no key update 不挡外键；for update 会挡）'
+);
+select tests.remote_send('c2', tests.reserve_sql(:'q_i2', :'ub')) as _ \gset
+select is(tests.wait_remote('c2', :c2_pid, :c1_pid), 'waiting', 'c2（同一家、另一个人）在等 c1');
+select dblink_exec('c1', 'commit') as _ \gset
+select is(tests.remote_result('c2')::jsonb ->> 'result', 'quota', 'c1 提交之后 c2 才数：已经 3 次 → quota（不会多放一次）');
+select is((select count(*)::int from public.price_list_runs where wholesaler_id = :'cx'), 3, 'CX 10 分钟内还是 3 次');
+
+-- ---------- 同一个人、两家批发商同时叫：在「人」的 advisory lock 排队 ----------
+select tests.conc_clear() as _ \gset
+select tests.conc_runs(:'cy', :'ua', 2) as _ \gset
+select tests.conc_import(:'cx') as u_i1 \gset
+select tests.conc_import(:'cy') as u_i2 \gset
+select dblink_exec('c1', 'begin') as _ \gset
+select is(tests.remote('c1', tests.reserve_sql(:'u_i1', :'ua'))::jsonb ->> 'result', 'ok',
+  '同时（同一个人）：c1 在 CX 占位，UA 加起来第 3 次（还没提交）');
+select tests.remote_send('c2', tests.reserve_sql(:'u_i2', :'ua')) as _ \gset
+select is(tests.wait_remote('c2', :c2_pid, :c1_pid), 'waiting', 'c2（同一个人、另一家 CY）在等 c1');
+select dblink_exec('c1', 'commit') as _ \gset
+select is(tests.remote_result('c2')::jsonb ->> 'result', 'quota', 'c2 → quota（UA 加起来已经 3 次）');
+select is((select count(*)::int from public.price_list_runs where user_id = :'ua'), 3, 'UA 还是 3 次');
+
+-- ---------- 同一个人建的两家、两个员工同时叫：在「建的人」的 advisory lock 排队 ----------
+select tests.conc_clear() as _ \gset
+select tests.conc_runs(:'cc1', null, 2) as _ \gset
+select tests.conc_import(:'cc2') as c_i1 \gset
+select tests.conc_import(:'cc1') as c_i2 \gset
+select dblink_exec('c1', 'begin') as _ \gset
+select is(tests.remote('c1', tests.reserve_sql(:'c_i1', :'ub'))::jsonb ->> 'result', 'ok',
+  '同时（同一个人建的两家）：c1 UB 在 CC2 占位，UC 建的加起来第 3 次（还没提交）');
+select tests.remote_send('c2', tests.reserve_sql(:'c_i2', :'ua')) as _ \gset
+select is(tests.wait_remote('c2', :c2_pid, :c1_pid), 'waiting', 'c2（UA 在 CC1）在等 c1');
+select dblink_exec('c1', 'commit') as _ \gset
+select is(tests.remote_result('c2')::jsonb ->> 'result', 'quota', 'c2 → quota（UC 建的加起来已经 3 次）');
+select is((select count(*)::int from public.price_list_runs where wholesaler_id in (:'cc1', :'cc2')), 3, 'CC1 + CC2 还是 3 次');
+
+-- ---------- App 正在把导入标失败（markImportFailed）的时候占位：等那一行，不会用旧的资料占位 ----------
+select tests.conc_clear() as _ \gset
+select tests.conc_import(:'cx') as i_imp \gset
+select dblink_exec('c1', 'begin') as _ \gset
+select dblink_exec('c1', format('update public.price_list_imports set status = %L, error_message = %L where id = %L',
+                                'failed', 'START_FAILED', :'i_imp')) as _ \gset
+select tests.remote_send('c2', tests.reserve_sql(:'i_imp', :'ua')) as _ \gset
+select is(tests.wait_remote('c2', :c2_pid, :c1_pid), 'waiting', 'c1 在改导入（还没提交）：c2 的占位等那一行（for update）');
+select dblink_exec('c1', 'commit') as _ \gset
+select is(tests.remote_result('c2')::jsonb, '{"result": "not_processing", "status": "failed"}'::jsonb,
+  'c1 提交之后才看：已经 failed → not_processing');
+select is(
+  (select i.status || '/' || i.error_message || '/' || coalesce(i.ai_raw::text, '-') || '/'
+          || (select count(*) from public.price_list_runs r where r.import_id = i.id)
+   from public.price_list_imports i where i.id = :'i_imp'),
+  'failed/START_FAILED/-/0', '导入还是 failed、START_FAILED：没有占位、没算次数（不会白叫 Claude）'
+);
+
+-- ---------- 定时任务同时在跑：正在占位的导入跳过（skip locked），不会用旧的资料标成 START_FAILED ----------
+select tests.conc_clear() as _ \gset
+select tests.conc_import(:'cx', '20 minutes') as s_imp \gset
+select dblink_exec('c1', 'begin') as _ \gset
+select is(tests.remote('c1', tests.reserve_sql(:'s_imp', :'ua'))::jsonb ->> 'result', 'ok',
+  '20 分钟前建的导入现在才占位（c1 还没提交）');
+select tests.remote_send('c2', 'select public.fail_stuck_price_list_imports()::text') as _ \gset
+select is(tests.wait_remote('c2', :c2_pid, :c1_pid), 'done', '定时任务不等正在占位的那一份（c1 还没提交就做完了）');
+select dblink_exec('c1', 'commit') as _ \gset
+select is(tests.remote_result('c2'), '0', '也没有把它标成失败');
+select is((select status || '/' || (ai_raw ->> 'state') from public.price_list_imports where id = :'s_imp'), 'processing/running',
+  '占位成功的照样在跑');
+
+-- ---------- 同时 complete 和 release：等 complete 做完再看，发完的不会放回队列 ----------
+select dblink_exec('conc', format(
+  'insert into public.notifications (id, wholesaler_id, event_type, status, claimed_at, claim_id, channel) '
+  'values (%L, %L, %L, %L, now(), %L, %L)', :'cn', :'cx', 'test', 'sending', :'claim_a', 'push')) as _ \gset
+select dblink_exec('c1', 'begin') as _ \gset
+select is(tests.remote('c1', format('select public.complete_notification(%L, %L, %L, null, null, true, %L)::text',
+                                    :'cn', 'sent', 'push', :'claim_a')),
+  'true', 'c1 记「已发」（还没提交）');
+select tests.remote_send('c2', format('select public.release_notification(%L, %L)::text', :'cn', :'claim_a')) as _ \gset
+select is(tests.wait_remote('c2', :c2_pid, :c1_pid), 'waiting', '同时要把它放回队列：等 c1 做完');
+select dblink_exec('c1', 'commit') as _ \gset
+select is(tests.remote_result('c2'), 'false', 'c1 提交之后再看：已经发完了，不放回（回 false）');
+select is((select status || '/' || (sent_at is not null) from public.notifications where id = :'cn'), 'sent/true',
+  '还是「已发」（不会再被领、再发一次）');
+
+select tests.conc_reset() as _ \gset
+select dblink_disconnect('c1') as _ \gset
+select dblink_disconnect('c2') as _ \gset
+select dblink_disconnect('c3') as _ \gset
+select dblink_disconnect('conc') as _ \gset
+\else
+select skip('没有 dblink 或不是超级用户（真的 Supabase）：两个连线同时进来的测试只在 scripts/test-db.sh 跑', 24);
+\endif
+
 -- =============================================================================
 -- 定时任务（跟 06 一样：本机用假的 cron.schedule 测；真的 Supabase 检查迁移建好的）
 -- =============================================================================
@@ -603,8 +1020,19 @@ select is(
   'fail-stuck-price-list-imports | */5 * * * * | select public.fail_stuck_price_list_imports()',
   '每 5 分钟把卡住的导入标成失败（只有一个，重复跑不会多建）'
 );
+select skip('本机没有 pg_cron：迁移建好的定时任务只能在真的 Supabase 检查', 1);
 \else
--- 真的 pg_cron（Supabase）：迁移已经建好；再跑是更新同名的
+-- 真的 pg_cron（Supabase）：先检查迁移建好的（在测试自己再跑一次之前），再测重复跑是更新同名的。
+-- 06 的三个也在这里检查（06 的测试也会自己再跑一次，交易 rollback 之后这里看到的是迁移建的）
+select is(
+  (select string_agg(jobname || ' | ' || schedule || ' | ' || command, E'\n' order by jobname) from cron.job
+   where jobname in ('fail-stuck-price-list-imports', 'daily-delivery-summary', 'dispatch-notifications', 'unconfirmed-order-alerts')),
+  'daily-delivery-summary | 30 21 * * * | select public.enqueue_daily_summaries()' || E'\n'
+  || 'dispatch-notifications | * * * * * | select public._request_notification_dispatch(true)' || E'\n'
+  || 'fail-stuck-price-list-imports | */5 * * * * | select public.fail_stuck_price_list_imports()' || E'\n'
+  || 'unconfirmed-order-alerts | */5 * * * * | select public.enqueue_unconfirmed_alerts()',
+  '迁移已经建好定时任务（06 的三个、这里的一个）'
+);
 select ok(public._schedule_seller_hardening_jobs(), '有 pg_cron：建定时任务（同名的会更新）');
 select ok(public._schedule_seller_hardening_jobs(), '可以重复跑');
 select is(

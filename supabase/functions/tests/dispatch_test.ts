@@ -66,10 +66,27 @@ interface Backend {
   releases: string[];
   /** 每条通知现在的状态：claim → sending；complete → sent / failed / skipped；release → queued */
   status: Map<string, string>;
+  /** 每条通知是哪个 dispatcher 领的（claim_notifications 的 p_claim_id；release 清掉） */
+  claims: Map<string, string | null>;
+  /** claim_notifications 收到的 p_claim_id（每次叫一个） */
+  claimIds: string[];
+  /** complete_notification 回了什么（id → true / false） */
+  completeResults: Record<string, boolean>;
   claimError?: boolean;
   /** release_notification 回 500 */
   releaseError?: boolean;
+  /**
+   * release_notification 其实做完了（放回队列），但回应在路上断了（断线）；断之前别的 dispatcher 马上又领走
+   * （claim id = OTHER_DISPATCHER）
+   */
+  releaseLost?: boolean;
+  /** release_notification 等这个 promise 之后才做、才回（测 dispatch 有没有等放回去的做完） */
+  releaseGate?: Promise<void>;
 }
+
+/** 别的 dispatcher 的 claim id */
+const OTHER_DISPATCHER = "99999999-0000-4000-8000-0000000000ff";
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 /** PostgREST RPC + Google OAuth + FCM + Graph API */
 function backend(b: Backend, publicKey: CryptoKey) {
@@ -78,33 +95,55 @@ function backend(b: Backend, publicKey: CryptoKey) {
     if (name) {
       if (!isService(c)) return pgError("NOT_ALLOWED", "42501", 403);
       if (name === "claim_notifications") {
-        assertEquals(c.json(), { p_limit: 50 });
+        const p = c.json();
+        assertEquals(Object.keys(p).sort(), ["p_claim_id", "p_limit"]);
+        assertEquals(p.p_limit, 50);
+        assert(UUID.test(p.p_claim_id), p.p_claim_id);
+        b.claimIds.push(p.p_claim_id);
         if (b.claimError) return pgError("boom", "XX000", 500);
         const batch = b.batches.shift() ?? [];
         for (const r of batch) {
           const id = (r as { id?: unknown }).id;
-          if (typeof id === "string") b.status.set(id, "sending");
+          if (typeof id === "string") {
+            b.status.set(id, "sending");
+            b.claims.set(id, p.p_claim_id);
+          }
         }
         return Response.json(batch);
       }
       if (name === "complete_notification") {
         const p = c.json();
-        assertEquals(Object.keys(p).sort(), ["p_channel", "p_error", "p_id", "p_retry", "p_status", "p_wa_message_id"]);
+        assertEquals(
+          Object.keys(p).sort(),
+          ["p_channel", "p_claim_id", "p_error", "p_id", "p_retry", "p_status", "p_wa_message_id"],
+        );
         b.completes[p.p_id] = p;
-        // 照 SQL：只改「发送中」的那条（true）；不是发送中就不改（false）
-        if (b.status.get(p.p_id) !== "sending") return Response.json(false);
+        // 照 SQL：只改「发送中」的那条（true）；不是发送中就不改（false）；
+        // failed / skipped 还要是领着的那个 dispatcher（claim id 对得上），sent 不看
+        const mine = b.status.get(p.p_id) === "sending" &&
+          (p.p_status === "sent" || b.claims.get(p.p_id) === p.p_claim_id);
+        b.completeResults[p.p_id] = mine;
+        if (!mine) return Response.json(false);
         b.status.set(p.p_id, p.p_status);
         return Response.json(true);
       }
       if (name === "release_notification") {
         const p = c.json();
-        assertEquals(Object.keys(p), ["p_id"]);
+        assertEquals(Object.keys(p).sort(), ["p_claim_id", "p_id"]);
         b.releases.push(p.p_id);
+        if (b.releaseGate) await b.releaseGate;
         if (b.releaseError) return pgError("canceling statement due to statement timeout", "57014", 500);
-        // 照 SQL：没有这条 → NOTIFICATION_NOT_FOUND；只放「发送中」的（true），其他不改（false）
+        // 照 SQL：没有这条 → NOTIFICATION_NOT_FOUND；只放「发送中」、而且是自己领的（true），其他不改（false）
         if (!b.status.has(p.p_id)) return pgError("NOTIFICATION_NOT_FOUND");
-        if (b.status.get(p.p_id) !== "sending") return Response.json(false);
+        if (b.status.get(p.p_id) !== "sending" || b.claims.get(p.p_id) !== p.p_claim_id) return Response.json(false);
         b.status.set(p.p_id, "queued");
+        b.claims.set(p.p_id, null);
+        if (b.releaseLost) {
+          // 提交了，回应还没送到之前：别的 dispatcher（cron / trigger）马上又领走
+          b.status.set(p.p_id, "sending");
+          b.claims.set(p.p_id, OTHER_DISPATCHER);
+          return Promise.reject(new TypeError("connection reset by peer"));
+        }
         return Response.json(true);
       }
       if (name === "remove_device_tokens") {
@@ -163,7 +202,17 @@ async function setup(extra: Record<string, string | undefined> = {}) {
     WHATSAPP_GRAPH_VERSION: undefined,
     ...extra,
   });
-  const b: Backend = { batches: [], completes: {}, removed: [], templates: [], releases: [], status: new Map() };
+  const b: Backend = {
+    batches: [],
+    completes: {},
+    removed: [],
+    templates: [],
+    releases: [],
+    status: new Map(),
+    claims: new Map(),
+    claimIds: [],
+    completeResults: {},
+  };
   const net = fakeFetch(backend(b, publicKey));
   return {
     b,
@@ -260,6 +309,7 @@ Deno.test("dispatch：推送（失效 token 清掉）、WhatsApp（成功 / 不�
       p_error: null,
       p_wa_message_id: null,
       p_retry: false,
+      p_claim_id: t.b.claimIds[0], // 这次 dispatch 领的时候用的同一个
     });
     assertEquals([c[id(2)].p_status, c[id(2)].p_retry, c[id(2)].p_error], [
       "failed",
@@ -316,6 +366,14 @@ Deno.test("dispatch：领满 50 条就再领一批，直到领到的不满一批
     assertEquals([s.rounds, s.claimed, s.skipped, s.sent], [2, 51, 50, 1]);
     assertEquals(t.b.completes[id(200)].p_status, "sent");
     assertEquals(t.b.batches.length, 1);
+    // 一次 dispatch 一个 claim id：每一批都用同一个，complete 也带同一个；下一次 dispatch 换新的
+    const [first, ...rest] = t.b.claimIds;
+    assertEquals([t.b.claimIds.length, rest.every((x) => x === first)], [2, true]);
+    assertEquals(new Set(Object.values(t.b.completes).map((c) => c.p_claim_id)), new Set([first]));
+    t.b.batches.length = 0;
+    await (await fn.fetch(post())).json();
+    assertEquals(t.b.claimIds.length, 3);
+    assert(t.b.claimIds[2] !== first);
   } finally {
     t.restore();
   }
@@ -462,12 +520,46 @@ Deno.test("时间不够、放不回队列（release_notification 出错）→ �
   }
 });
 
+Deno.test("放回队列其实成功了、回应在路上断了，别的 dispatcher 马上又领走：退回的「标失败」带这次的 claim id，不会改到别人的", async () => {
+  const t = await setup();
+  t.b.releaseLost = true;
+  t.b.batches.push(
+    Array.from({ length: 50 }, (_, i) => claimed(1200 + i, { channel: "whatsapp", whatsapp_phone: "60111" })),
+  );
+  const clock = fakeClock();
+  try {
+    const s = await (await fn.fetch(post())).json();
+    assert(s.deferred > 0 && s.sent > 0, JSON.stringify(s));
+    const mine = t.b.claimIds[0];
+    const released = t.b.releases;
+    assertEquals(released.length, s.deferred);
+    for (const r of released) {
+      // 放回去失败（断线）→ 退回 complete(failed)，带着这次的 claim id
+      const c = t.b.completes[r];
+      assertEquals([c.p_status, c.p_error, c.p_retry, c.p_claim_id], ["failed", BUDGET_EXCEEDED, true, mine]);
+      // 那条已经是别的 dispatcher 的：数据库对不上、不改（还是「发送中」、别人的 claim id）
+      assertEquals([t.b.completeResults[r], t.b.status.get(r), t.b.claims.get(r)], [
+        false,
+        "sending",
+        OTHER_DISPATCHER,
+      ]);
+    }
+    assertEquals(s.errors, 0); // complete 叫到了（只是回 false），不算错误
+  } finally {
+    clock.restore();
+    t.restore();
+  }
+});
+
 Deno.test("worker 要被关掉（beforeunload）：领到了、还没开始发的马上放回队列，不等正在发的那几条；每条只处理一次", async () => {
   const t = await setup();
   t.b.batches.push(
     Array.from({ length: 12 }, (_, i) => claimed(1000 + i, { channel: "whatsapp", whatsapp_phone: "60111" })),
   );
   t.b.batches.push([claimed(1100, { channel: "whatsapp", whatsapp_phone: "60111" })]);
+  // release_notification 等 openGate 之后才做完：回应（请求结束）之前一定要等放回去的都做完
+  let openGate = () => {};
+  t.b.releaseGate = new Promise<void>((r) => (openGate = r));
   // Meta 一直不回，直到 finish：同时最多 5 条在发
   const inner = globalThis.fetch;
   const inFlight: (() => void)[] = [];
@@ -479,13 +571,21 @@ Deno.test("worker 要被关掉（beforeunload）：领到了、还没开始发�
     const res = fn.fetch(post());
     await waitFor(() => inFlight.length === 5);
     globalThis.dispatchEvent(new CustomEvent("beforeunload", { detail: { reason: "WallClockTime" } }));
-    // 正在发的 5 条还没回来，没开始的 7 条已经放回去了
+    // 正在发的 5 条还没回来，没开始的 7 条马上叫了 release_notification（不等正在发的那几条）
     await waitFor(() => t.b.releases.length === 7);
     assertEquals([...t.b.releases].sort(), Array.from({ length: 7 }, (_, i) => id(1005 + i)));
-    for (const r of t.b.releases) assertEquals(t.b.status.get(r), "queued");
     assertEquals(Object.keys(t.b.completes), []);
     inFlight.forEach((finish) => finish());
+    // 正在发的 5 条都记好了，但放回去的还没做完：还不能回应（请求结束了 worker 就可能被关掉，那几条会卡在「发送中」）
+    await waitFor(() => Object.keys(t.b.completes).length === 5);
+    const early = await Promise.race([
+      res.then(() => "responded"),
+      new Promise((r) => setTimeout(() => r("waiting"), 50)),
+    ]);
+    assertEquals(early, "waiting");
+    openGate();
     const s = await (await res).json();
+    for (const r of t.b.releases) assertEquals(t.b.status.get(r), "queued");
     assertEquals([s.rounds, s.sent, s.deferred, s.errors], [1, 5, 7, 0]);
     assertEquals(t.b.releases.length, 7);
     assertEquals(Object.keys(t.b.completes).sort(), Array.from({ length: 5 }, (_, i) => id(1000 + i)));

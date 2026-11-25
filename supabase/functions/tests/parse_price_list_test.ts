@@ -104,6 +104,8 @@ interface State {
   patches: URLSearchParams[];
   /** 这时候 PostgREST 全部回 503（数据库暂时连不上） */
   restDown?: (c: Call) => boolean;
+  /** Auth 的 /user 换成这个回应（Auth 服务出问题）；丢错 = 断线 */
+  authResponse?: () => Response;
 }
 
 /** 照 _price_list_run_limits（20261127000200_seller_hardening.sql）：[段, 长度, active 上限, pending 上限] */
@@ -113,8 +115,10 @@ const LIMITS = [["burst", 10 * MIN, 3, 2], ["hour", 60 * MIN, 10, 4], ["day", 24
 const pgTime = (ms: number) => new Date(ms).toISOString().replace(/\.(\d{3})Z$/, ".$1000+00:00");
 
 /**
- * 假的 reserve_price_list_run：检查的顺序、回传的样子都照 SQL（20261127000200_seller_hardening.sql）。
- * 只有一家批发商（W）、一份导入（s.imp）。不跑的结果什么都不改。
+ * 假的 reserve_price_list_run：检查的顺序、回传的样子都照 SQL（20261127000200_seller_hardening.sql；
+ * 顺序和进位 07_seller_hardening.test.sql 有测）。只有一家批发商（W）、一份导入（s.imp）。不跑的结果什么都不改。
+ * 用量算两份：这家批发商、叫的人（在每一家跑的都算，客服不算）。SQL 还会把「建这家批发商的人」建的每一家
+ * 加起来算、停权的老板也挡，这里只有一家批发商，不用。
  */
 function reserve(s: State, p: Record<string, unknown>): Response {
   const uuidOrNull = (v: unknown) => v == null || (typeof v === "string" && UUID_RE.test(v));
@@ -138,14 +142,18 @@ function reserve(s: State, p: Record<string, unknown>): Response {
   }
   let window: string | null = null;
   let retry = 0;
+  const scopes: ((r: Run) => boolean)[] = [(r) => r.wholesaler_id === W];
+  if (!s.admins.includes(user)) scopes.push((r) => r.user_id === user);
   for (const [name, len, active, pending] of LIMITS) {
     const max = s.wholesalerStatus === "active" ? active : pending;
-    const times = s.runs.filter((r) => r.wholesaler_id === W && r.created_at > now - len).map((r) => r.created_at)
-      .sort((a, b) => a - b);
-    if (times.length >= max) {
-      // 第 (已跑 - 上限 + 1) 旧的那一次离开这段时间就有位置；几段都满 → 要等最久的那段
-      const wait = Math.max(1, Math.ceil((times[times.length - max] + len - now) / 1000));
-      if (window === null || wait > retry) [window, retry] = [name, wait];
+    for (const inScope of scopes) {
+      const times = s.runs.filter((r) => inScope(r) && r.created_at > now - len).map((r) => r.created_at)
+        .sort((a, b) => a - b);
+      if (times.length >= max) {
+        // 第 (已跑 - 上限 + 1) 旧的那一次离开这段时间就有位置；几份、几段都满 → 要等最久的
+        const wait = Math.max(1, Math.ceil((times[times.length - max] + len - now) / 1000));
+        if (window === null || wait > retry) [window, retry] = [name, wait];
+      }
     }
   }
   if (window) return Response.json({ result: "quota", window, retry_after_sec: retry });
@@ -194,6 +202,7 @@ function backend(s: State) {
       return reserve(s, params);
     }
     if (p === "/auth/v1/user") {
+      if (s.authResponse) return s.authResponse();
       if (c.headers.get("authorization") !== `Bearer ${USER_JWT}`) {
         return Response.json({ code: 401, error_code: "bad_jwt", msg: "invalid JWT" }, { status: 401 });
       }
@@ -351,6 +360,68 @@ Deno.test("parse-price-list：身份、参数、设定不全、RLS 读不到 →
     assertEquals(c.net.calls.length, 0);
   } finally {
     c.restore();
+  }
+});
+
+Deno.test("Auth 服务出问题（断线、5xx、429、回的不是 JSON）→ 503 AUTH_UNAVAILABLE（不是 401：JWT 可能是好的）；JWT 真的不对才 401", async () => {
+  const cases: [string, () => Response, number, string][] = [
+    ["503", () => Response.json({ code: 503, msg: "unavailable" }, { status: 503 }), 503, "AUTH_UNAVAILABLE"],
+    ["500", () => Response.json({ code: 500, msg: "boom" }, { status: 500 }), 503, "AUTH_UNAVAILABLE"],
+    ["502 HTML（gateway）", () => new Response("<html>Bad Gateway</html>", { status: 502 }), 503, "AUTH_UNAVAILABLE"],
+    ["504 逾时", () => new Response("upstream timeout", { status: 504 }), 503, "AUTH_UNAVAILABLE"],
+    [
+      "429 太忙",
+      () => Response.json({ code: 429, error_code: "over_request_rate_limit", msg: "slow down" }, { status: 429 }),
+      503,
+      "AUTH_UNAVAILABLE",
+    ],
+    ["回的不是 JSON（4xx）", () => new Response("<html>Forbidden</html>", { status: 403 }), 503, "AUTH_UNAVAILABLE"],
+    [
+      "断线",
+      () => {
+        throw new TypeError("connection refused");
+      },
+      503,
+      "AUTH_UNAVAILABLE",
+    ],
+    [
+      "JWT 不对（401）",
+      () => Response.json({ code: 401, error_code: "bad_jwt", msg: "invalid JWT" }, { status: 401 }),
+      401,
+      "UNAUTHORIZED",
+    ],
+    [
+      "用户删掉了（403 user_not_found）",
+      () =>
+        Response.json({ code: 403, error_code: "user_not_found", msg: "User from sub claim in JWT does not exist" }, {
+          status: 403,
+        }),
+      401,
+      "UNAUTHORIZED",
+    ],
+    [
+      "session 不在了（登出）",
+      () =>
+        Response.json({ code: 403, error_code: "session_not_found", msg: "Session does not exist" }, { status: 403 }),
+      401,
+      "UNAUTHORIZED",
+    ],
+  ];
+  for (const [name, response, status, error] of cases) {
+    const t = setup({ authResponse: response });
+    try {
+      const res = await call();
+      assertEquals([res.status, await res.json()], [status, { error }], name);
+      assertEquals(res.headers.get("access-control-allow-origin"), "*", name);
+      // 都还没碰导入：没读、没叫 reserve、没占位
+      assertEquals(
+        [t.s.reserveCalls.length, t.s.runs.length, t.s.imp.ai_raw, t.s.claudeCalls.length],
+        [0, 0, null, 0],
+        name,
+      );
+    } finally {
+      t.restore();
+    }
   }
 });
 
@@ -1172,6 +1243,9 @@ Deno.test("用量：批发商一直新建导入再叫 → 第 4 次 429（Retry-
     // 超过一天的不算
     t.s.runs = Array.from({ length: 30 }, (_, i) => pastRun(24 * 60 + 1 + i));
     assertEquals((await again()).status, 202);
+    // 同一个人在别家批发商跑的也算（一直注册新的批发商不会多出用量）
+    t.s.runs = [1, 2, 3].map((m) => ({ ...pastRun(m), wholesaler_id: OTHER_W }));
+    await blocked("burst", 1, 600);
   } finally {
     t.restore();
   }
