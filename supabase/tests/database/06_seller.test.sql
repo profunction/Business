@@ -2,7 +2,7 @@
 -- WhatsApp 按钮 / 消息 / 状态、客服提醒、每日总结、dispatcher（pg_net + Vault）、Storage、定时任务、权限
 begin;
 \ir _helpers.psql
-select plan(229);
+select plan(256);
 select tests.setup_world();
 
 -- ---------- 准备订单 ----------
@@ -77,6 +77,31 @@ select is(
 select is(
   (public.list_seller_orders(tests.uid('W1'), p_limit => 1) -> 0 ->> 'id')::uuid, :'o2'::uuid, 'p_limit 限制张数'
 );
+select is(
+  (select array_agg((e ->> 'id')::uuid order by ord)
+   from jsonb_array_elements(public.list_seller_orders(tests.uid('W1'), '{}'::public.order_status[])) with ordinality as t(e, ord)),
+  array[:'o2', :'o3', :'o1']::uuid[], 'p_statuses 是空数组：等于不筛选（App 的「全部」）'
+);
+select is(
+  jsonb_array_length(public.list_seller_orders(tests.uid('W1'), p_limit => 0))
+    || '/' || jsonb_array_length(public.list_seller_orders(tests.uid('W1'), p_limit => -5)),
+  '1/1', 'p_limit 最少 1'
+);
+-- p_limit 最多 200：子交易里多放 198 张已送达的单（一共 201 张），看完退回
+savepoint many_orders;
+select tests.logout();
+insert into public.orders (order_no, checkout_id, shop_id, wholesaler_id, zone_id, status, goods_subtotal_sen, shipping_fee_sen,
+                           expected_delivery_date, source)
+select o.order_no || '-' || g, o.checkout_id, o.shop_id, o.wholesaler_id, o.zone_id, 'delivered', o.goods_subtotal_sen,
+       o.shipping_fee_sen, o.expected_delivery_date, o.source
+from public.orders o cross join generate_series(1, 198) g
+where o.id = :'o1';
+select tests.login_as(tests.uid('seller1'));
+select jsonb_array_length(public.list_seller_orders(tests.uid('W1'), p_limit => 500)) as many_500,
+       jsonb_array_length(public.list_seller_orders(tests.uid('W1'), p_limit => null)) as many_null,
+       (select count(*) from public.orders where wholesaler_id = tests.uid('W1')) as many_total \gset
+rollback to savepoint many_orders;
+select is(:many_total || '/' || :many_500 || '/' || :many_null, '201/200/50', 'p_limit 最多 200；不给（null）就是 50');
 select throws_ok(format('select public.list_seller_orders(%L)', tests.uid('W2')), '42501', 'NOT_ALLOWED', '不能看别家批发商的订单');
 
 select tests.login_as(tests.uid('seller2'));
@@ -86,6 +111,9 @@ select is(
 );
 
 -- ---------- 首页 ----------
+-- 缺货 / 快卖完只算上架中的商品：草稿 P6 也缺货，但不算
+select tests.logout();
+update public.products set stock_status = 'out_of_stock' where id = tests.uid('P6');
 select tests.login_as(tests.uid('seller1'));
 select public.get_seller_home(tests.uid('W1')) as home \gset
 select is(
@@ -103,14 +131,33 @@ select is((:'home'::jsonb ->> 'today_order_count')::int, 2, '首页：今天要�
 select is((:'home'::jsonb ->> 'today_total_sen')::int, 17000 + 9800, '首页：今天要送的总额（缺货的不算）');
 select is(
   :'home'::jsonb -> 'product_counts', '{"active": 2, "draft": 1, "out_of_stock": 0, "low_stock": 1}'::jsonb,
-  '首页：商品数量（上架、草稿、缺货、快卖完）'
+  '首页：商品数量（上架、草稿、缺货、快卖完）；草稿缺货不算缺货'
 );
+-- 下架（archived）的快卖完也不算
+select tests.logout();
+update public.products set status = 'archived', stock_status = 'low_stock' where id = tests.uid('P6');
+select tests.login_as(tests.uid('seller1'));
+select is(
+  public.get_seller_home(tests.uid('W1')) -> 'product_counts', '{"active": 2, "draft": 0, "out_of_stock": 0, "low_stock": 1}'::jsonb,
+  '首页：下架的商品快卖完不算快卖完'
+);
+select tests.logout();
+update public.products set status = 'draft', stock_status = 'in_stock' where id = tests.uid('P6');
+select tests.login_as(tests.uid('seller1'));
 select is(:'home'::jsonb -> 'latest_import', 'null'::jsonb, '还没上传过价目表');
 select throws_ok(format('select public.get_seller_home(%L)', tests.uid('W2')), '42501', 'NOT_ALLOWED', '不能看别家批发商的首页');
 select tests.login_as(tests.uid('buyer1'));
 select throws_ok(format('select public.get_seller_home(%L)', tests.uid('W1')), '42501', 'NOT_ALLOWED', '买家不能看批发商首页');
 select tests.login_as(tests.uid('admin'));
 select is((public.get_seller_home(tests.uid('W1')) ->> 'pending_count')::int, 1, '客服可以看任何一家批发商的首页');
+select is(jsonb_array_length(public.list_seller_orders(tests.uid('W1'))), 3, '客服可以看任何一家批发商的订单');
+-- 客服打错 / 已删掉的批发商：三个都报 WHOLESALER_NOT_FOUND（订单列表不是回空的，像是「没有订单」）
+select throws_ok(format('select public.get_seller_home(%L)', '00000000-0000-4000-8000-000000000999'),
+  'P0001', 'WHOLESALER_NOT_FOUND', '首页：批发商不存在');
+select throws_ok(format('select public.list_seller_orders(%L)', '00000000-0000-4000-8000-000000000999'),
+  'P0001', 'WHOLESALER_NOT_FOUND', '订单列表：批发商不存在');
+select throws_ok(format('select public.get_delivery_summary(%L)', '00000000-0000-4000-8000-000000000999'),
+  'P0001', 'WHOLESALER_NOT_FOUND', '送货总结：批发商不存在');
 
 -- ---------- 订单详情（第三步的 get_order，批发商也用）----------
 select tests.login_as(tests.uid('seller1'));
@@ -354,6 +401,12 @@ select is(
 select throws_ok(format('select public.apply_price_list_import(%L)', :'imp'), 'P0001', 'IMPORT_NOT_IN_REVIEW', '不能上架两次');
 select tests.logout();
 select throws_ok(format('select public.suggest_import_matches(%L)', :'imp'), 'P0001', 'IMPORT_ALREADY_APPLIED', '已上架的导入不能再比对');
+select throws_ok(format('select public.suggest_import_matches(%L)', '99999999-0000-4000-8000-000000000999'),
+  'P0001', 'IMPORT_NOT_FOUND', '比对：没有这次导入');
+select tests.login_as(tests.uid('seller1'));
+select throws_ok(format('select public.apply_price_list_import(%L)', '99999999-0000-4000-8000-000000000999'),
+  'P0001', 'IMPORT_NOT_FOUND', '上架：没有这次导入');
+select tests.logout();
 
 -- 商品名相似度：英文跟 pg_trgm 一样；中文字也算字（不会因为数字一样就当成同一样东西）
 select is(public._name_similarity('16oz PP Cup', '16oz cup'), extensions.similarity('16oz pp cup', '16oz cup'), '英文名字直接用 pg_trgm');
@@ -419,6 +472,77 @@ rollback to savepoint perf;
 select ok(:perf_secs < 5, '200 行 × 400 样很像的商品：几秒内比对完（这次 ' || :perf_secs || ' 秒）');
 select is(
   (:'perf_result'::jsonb ->> 'matched') || '/' || :perf_right, '200/200', '每一行都对到同一款（数字都一样的那一样）'
+);
+
+-- 一对一、同样像、下架的商品（W3，全英文名字）
+--   * 新款「16oz Clear Thick」最像的是「16oz Clear」，但已经对给第 1 行 → create；
+--     不能退而求其次对到「16oz Clear Printed」（确认上架时会把新款的价钱写到 Printed 上，新款也没建）
+--   * 同名两样（上架、下架）一样像：上架的优先（下架那样的 id 故意排在前面）
+--   * 只有下架的那样对得上：也对到，上架时重新上架
+--   * 同名、不同单位的两样，两行都没写单位：一样像，两行各对一样（不会有一行变 create）
+\set imp3 '99999999-0000-4000-8000-000000000003'
+\set pc_clear   'eeeeeeee-0000-4000-8000-000000000001'
+\set pc_printed 'eeeeeeee-0000-4000-8000-000000000002'
+\set bowl_arch  'eeeeeeee-0000-4000-8000-000000000003'
+\set bowl_act   'eeeeeeee-0000-4000-8000-000000000004'
+\set bag_arch   'eeeeeeee-0000-4000-8000-000000000005'
+\set straw_pack 'eeeeeeee-0000-4000-8000-000000000006'
+\set straw_ctn  'eeeeeeee-0000-4000-8000-000000000007'
+insert into public.products (id, wholesaler_id, name, unit, pack_qty, price_sen, status) values
+  (:'pc_clear',   tests.uid('W3'), 'PP Cup 16oz Clear',         'carton', 1000, 9000,  'active'),
+  (:'pc_printed', tests.uid('W3'), 'PP Cup 16oz Clear Printed', 'carton', 1000, 9900,  'active'),
+  (:'bowl_arch',  tests.uid('W3'), 'Kraft Bowl 750ml',          'carton', 300,  11000, 'archived'),
+  (:'bowl_act',   tests.uid('W3'), 'Kraft Bowl 750ml',          'carton', 300,  11500, 'active'),
+  (:'bag_arch',   tests.uid('W3'), 'Paper Bag Medium',          'pack',   50,   1200,  'archived'),
+  (:'straw_pack', tests.uid('W3'), 'Straw 6mm Black',           'pack',   100,  500,   'active'),
+  (:'straw_ctn',  tests.uid('W3'), 'Straw 6mm Black',           'carton', 5000, 20000, 'active');
+insert into public.price_list_imports (id, wholesaler_id, file_path, file_type)
+values (:'imp3', tests.uid('W3'), tests.uid('W3') || '/5b0f2c1e-8a7d-4c1e-9a3b-2f6d1e0c9a13.jpg', 'image');
+insert into public.price_list_import_rows (id, import_id, row_no, name, unit, pack_qty, price_sen) values
+  ('99999999-0000-4000-8000-000000000301', :'imp3', 1, 'PP Cup 16oz Clear',       'carton', 1000, 9100),
+  ('99999999-0000-4000-8000-000000000302', :'imp3', 2, 'PP Cup 16oz Clear Thick', 'carton', 1000, 9500),
+  ('99999999-0000-4000-8000-000000000303', :'imp3', 3, 'Kraft Bowl 750ml',        'carton', 300,  11800),
+  ('99999999-0000-4000-8000-000000000304', :'imp3', 4, 'Paper Bag Medium',        'pack',   50,   1300),
+  ('99999999-0000-4000-8000-000000000305', :'imp3', 5, 'Straw 6mm Black',         null,     null, 550),
+  ('99999999-0000-4000-8000-000000000306', :'imp3', 6, 'Straw 6mm Black',         null,     null, 21000);
+select ok(
+  public._name_similarity('PP Cup 16oz Clear Thick', 'PP Cup 16oz Clear Printed') > 0.45
+    and public._name_similarity('PP Cup 16oz Clear Thick', 'PP Cup 16oz Clear')
+        > public._name_similarity('PP Cup 16oz Clear Thick', 'PP Cup 16oz Clear Printed'),
+  '（新款跟 Printed 也超过 0.45，但跟 Clear 更像）'
+);
+select is(
+  public.suggest_import_matches(:'imp3') ->> 'matched', '5', '6 行里 5 行对到自己的商品'
+);
+select is(
+  (select array_agg(r.action::text || ':' || coalesce(p.name || '/' || p.status || '/' || p.unit, '-') order by r.row_no)
+   from public.price_list_import_rows r
+   left join public.products p on p.id = r.matched_product_id
+   where r.import_id = :'imp3'),
+  array[
+    'update:PP Cup 16oz Clear/active/carton',
+    'create:-',
+    'update:Kraft Bowl 750ml/active/carton',
+    'update:Paper Bag Medium/archived/pack',
+    'update:Straw 6mm Black/active/pack',
+    'update:Straw 6mm Black/active/carton'
+  ],
+  '最像的已经给了别行 → create（不对到第二像的）；同样像时上架的优先；下架的也对得到；同样像的两样两行各一样'
+);
+update public.price_list_imports set status = 'review' where id = :'imp3';
+select tests.login_as(tests.uid('seller3'));
+select is(
+  public.apply_price_list_import(:'imp3'), '{"created": 1, "updated": 5, "skipped": 0}'::jsonb, 'W3 确认上架：新增 1 样、改了 5 样'
+);
+select tests.logout();
+select is(
+  (select string_agg(p.name || ':' || p.unit || ':' || p.price_sen || ':' || p.status, ', '
+                     order by p.name collate "C", p.unit, p.price_sen)
+   from public.products p where p.wholesaler_id = tests.uid('W3') and p.name ~ '^(PP Cup|Kraft|Paper|Straw)'),
+  'Kraft Bowl 750ml:carton:11000:archived, Kraft Bowl 750ml:carton:11800:active, '
+  || 'PP Cup 16oz Clear:carton:9100:active, PP Cup 16oz Clear Printed:carton:9900:active, PP Cup 16oz Clear Thick:carton:9500:active, '
+  || 'Paper Bag Medium:pack:1300:active, Straw 6mm Black:carton:21000:active, Straw 6mm Black:pack:550:active',
+  '上架后：Printed 的价钱没被改、新款 Thick 新增了；下架的那样碗不动；对到的下架纸袋重新上架'
 );
 
 -- =============================================================================
@@ -543,6 +667,23 @@ select is(
 );
 select is(public.complete_notification(:'n1', 'sent', 'push'), false, '不是「发送中」的不能再完成一次');
 select is((select status || '/' || attempts from public.notifications where id = :'n1'), 'failed/2', '没有被改');
+-- 卡住被重新领、另一个 dispatcher 已经完成了（sent），原来那个 dispatcher 的 WhatsApp 后来才报告发出去：
+-- 通知不改，但那条 WhatsApp 照样记下（按钮 context 要对得到这张订单和批发商，只有 BSUID 的批发商按按钮才认得）
+\set n15 '11111111-0000-4000-8000-000000000015'
+insert into public.notifications (id, wholesaler_id, event_type, payload, status, attempts, channel, sent_at, wa_message_id)
+values (:'n15', tests.uid('W2'), 'order_new', jsonb_build_object('order_id', :'o_w2'), 'sent', 1, 'whatsapp',
+        now() - interval '1 minute', 'wamid.FIRST');
+select is(public.complete_notification(:'n15', 'sent', 'whatsapp', null, 'wamid.LATE'), false, '已经完成的通知：回 false');
+select is(
+  (select status || '/' || attempts || '/' || wa_message_id || '/' || (sent_at = now() - interval '1 minute') from public.notifications where id = :'n15'),
+  'sent/1/wamid.FIRST/true', '通知没有被改'
+);
+select is(
+  (select direction || '/' || message_type || '/' || phone || '/' || wholesaler_id || '/' || order_id
+   from public.whatsapp_messages where wa_message_id = 'wamid.LATE'),
+  'outbound/template/60122000002/' || tests.uid('W2') || '/' || :'o_w2',
+  '晚到的那条 WhatsApp 也记一行（关联批发商和订单）'
+);
 update public.notifications set next_attempt_at = now() - interval '1 second' where id = :'n1';
 select is(jsonb_array_length(public.claim_notifications()), 1, '再领一次');
 select ok(public.complete_notification(:'n1', 'failed', 'whatsapp', 'WA 131026 not on WhatsApp', p_retry => false), '永久失败');
@@ -593,6 +734,8 @@ select is(
 select ok(public.complete_notification(:'n4', 'skipped', null, 'NO_CHANNEL'), '没渠道的标为跳过');
 select is((select status || '/' || attempts || '/' || last_error from public.notifications where id = :'n4'), 'skipped/1/NO_CHANNEL', '跳过：记下原因');
 select throws_ok(format('select public.complete_notification(%L, %L, %L)', :'n6', 'queued', 'push'), 'P0001', 'INVALID_STATUS', '只能完成为 sent / failed / skipped');
+select throws_ok(format('select public.complete_notification(%L, %L, %L)', '11111111-0000-4000-8000-000000000999', 'sent', 'push'),
+  'P0001', 'NOTIFICATION_NOT_FOUND', '没有这条通知');
 
 -- notify_channel 强制
 update public.wholesalers set notify_channel = 'whatsapp', whatsapp_phone = '60122000001', whatsapp_opt_in_at = now() where id = tests.uid('W1');
@@ -654,6 +797,10 @@ select is(
   'fid-buyer1:fid:android,tok-buyer1:token:ios', '自己的 token 和种类'
 );
 select throws_ok($$select public.register_device_token('x', 'android', 'apns')$$, 'P0001', 'INVALID_TOKEN_KIND', '种类只能是 token / fid');
+select throws_ok($$select public.register_device_token('   ', 'android')$$, 'P0001', 'INVALID_TOKEN', 'token 不能是空的');
+select throws_ok($$select public.register_device_token(null, 'android')$$, 'P0001', 'INVALID_TOKEN', 'token 不能是 null');
+select throws_ok($$select public.register_device_token('x', 'symbian')$$, 'P0001', 'INVALID_PLATFORM', '平台只能是 ios / android / web');
+select throws_ok($$select public.register_device_token('x', null)$$, 'P0001', 'INVALID_PLATFORM', '平台不能是 null');
 select tests.login_as(tests.uid('buyer2'));
 select lives_ok($$select public.register_device_token('fid-buyer1', 'android', 'fid')$$, '同一部手机换人登录');
 select tests.logout();
@@ -811,6 +958,11 @@ select is(
   (select last_error from public.notifications where id = :'n2'), 'Message undeliverable (131026)', '通知也记下 WhatsApp 发送失败的原因'
 );
 select is(public.update_whatsapp_status('wamid.N2', 'deleted') ->> 'result', 'ignored', '不认识的状态忽略');
+-- 语音消息「played」排在「read」后面：晚到的 read 不会把 played 改回去
+select is(public.update_whatsapp_status('wamid.OUT.C', 'read') ->> 'result', 'updated', 'read');
+select is(public.update_whatsapp_status('wamid.OUT.C', 'played') ->> 'result', 'updated', 'played 比 read 后面');
+select is(public.update_whatsapp_status('wamid.OUT.C', 'read') ->> 'result', 'stale', '晚到的 read 不会把 played 改回去');
+select is((select delivery_status from public.whatsapp_messages where wa_message_id = 'wamid.OUT.C'), 'played', '还是 played');
 select is(public.update_whatsapp_status('wamid.EARLY', 'sent') ->> 'result', 'updated', '状态比完成记录先到：先建一行');
 \set n12 '11111111-0000-4000-8000-000000000012'
 insert into public.notifications (id, wholesaler_id, event_type, payload, status)

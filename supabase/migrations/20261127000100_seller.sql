@@ -306,6 +306,10 @@ begin
   if not (public.is_wholesaler_member(p_wholesaler_id) or public.is_admin()) then
     raise exception 'NOT_ALLOWED' using errcode = '42501';
   end if;
+  -- 跟首页、送货总结一样：客服打错 / 已删掉的批发商要报错，不是回一个空的列表（像是「没有订单」）
+  if not exists (select 1 from public.wholesalers w where w.id = p_wholesaler_id) then
+    raise exception 'WHOLESALER_NOT_FOUND' using errcode = 'P0001';
+  end if;
 
   return coalesce((
     select jsonb_agg(x.j order by x.rn)
@@ -431,7 +435,8 @@ $$;
 
 -- 服务器（parse-price-list）写完每一行之后调用：
 --   * 同一家批发商的商品里找名字最像的（> 0.45）→ matched_product_id，action = update；
---     一样商品只对给最像的那一行（避免两行改同一样商品）；一样像时，单位、包装数量也相同的优先
+--     一样商品只对给最像的那一行（避免两行改同一样商品），其他行变 create（不改对到第二像的）；
+--     一样像时，单位、包装数量也相同的优先；下架的也对，但排在后面
 --   * 标准商品里找最像的（zh / en / ms 取最高，> 0.3）→ suggested_catalog_item_id
 --   * 两边名字里的数字对不上（一边不包含另一边，例如 12oz / 16oz）就不算同一样（_name_numbers）
 --   * 没名字或没价钱 → skip；对到商品 → update；其他 → create
@@ -493,23 +498,32 @@ begin
     ),
     pairs as (
       select r.id as row_id, p.id as product_id, p.status,
-             case when r.is_ascii and p.is_ascii then extensions.similarity(lower(r.name), lower(p.name))
-                  else c.n::real / (cardinality(r.t) + cardinality(p.t) - c.n)::real end as sim,
-             (r.unit is not distinct from p.unit) as same_unit,
-             (r.pack_qty is not distinct from p.pack_qty) as same_pack
+             s.sim
+               + case when r.unit is not distinct from p.unit then 0.05 else 0 end
+               + case when r.pack_qty is not distinct from p.pack_qty then 0.05 else 0 end as score
       from common c
       join r on r.k = c.rk
       join p on p.k = c.pk
-      where r.nums <@ p.nums or p.nums <@ r.nums
+      cross join lateral (
+        select case when r.is_ascii and p.is_ascii then extensions.similarity(lower(r.name), lower(p.name))
+                    else c.n::real / (cardinality(r.t) + cardinality(p.t) - c.n)::real end as sim
+      ) s
+      where (r.nums <@ p.nums or p.nums <@ r.nums) and s.sim > 0.45
+    ),
+    -- 每一行只考虑它最像的那样（一样像的几样都算，例如同名、不同单位的两样）。
+    -- 最像的已经给了更像的那一行，这一行就变 create，不会退而求其次对到第二像的商品
+    -- （例如价目表多了新款「16oz Clear Thick」，「16oz Clear」已经对给别行，
+    -- 不能把新款的价钱写到「16oz Clear Printed」上）
+    best as (
+      select pairs.*, max(pairs.score) over (partition by pairs.row_id) as best_score
+      from pairs
     )
-    select pairs.row_id, pairs.product_id
-    from pairs
-    where pairs.sim > 0.45
-    order by pairs.sim
-               + case when pairs.same_unit then 0.05 else 0 end
-               + case when pairs.same_pack then 0.05 else 0 end desc,
-             (pairs.status = 'archived'),
-             pairs.row_id, pairs.product_id
+    select best.row_id, best.product_id
+    from best
+    where best.score = best.best_score
+    order by best.score desc,
+             (best.status = 'archived'),
+             best.row_id, best.product_id
   loop
     if not (pr.row_id = any (v_rows_done)) and not (pr.product_id = any (v_products_used)) then
       update public.price_list_import_rows set matched_product_id = pr.product_id where id = pr.row_id;
