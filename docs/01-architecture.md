@@ -1,7 +1,7 @@
 # 第一步：整体架构、数据库表设计、开发步骤
 
 > 状态：设计稿，还没写代码。第二步会照这份设计写数据库迁移文件（SQL）和 RLS。
-> 第 5 节有几个问题要你先确认，每个都附了建议答案。
+> 第 5 节的 5 个问题已确认（2026-11-25：全部照建议，之后不满意再改）。
 
 **一句话：** 小店老板打开 App，比较几家批发商的价钱，一键下单；批发商确认后自己送货。平台不经手货款也不管物流，收入来自买家月费和批发商佣金。
 
@@ -97,7 +97,8 @@ docs/                   设计文档和提示词
 | `profiles` | 每个登录账号一行，对应 Supabase 的 `auth.users` | `id`、`full_name`、`phone`、`role`（buyer / seller / admin）、`locale`（zh / en / ms） |
 | `shops` | 买家的店 | `name`、`shop_type`（餐馆 / 饮料店 / 杂货店 / 其他）、`zone_id`、`address`、`phone`、`whatsapp_phone`、`notify_channel`、`created_by` |
 | `shop_members` | 哪些账号可以操作这家店 | `shop_id`、`user_id`、`member_role`（owner / staff） |
-| `wholesalers` | 批发商 | `name`、`industry_id`、`region_id`、`phone`、`whatsapp_phone`、`notify_channel`、`status`（pending 待审核 / active / suspended）、`is_founding`、`founding_no`（1–100）、`commission_rate_override`、`rating_avg`、`rating_count`、`order_cutoff_time`、`payment_terms` |
+| `wholesalers` | 批发商 | `name`、`industry_id`、`region_id`、`phone`、`whatsapp_phone`、`notify_channel`、`status`（pending 待审核 / active / suspended）、`is_founding`、`founding_no`（1–100）、`rating_avg`、`rating_count`、`order_cutoff_time`、`payment_terms` |
+| `wholesaler_private` | 批发商的私密资料，买家看不到 | `commission_rate_override`（单独调整的佣金比例）、开账单用的名称 / 电邮 / 地址、SSM 号码 |
 | `wholesaler_members` | 哪些账号可以操作这家批发商 | `wholesaler_id`、`user_id`、`member_role` |
 | `wholesaler_delivery_zones` | 每家批发商送哪些区、运费多少 | `wholesaler_id`、`zone_id`、`shipping_fee_sen`、`free_shipping_min_sen`（满多少免运费，可空）、`min_order_sen`（最低消费，可空）、`lead_time_days`（几天送到）、`delivery_weekdays` |
 | `device_tokens` | 推送用的手机 token | `user_id`、`fcm_token`、`platform`、`last_seen_at` |
@@ -200,7 +201,7 @@ App 里语音下单，草稿由老板自己确认；WhatsApp 下单，草稿由�
 | 数据 | 买家 | 批发商 | 客服 |
 |---|---|---|---|
 | 订单、订单明细、状态记录 | 自己店的 | 发给自己的 | 全部 |
-| 商品 | 已上架的（价钱走专用函数，见下面） | 自己的，可以改 | 全部 |
+| 商品 | 不能直接查，要用 `get_offers()`（见下面） | 自己的，可以改 | 全部 |
 | 店铺资料 | 自己的 | 给自己下过单的店（名字、地址、电话，送货要用） | 全部 |
 | 订阅、付款 | 自己的 | 自己的上架费和佣金付款 | 全部 |
 | 佣金记录、佣金账单 | 看不到 | 自己的 | 全部 |
@@ -263,17 +264,14 @@ App 里语音下单，草稿由老板自己确认；WhatsApp 下单，草稿由�
 
 ---
 
-## 5. 做第二步之前请你确认
+## 5. 已确认的决定（2026-11-25）
 
-每题都有建议答案，同意的话直接回「照建议」就可以。
+全部照建议，之后不满意再改。改的时候大多只要改 `app_settings` 表里的数字，不用改代码。
 
-1. **未付费用户的「三家批发商」怎么选？**
-   建议：老板自己选 3 家（第一次会自动填他买过的那几家），每个月可以换一次。
-2. **未付费用户能不能下单？**
-   建议：可以，但只能向这 3 家下单。
-3. **佣金按什么金额算？**
-   建议：只算已送达的货价，不含运费；缺货和取消的不算。
-4. **续费宽限期多久？**
-   建议：7 天。宽限期内补付，保留原来锁定的价钱。
-5. **批发商能不能自己注册上架？**
-   建议：可以自己注册，但要客服审核通过后才出现在买家面前。
+| # | 问题 | 决定 | 在哪里改 |
+|---|---|---|---|
+| 1 | 未付费用户的「三家批发商」怎么选 | 老板自己选 3 家；试用或订阅停了时，系统先自动帮他选最近买过的几家；拿掉已选的批发商每 30 天一次，补满空位随时可以 | `app_settings.free_unlocked_wholesalers`、`unlock_change_cooldown_days` |
+| 2 | 未付费用户能不能下单 | 可以，但只能向这 3 家下单 | `_quote_cart()` 里的 `WHOLESALER_LOCKED` |
+| 3 | 佣金按什么金额算 | 只算已送达的货价，不含运费；缺货和取消的不算 | `orders_after_change()` |
+| 4 | 续费宽限期 | 7 天，宽限期内补付保留原来锁定的价钱 | `app_settings.subscription_grace_days` |
+| 5 | 批发商能不能自己注册 | 可以，但状态是「待审核」，客服通过后才出现在买家面前 | `wholesalers.status` |

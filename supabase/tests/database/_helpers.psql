@@ -1,0 +1,196 @@
+-- 测试共用的辅助函数和测试数据。每个测试文件开头用 \ir _helpers.psql 载入，
+-- 测试在一个交易里跑，最后 rollback，不会留下任何东西。
+--
+-- 固定 id（方便看懂测试）：
+--   用户   aaaaaaaa-...-0001 buyer1（店 S1，试用中）
+--          aaaaaaaa-...-0002 buyer2（店 S2，试用中）
+--          aaaaaaaa-...-0003 buyer3（店 S3，没有试用：未付费）
+--          aaaaaaaa-...-0011/12/13 seller1/2/3（批发商 W1/W2/W3 的老板）
+--          aaaaaaaa-...-0099 admin（客服）
+--   批发商 cccccccc-...-0001 W1 创始会员（佣金 1.5%）
+--          cccccccc-...-0002 W2 普通（行业默认 3%）
+--          cccccccc-...-0003 W3 单独调整（2.5%）
+--          cccccccc-...-0004 W4 待审核
+--   商品   eeeeeeee-...-0101 P1 W1 16oz 杯 1000 个一箱 RM85.00
+--          eeeeeeee-...-0102 P2 W1 平盖 1000 个一箱 RM45.00
+--          eeeeeeee-...-0103 P6 W1 草稿（没上架）
+--          eeeeeeee-...-0201 P3 W2 16oz 杯 50 个一包 RM4.80，起订 5 包
+--          eeeeeeee-...-0301 P4 W3 16oz 杯 1000 个一箱 RM82.00
+--          eeeeeeee-...-0302 P5 W3 平盖 缺货
+--          eeeeeeee-...-0401 P7 W4 16oz 杯（批发商还没审核）
+--   店铺   dddddddd-...-0001 S1、-0002 S2、-0003 S3（都在送货区 Z1）
+
+create extension if not exists pgtap with schema extensions;
+
+create schema if not exists tests;
+grant usage on schema tests to anon, authenticated, service_role;
+
+create or replace function tests.login_as(p_user uuid)
+returns void
+language plpgsql
+as $$
+begin
+  perform set_config('request.jwt.claims', json_build_object('sub', p_user, 'role', 'authenticated')::text, true);
+  perform set_config('role', 'authenticated', true);
+end;
+$$;
+
+create or replace function tests.login_as_anon()
+returns void
+language plpgsql
+as $$
+begin
+  perform set_config('request.jwt.claims', '{"role": "anon"}', true);
+  perform set_config('role', 'anon', true);
+end;
+$$;
+
+-- 回到测试本身的身份（postgres，等于服务器 / 定时任务）
+create or replace function tests.logout()
+returns void
+language plpgsql
+as $$
+begin
+  perform set_config('request.jwt.claims', '', true);
+  perform set_config('role', 'none', true);
+end;
+$$;
+
+create or replace function tests.uid(p_name text)
+returns uuid
+language sql
+immutable
+as $$
+  select (case p_name
+    when 'buyer1'  then 'aaaaaaaa-0000-4000-8000-000000000001'
+    when 'buyer2'  then 'aaaaaaaa-0000-4000-8000-000000000002'
+    when 'buyer3'  then 'aaaaaaaa-0000-4000-8000-000000000003'
+    when 'seller1' then 'aaaaaaaa-0000-4000-8000-000000000011'
+    when 'seller2' then 'aaaaaaaa-0000-4000-8000-000000000012'
+    when 'seller3' then 'aaaaaaaa-0000-4000-8000-000000000013'
+    when 'admin'   then 'aaaaaaaa-0000-4000-8000-000000000099'
+    when 'Z1'      then 'bbbbbbbb-0000-4000-8000-000000000011'
+    when 'Z2'      then 'bbbbbbbb-0000-4000-8000-000000000012'
+    when 'W1'      then 'cccccccc-0000-4000-8000-000000000001'
+    when 'W2'      then 'cccccccc-0000-4000-8000-000000000002'
+    when 'W3'      then 'cccccccc-0000-4000-8000-000000000003'
+    when 'W4'      then 'cccccccc-0000-4000-8000-000000000004'
+    when 'S1'      then 'dddddddd-0000-4000-8000-000000000001'
+    when 'S2'      then 'dddddddd-0000-4000-8000-000000000002'
+    when 'S3'      then 'dddddddd-0000-4000-8000-000000000003'
+    when 'P1'      then 'eeeeeeee-0000-4000-8000-000000000101'
+    when 'P2'      then 'eeeeeeee-0000-4000-8000-000000000102'
+    when 'P6'      then 'eeeeeeee-0000-4000-8000-000000000103'
+    when 'P3'      then 'eeeeeeee-0000-4000-8000-000000000201'
+    when 'P4'      then 'eeeeeeee-0000-4000-8000-000000000301'
+    when 'P5'      then 'eeeeeeee-0000-4000-8000-000000000302'
+    when 'P7'      then 'eeeeeeee-0000-4000-8000-000000000401'
+  end)::uuid;
+$$;
+
+create or replace function tests.setup_world()
+returns void
+language plpgsql
+as $$
+declare
+  v_region uuid := 'bbbbbbbb-0000-4000-8000-000000000001';
+  v_industry uuid := 'bbbbbbbb-0000-4000-8000-000000000021';
+  v_category uuid := 'bbbbbbbb-0000-4000-8000-000000000031';
+  v_cup uuid := 'bbbbbbbb-0000-4000-8000-000000000041';
+  v_lid uuid := 'bbbbbbbb-0000-4000-8000-000000000042';
+begin
+  -- 用户（新增 auth.users 会自动建 profiles）
+  insert into auth.users (id, phone) values
+    (tests.uid('buyer1'),  '60111000001'),
+    (tests.uid('buyer2'),  '60111000002'),
+    (tests.uid('buyer3'),  '60111000003'),
+    (tests.uid('seller1'), '60111000011'),
+    (tests.uid('seller2'), '60111000012'),
+    (tests.uid('seller3'), '60111000013'),
+    (tests.uid('admin'),   '60111000099');
+  update public.profiles set role = 'seller' where id in (tests.uid('seller1'), tests.uid('seller2'), tests.uid('seller3'));
+  update public.profiles set role = 'admin' where id = tests.uid('admin');
+
+  -- 设定
+  insert into public.regions (id, code, name) values
+    (v_region, 'TST', '{"zh": "测试区", "en": "Test", "ms": "Ujian"}');
+  insert into public.delivery_zones (id, region_id, code, name) values
+    (tests.uid('Z1'), v_region, 'z1', '{"zh": "一区", "en": "Zone 1", "ms": "Zon 1"}'),
+    (tests.uid('Z2'), v_region, 'z2', '{"zh": "二区", "en": "Zone 2", "ms": "Zon 2"}');
+  insert into public.industries (id, code, name, default_commission_rate, founding_commission_rate) values
+    (v_industry, 'test_industry', '{"zh": "测试行业", "en": "Test", "ms": "Ujian"}', 0.0300, 0.0150);
+  insert into public.categories (id, industry_id, code, name) values
+    (v_category, v_industry, 'test_cups', '{"zh": "杯", "en": "Cups", "ms": "Cawan"}');
+  insert into public.catalog_items (id, code, category_id, name) values
+    (v_cup, 'test_cup_16oz', v_category, '{"zh": "16oz 杯", "en": "16oz cup", "ms": "Cawan 16oz"}'),
+    (v_lid, 'test_lid_95', v_category, '{"zh": "95 平盖", "en": "95 lid", "ms": "Penutup 95"}');
+  -- 测试用的月费（比种子数据的新，所以是「现在的价钱」）
+  insert into public.pricing_plans (plan_code, amount_sen, is_founding, effective_from)
+  values ('buyer_monthly', 5000, true, now() - interval '1 hour');
+
+  -- 批发商
+  insert into public.wholesalers (id, name, industry_id, region_id, status, is_founding) values
+    (tests.uid('W1'), 'W1 创始批发商', v_industry, v_region, 'active', true),
+    (tests.uid('W2'), 'W2 普通批发商', v_industry, v_region, 'active', false),
+    (tests.uid('W3'), 'W3 特别比例', v_industry, v_region, 'active', false),
+    (tests.uid('W4'), 'W4 待审核', v_industry, v_region, 'pending', false);
+  update public.wholesaler_private set commission_rate_override = 0.0250 where wholesaler_id = tests.uid('W3');
+  insert into public.wholesaler_members (wholesaler_id, user_id) values
+    (tests.uid('W1'), tests.uid('seller1')),
+    (tests.uid('W2'), tests.uid('seller2')),
+    (tests.uid('W3'), tests.uid('seller3'));
+
+  -- 运费：W1 RM8（满 RM150 免运费，最低消费 RM50）；W2 RM10；W3 RM5（最低消费 RM30）
+  insert into public.wholesaler_delivery_zones
+    (wholesaler_id, zone_id, shipping_fee_sen, free_shipping_min_sen, min_order_sen, lead_time_days, delivery_weekdays) values
+    (tests.uid('W1'), tests.uid('Z1'), 800, 15000, 5000, 1, '{1,2,3,4,5,6,7}'),
+    (tests.uid('W1'), tests.uid('Z2'), 800, 15000, 5000, 1, '{1,2,3,4,5,6,7}'),
+    (tests.uid('W2'), tests.uid('Z1'), 1000, null, null, 0, '{1,2,3,4,5,6,7}'),
+    (tests.uid('W3'), tests.uid('Z1'), 500, null, 3000, 2, '{1,2,3,4,5,6,7}'),
+    (tests.uid('W4'), tests.uid('Z1'), 500, null, null, 1, '{1,2,3,4,5,6,7}');
+
+  insert into public.products (id, wholesaler_id, catalog_item_id, name, unit, pack_qty, price_sen, min_order_qty, stock_status, status) values
+    (tests.uid('P1'), tests.uid('W1'), v_cup, 'W1 16oz 杯', 'carton', 1000, 8500, 1, 'in_stock', 'active'),
+    (tests.uid('P2'), tests.uid('W1'), v_lid, 'W1 平盖', 'carton', 1000, 4500, 1, 'in_stock', 'active'),
+    (tests.uid('P6'), tests.uid('W1'), v_cup, 'W1 草稿', 'carton', 1000, 100, 1, 'in_stock', 'draft'),
+    (tests.uid('P3'), tests.uid('W2'), v_cup, 'W2 16oz 杯 小包', 'pack', 50, 480, 5, 'in_stock', 'active'),
+    (tests.uid('P4'), tests.uid('W3'), v_cup, 'W3 16oz 杯', 'carton', 1000, 8200, 1, 'in_stock', 'active'),
+    (tests.uid('P5'), tests.uid('W3'), v_lid, 'W3 平盖', 'carton', 1000, 4000, 1, 'out_of_stock', 'active'),
+    (tests.uid('P7'), tests.uid('W4'), v_cup, 'W4 16oz 杯', 'carton', 1000, 7000, 1, 'in_stock', 'active');
+
+  -- 店铺
+  insert into public.shops (id, name, zone_id, phone, whatsapp_phone) values
+    (tests.uid('S1'), 'S1 店', tests.uid('Z1'), '60111000001', '60111000001'),
+    (tests.uid('S2'), 'S2 店', tests.uid('Z1'), '60111000002', '60111000002'),
+    (tests.uid('S3'), 'S3 店', tests.uid('Z1'), '60111000003', '60111000003');
+  insert into public.shop_members (shop_id, user_id) values
+    (tests.uid('S1'), tests.uid('buyer1')),
+    (tests.uid('S2'), tests.uid('buyer2')),
+    (tests.uid('S3'), tests.uid('buyer3'));
+  perform public._start_trial(tests.uid('S1'), '60111000001');
+  perform public._start_trial(tests.uid('S2'), '60111000002');
+  -- S3 不开试用：未付费用户
+end;
+$$;
+
+-- 把东西放进购物车（用 postgres 身份，绕过 RLS，方便准备测试数据）
+create or replace function tests.add_to_cart(p_shop text, p_product text, p_qty int)
+returns void
+language sql
+as $$
+  insert into public.cart_items (shop_id, product_id, qty) values (tests.uid(p_shop), tests.uid(p_product), p_qty)
+  on conflict (shop_id, product_id) do update set qty = excluded.qty;
+$$;
+
+create or replace function tests.order_of(p_shop text, p_wholesaler text)
+returns uuid
+language sql
+stable
+as $$
+  select o.id from public.orders o
+  where o.shop_id = tests.uid(p_shop) and o.wholesaler_id = tests.uid(p_wholesaler)
+  order by o.created_at desc, o.order_no desc
+  limit 1;
+$$;
+
+grant execute on all functions in schema tests to anon, authenticated, service_role;
