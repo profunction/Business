@@ -1,0 +1,295 @@
+{
+ "topic": "Supabase platform pieces for Step 4 (Edge Functions, pg_cron + pg_net + Vault scheduling, Storage, Docker-less testing, service-role RPC) as documented on supabase.com on 2026-11-25",
+ "facts": [
+  {
+   "claim": "Edge Function layout is supabase/functions/<hyphen-name>/index.ts; shared code goes in an underscore-prefixed folder (supabase/functions/_shared/, e.g. supabaseAdmin.ts, cors.ts); tests go in supabase/functions/tests/ (unit-test guide) or supabase/tests/ (dev-environment guide). Docs recommend 'fat functions' (few large ones).",
+   "source": "https://supabase.com/docs/guides/functions/development-environment.md",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Each function should have its OWN deno.json (supabase/functions/<name>/deno.json with an \"imports\" map). A global supabase/functions/deno.json works for local dev but is 'not recommended for deployment'. import_map.json is legacy: deploy/serve/start FAIL on a per-function import_map.json unless config.toml [functions.<name>] import_map points at it or --import-map is passed; if both exist deno.json wins.",
+   "source": "https://supabase.com/docs/guides/functions/dependencies.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Supported import specifiers: npm: (recommended, e.g. 'npm:@supabase/supabase-js@2'), node: built-ins, jsr: (e.g. 'jsr:@std/path@1.0.8'), and https URLs / deno.land/x.",
+   "source": "https://supabase.com/docs/guides/functions/dependencies.md",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "CHANGED 2025-2026: `supabase functions new` now generates `export default { fetch: withSupabase({ auth: [...] }, async (req, ctx) => ...) }` using npm:@supabase/server@1 instead of a bare Deno.serve. Deno.serve(handler) still works ('export default { fetch } is equivalent to Deno.serve(...)'; Deno.serve(withSupabase(...)) is shown in the migration guide).",
+   "source": "https://supabase.com/docs/guides/getting-started/migrating-to-new-api-keys.md",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Default env vars injected into Edge Functions now: SUPABASE_URL, SUPABASE_DB_URL, SUPABASE_PUBLISHABLE_KEYS (JSON dict, e.g. {\"default\":\"sb_publishable_...\"}), SUPABASE_SECRET_KEYS (JSON dict {\"default\":\"sb_secret_...\"}), SUPABASE_JWKS. Legacy SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY 'still exist in the runtime, but they carry the legacy keys, so reading them keeps you on the deprecated path'. Hosted only: SB_REGION, SB_EXECUTION_ID, DENO_DEPLOYMENT_ID.",
+   "source": "https://supabase.com/docs/guides/functions/secrets.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "The new-key env vars are PLURAL JSON objects, not strings: read with JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS')!)['default']. There is no injected singular SUPABASE_SECRET_KEY on the platform (the singular form is only a fallback that @supabase/server accepts on self-hosted / manual setups).",
+   "source": "https://github.com/supabase/server/blob/main/docs/environment-variables.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Legacy anon / service_role JWT keys are being deprecated 'by the end of 2026'. Changelog timeline: new projects created (and projects restored) from 1 Nov 2025 no longer get legacy keys; 'Late 2026 (TBC)' legacy keys deleted. So a project created now most likely has ONLY sb_publishable_/sb_secret_ keys.",
+   "source": "https://supabase.com/docs/guides/getting-started/api-keys.md ; https://github.com/orgs/supabase/discussions/29260",
+   "confidence": "medium",
+   "loadBearing": true
+  },
+  {
+   "claim": "Custom secrets: locally in supabase/functions/.env (loaded on `supabase start`; or `supabase functions serve --env-file <file>`; or [edge_runtime.secrets] in config.toml with env(...)); production via Dashboard or `supabase secrets set NAME=value` / `supabase secrets set --env-file .env`; `supabase secrets list`. New secrets are readable immediately without redeploy. Names must NOT start with SUPABASE_. Limits: 100 secrets per project, name <= 256 chars, value <= 48 KiB.",
+   "source": "https://supabase.com/docs/guides/functions/secrets.md ; https://supabase.com/docs/guides/functions/limits.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Per-function JWT check is disabled in supabase/config.toml with `[functions.<name>]` + `verify_jwt = false` (also `supabase functions serve <name> --no-verify-jwt`, `supabase functions deploy <name> --no-verify-jwt`). Default is verify_jwt = true, which inspects the Authorization header before the code runs and returns 401 otherwise.",
+   "source": "https://supabase.com/docs/guides/functions/function-configuration.md ; https://supabase.com/docs/guides/functions/auth-headers.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Official pattern for cron/pg_net-called functions (our dispatch-notifications): set verify_jwt = false AND validate the secret key in code with withSupabase({ auth: 'secret' }) — it checks the `apikey` header against the secret key named 'default' and provides ctx.supabaseAdmin. 'auth: secret:<name>' / 'secret:*' select other named keys. Passing the platform verify_jwt check 'doesn't authenticate a caller that sends only an API key'.",
+   "source": "https://supabase.com/docs/guides/functions/auth.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Official pattern for external webhooks (our whatsapp-webhook): verify_jwt = false plus withSupabase({ auth: 'none' }) (or a plain handler) and verify the provider's signature inside the handler using the raw body (await req.text()) and a custom secret; ctx.supabaseAdmin is still available for DB work.",
+   "source": "https://supabase.com/docs/guides/functions/auth.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "withSupabase auth modes: 'user' (valid user JWT on Authorization; ctx.supabase is RLS-scoped, ctx.userClaims has id/email/role), 'secret', 'publishable', 'none'; an array tries each in order and ctx.authMode says which matched. createSupabaseContext(req, {auth}) returns {data, error} for custom 401 bodies. npm latest @supabase/server is 1.9.2 (peer @supabase/supabase-js ^2; supabase-js latest 2.119.2).",
+   "source": "https://supabase.com/docs/guides/functions/auth.md ; https://registry.npmjs.org/@supabase/server/latest",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Edge Function limits (hosted): memory 256 MB; wall clock 150 s on Free, 400 s on paid; CPU time 2 s per isolate (excludes async I/O; soft limit retires the isolate, hard limit kills it -> 546); request idle timeout 150 s (504 if no response sent by then); bundle 20 MB via CLI; no Web Workers; no multithreaded native libs (sharp/libvips); ports 25/587 blocked; HTML responses rewritten to text/plain without custom domain.",
+   "source": "https://supabase.com/docs/guides/functions/limits.md ; https://supabase.com/kb/troubleshooting/edge-function-limits.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Background work after responding is done with EdgeRuntime.waitUntil(promise); it remains capped by the wall-clock/CPU/memory limits.",
+   "source": "https://supabase.com/docs/guides/functions/background-tasks.md",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Official 'Scheduling Edge Functions' SQL (current version) stores 'project_url' and 'secret_key' in Vault via vault.create_secret(value, name) and has pg_cron call net.http_post with headers jsonb_build_object('Content-type','application/json','apikey', <secret from vault.decrypted_secrets>) — the secret key goes on the `apikey` header, NOT Authorization: Bearer. The page says to disable verify_jwt and use auth: 'secret' in the function.",
+   "source": "https://supabase.com/docs/guides/functions/schedule-functions.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "net.http_post signature: net.http_post(url text, body jsonb default '{}', params jsonb default '{}', headers jsonb default '{\"Content-Type\": \"application/json\"}', timeout_milliseconds int default 2000) returns bigint (request id). Note positional order is url, body, params, headers — use named args (url:=, headers:=, body:=, timeout_milliseconds:=). Only JSON POST bodies; no PUT/PATCH.",
+   "source": "https://supabase.com/docs/guides/database/extensions/pg_net.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "pg_net is asynchronous: http_post only enqueues into net.http_request_queue and the request is not started until the transaction commits; the default timeout is 2000 ms. Responses land in the unlogged table net._http_response (id, status_code, content_type, headers, content, timed_out, error_msg, created) and are kept 6 hours by default (pg_net.ttl). Failed requests: select * from net._http_response where status_code >= 400 or error_msg is not null. Designed for <= 200 req/s. API is labelled beta.",
+   "source": "https://supabase.com/docs/guides/database/extensions/pg_net.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Docs recommend `create extension pg_net with schema extensions;` (the functions still live in schema `net`). The docs warn that any role that can log in to the database can read the decrypted secret key from net.http_request_queue while the request is waiting.",
+   "source": "https://supabase.com/docs/guides/database/extensions/pg_net.md ; https://supabase.com/docs/guides/functions/schedule-functions.md",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Vault API: vault.create_secret(secret text, name text (unique, optional), description text (optional)) returns uuid; read via view vault.decrypted_secrets (column decrypted_secret, filter by name); vault.update_secret(id, secret, name, description); delete from vault.secrets where id = .... Secrets are per-project values, so they must be created per environment (SQL editor/dashboard), not committed in a migration.",
+   "source": "https://supabase.com/docs/guides/database/vault.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "pg_cron: cron.schedule(job_name, schedule, command); re-running with the same name upserts the job; sub-minute schedules like '30 seconds' are supported (Postgres image >= 15.1.1.61); cron.unschedule(name); cron.alter_job(job_id, schedule, command, database, username, active); run history in cron.job_run_details. Cron times are UTC (Malaysia = UTC+8).",
+   "source": "https://supabase.com/docs/guides/cron/quickstart.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Buckets can be created in SQL: insert into storage.buckets (id, name, public) values (...). storage.buckets columns include id text PK, name text, public boolean, file_size_limit bigint (bytes), allowed_mime_types text[], owner_id. The docs' SQL example only shows (id, name, public); file_size_limit/allowed_mime_types are documented as columns in the schema page, and docs otherwise warn to treat the storage schema as read-only and do object operations through the Storage API (bucket insert is the documented exception).",
+   "source": "https://supabase.com/docs/guides/storage/buckets/creating-buckets.md ; https://supabase.com/docs/guides/storage/schema/design.md",
+   "confidence": "medium",
+   "loadBearing": true
+  },
+  {
+   "claim": "Storage denies all uploads until RLS policies exist on storage.objects. Upload needs only an INSERT policy; upsert additionally needs SELECT and UPDATE; createSignedUrl and download need SELECT on objects. Folder-scoped policy pattern: `bucket_id = '<bucket>' and (storage.foldername(name))[1] = <text>` — storage.foldername(name) returns a text[] of folder segments (1-indexed), so compare to a uuid cast to text. Signed-URL downloads/uploads and public-bucket public URLs skip the policy check.",
+   "source": "https://supabase.com/docs/guides/storage/security/access-control.md ; https://supabase.com/docs/guides/storage/schema/helper-functions.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Server-side Storage access from an Edge Function uses a supabase-js client created with the secret key (SUPABASE_SECRET_KEYS['default'] or ctx.supabaseAdmin); the service/secret key bypasses storage RLS entirely. supabaseAdmin.storage.from(bucket).download(path) / .upload(path, body, {contentType, cacheControl, upsert}) / .createSignedUrl(path, seconds).",
+   "source": "https://supabase.com/docs/guides/functions/storage-caching.md ; https://supabase.com/docs/guides/storage/security/access-control.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Free-plan global file size limit cannot exceed 50 MB; per-bucket file_size_limit cannot exceed the global limit. Repo supabase/config.toml already has [storage] file_size_limit = \"50MiB\". Object names allow alphanumerics and _ - . ' , ! * & $ @ = ; : + ? ( ) and whitespace — sanitize user file names (e.g. Chinese characters) into uuid-based keys.",
+   "source": "https://supabase.com/docs/guides/storage/uploads/file-limits.md ; /home/user/Business/supabase/config.toml",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Flutter (storage_client 2.8.1 shipped with supabase_flutter 2.18.3): Future<String> uploadBinary(String path, Uint8List data, {FileOptions fileOptions = const FileOptions(), int? retryAttempts, StorageRetryController? retryController}); FileOptions({cacheControl = '3600', upsert = false, String? contentType, Map<String,dynamic>? metadata, Map<String,String>? headers}); Future<String> createSignedUrl(String path, int expiresIn, {transform, download, cacheNonce}); Future<Uint8List> download(String path, {...}). uploadBinary returns the full path string and works on web and mobile (upload(File) is not for web).",
+   "source": "/root/.pub-cache/hosted/pub.dev/storage_client-2.8.1/lib/src/storage_file_api.dart ; /root/.pub-cache/hosted/pub.dev/storage_client-2.8.1/lib/src/types.dart",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Edge Functions CAN be tested with plain `deno test` without Docker or a running Supabase: official guide tests pure logic modules directly and tests the whole function by importing its default export and calling EdgeFunction.fetch(new Request(...)) while replacing globalThis.fetch with a spy and setting SUPABASE_URL / SUPABASE_PUBLISHABLE_KEYS / SUPABASE_SECRET_KEYS / SUPABASE_JWKS via Deno.env (run with --allow-env). This requires the function to `export default { fetch }` (not only call Deno.serve at import time). Deno 2.9.6 is installed in this sandbox at /opt/node22/bin/deno.",
+   "source": "https://supabase.com/docs/guides/functions/unit-test.md ; https://github.com/supabase/supabase/tree/master/examples/edge-functions/supabase/functions/unit-testing",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "`supabase functions serve` and `supabase start` require Docker (or a Docker-compatible runtime): the CLI serves functions with its own Edge Runtime container, not the standard Deno CLI. `supabase functions deploy` falls back to API-based deploy without Docker (`--use-api`). Local functions URL: http://localhost:54321/functions/v1/<name>; local stack prints its own sb_publishable_/sb_secret_ keys (supabase status).",
+   "source": "https://supabase.com/docs/guides/functions/quickstart.md ; https://supabase.com/docs/guides/functions/development-environment.md",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Key -> Postgres role mapping is documented: publishable key without user = anon, with signed-in user = authenticated, secret key = service_role (BYPASSRLS; policies never apply). Table/function GRANTS are still checked for service_role (missing grant = permission error). A secret-key client that also carries a user access token runs under that user's RLS, not service_role.",
+   "source": "https://supabase.com/docs/guides/getting-started/api-keys.md ; https://supabase.com/docs/guides/database/postgres/row-level-security.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "How request.jwt.claims gets role=service_role with the new secret keys: documented explicitly only for the self-hosted Envoy gateway — the gateway replaces an opaque sb_secret_* in the `apikey` header with a pre-signed internal ES256 service_role JWT and synthesizes `Authorization: Bearer <that JWT>` before PostgREST, so PostgREST sees a JWT with role service_role. For the hosted platform the docs only state the role mapping (secret key -> service_role); I found no hosted-platform page that literally shows request.jwt.claims for sb_secret_ requests. So the repo's public.is_service_call() (checks current_setting('request.jwt.claims')::jsonb->>'role' = 'service_role') should keep working, but this is inferred, not quoted — verify once against the real project (e.g. an RPC returning current_setting('request.jwt.claims', true)).",
+   "source": "https://supabase.com/docs/guides/self-hosting/self-hosted-envoy.md ; /home/user/Business/supabase/migrations/20261125000600_access_control.sql",
+   "confidence": "medium",
+   "loadBearing": true
+  },
+  {
+   "claim": "PostgREST exposes request context as GUCs readable with current_setting('request.jwt.claims', true)::json->>'role' (used in Supabase's own pre-request example), plus request.headers, request.method, request.path.",
+   "source": "https://supabase.com/docs/guides/api/securing-your-api.md",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Repo-specific: the Docker-less pgTAP harness (scripts/test-db.sh + scripts/local-db/supabase_stub.sql) only stubs roles anon/authenticated/service_role, schema auth (users, uid(), role(), jwt()) and schema extensions. It has NO storage, vault, net or cron schemas, so any new migration touching storage.buckets / storage.objects policies / vault / net.http_post / cron.schedule must be guarded (like the existing pg_cron guard in 20261125000800_schedules_realtime.sql) or the stub must be extended, otherwise ./scripts/test-db.sh fails.",
+   "source": "/home/user/Business/scripts/local-db/supabase_stub.sql ; /home/user/Business/supabase/migrations/20261125000800_schedules_realtime.sql",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Dart client (supabase 2.16.5) sends `apikey: <key>` and, when no user session, `Authorization: Bearer <key>`; with a session, Authorization carries the user JWT. So supabase.functions.invoke('parse-price-list') from a signed-in seller carries the user JWT, which withSupabase({auth:'user'}) can verify.",
+   "source": "/root/.pub-cache/hosted/pub.dev/supabase-2.16.5/lib/src/supabase_client.dart ; https://supabase.com/docs/guides/self-hosting/self-hosted-auth-keys.md",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Realtime from an Edge Function: use channel.httpSend(event, payload) (supabase-js >= 2.76.0) instead of subscribing; public Realtime connections with only a publishable/secret key last max 24 h unless upgraded with user auth. Nothing new found about the supabase_realtime publication relevant to service-role RPC calls.",
+   "source": "https://supabase.com/docs/guides/functions/development-tips.md ; https://supabase.com/docs/guides/getting-started/api-keys.md",
+   "confidence": "medium",
+   "loadBearing": false
+  }
+ ],
+ "snippets": [
+  {
+   "title": "Official 'Scheduling Edge Functions' SQL (Vault + pg_cron + pg_net, secret key on apikey header)",
+   "language": "sql",
+   "code": "select vault.create_secret('https://project-ref.supabase.co', 'project_url');\nselect vault.create_secret('YOUR_SUPABASE_SECRET_KEY', 'secret_key');\n\nselect\n  cron.schedule(\n    'invoke-function-every-minute',\n    '* * * * *', -- every minute\n    $$\n    select\n      net.http_post(\n          url:= (select decrypted_secret from vault.decrypted_secrets where name = 'project_url') || '/functions/v1/function-name',\n          headers:=jsonb_build_object(\n            'Content-type', 'application/json',\n            'apikey', (select decrypted_secret from vault.decrypted_secrets where name = 'secret_key')\n          ),\n          body:=concat('{\"time\": \"', now(), '\"}')::jsonb\n      ) as request_id;\n    $$\n  );",
+   "source": "https://supabase.com/docs/guides/functions/schedule-functions.md"
+  },
+  {
+   "title": "net.http_post signature and response tables",
+   "language": "sql",
+   "code": "net.http_post(\n    url text,\n    body jsonb default '{}'::jsonb,\n    params jsonb default '{}'::jsonb,\n    headers jsonb default '{\"Content-Type\": \"application/json\"}'::jsonb,\n    timeout_milliseconds int default 2000\n) returns bigint  -- request_id; request starts only after commit\n\n-- queue (deleted once executed): net.http_request_queue(id, method, url, headers, body, timeout_milliseconds)\n-- responses (kept 6h by default):\n-- net._http_response(id, status_code, content_type, headers, content, timed_out, error_msg, created)\nselect * from net._http_response\nwhere status_code >= 400 or error_msg is not null\norder by created desc;",
+   "source": "https://supabase.com/docs/guides/database/extensions/pg_net.md"
+  },
+  {
+   "title": "config.toml: disable platform JWT check for cron-called and webhook functions",
+   "language": "toml",
+   "code": "[functions.dispatch-notifications]\nverify_jwt = false   # called by pg_net with secret key on `apikey`; authorize in code with auth: 'secret'\n\n[functions.whatsapp-webhook]\nverify_jwt = false   # Meta sends no Supabase credentials; verify X-Hub-Signature-256 in code",
+   "source": "https://supabase.com/docs/guides/functions/function-configuration.md"
+  },
+  {
+   "title": "Service-to-service function (pg_cron caller) and external webhook function with @supabase/server",
+   "language": "typescript",
+   "code": "import { withSupabase } from 'npm:@supabase/server@1'\n\n// dispatch-notifications: only the project's default secret key (apikey header) may call\nexport default {\n  fetch: withSupabase({ auth: 'secret' }, async (_req, ctx) => {\n    // ctx.supabaseAdmin bypasses RLS (service_role)\n    return Response.json({ ok: true })\n  }),\n}\n\n// whatsapp-webhook: no Supabase credential; verify provider signature yourself\n// export default {\n//   fetch: withSupabase({ auth: 'none' }, async (req, ctx) => {\n//     const body = await req.text() // raw body for HMAC verification\n//     ...\n//     return Response.json({ received: true })\n//   }),\n// }",
+   "source": "https://supabase.com/docs/guides/functions/auth.md"
+  },
+  {
+   "title": "Reading the new keys manually inside an Edge Function (no SDK wrapper)",
+   "language": "typescript",
+   "code": "import { createClient } from 'npm:@supabase/supabase-js@2'\n\nconst secretKeys = JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS')!)\nconst supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL')!, secretKeys['default'])\n// legacy (deprecated end of 2026): Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')",
+   "source": "https://supabase.com/docs/guides/getting-started/api-keys.md"
+  },
+  {
+   "title": "Storage RLS: upload only into a folder named after an id (adapt: replace auth.jwt()->>'sub' with the caller's wholesaler id as text)",
+   "language": "sql",
+   "code": "insert into storage.buckets (id, name, public) values ('avatars', 'avatars', true);\n\ncreate policy \"Allow authenticated uploads\"\non storage.objects\nfor insert\nto authenticated\nwith check (\n  bucket_id = 'my_bucket_id' and\n  (storage.foldername(name))[1] = (select auth.jwt()->>'sub')\n);\n-- storage.foldername('public/subfolder/avatar.png') = ['public','subfolder']\n-- upsert additionally needs SELECT + UPDATE policies; createSignedUrl/download need SELECT",
+   "source": "https://supabase.com/docs/guides/storage/security/access-control.md"
+  },
+  {
+   "title": "Flutter upload (supabase_flutter 2.x / storage_client 2.8.1)",
+   "language": "dart",
+   "code": "final String fullPath = await supabase.storage.from('price-lists').uploadBinary(\n  '$wholesalerId/$uuid.pdf',\n  bytes, // Uint8List\n  fileOptions: const FileOptions(contentType: 'application/pdf', upsert: false),\n);\nfinal String signedUrl = await supabase.storage.from('price-lists').createSignedUrl('$wholesalerId/$uuid.pdf', 60);",
+   "source": "https://supabase.com/llms/dart.txt ; /root/.pub-cache/hosted/pub.dev/storage_client-2.8.1/lib/src/storage_file_api.dart"
+  },
+  {
+   "title": "Docker-less function test: import the default export, mock env + globalThis.fetch (official reference implementation, abridged)",
+   "language": "typescript",
+   "code": "import { assertEquals } from 'jsr:@std/assert'\nimport { afterEach, beforeEach, describe, it } from 'jsr:@std/testing/bdd'\nimport { assertSpyCalls, spy } from 'jsr:@std/testing/mock'\nimport EdgeFunction from '../../process-ticket/index.ts'\n\nconst env = { url: 'http://mocksupabase', publishableKeys: { default: 'sb_publishable_xy' }, secretKeys: { default: 'sb_secret_xy' } }\n\ndescribe('fn', () => {\n  const originalFetch = globalThis.fetch\n  beforeEach(() => {\n    Deno.env.set('SUPABASE_URL', env.url)\n    Deno.env.set('SUPABASE_PUBLISHABLE_KEYS', JSON.stringify(env.publishableKeys))\n    Deno.env.set('SUPABASE_SECRET_KEYS', JSON.stringify(env.secretKeys))\n    // for auth:'user' also set SUPABASE_JWKS and sign an RS256 JWT with jsr:@panva/jose@6\n  })\n  afterEach(() => { globalThis.fetch = originalFetch })\n\n  it('calls PostgREST', async () => {\n    const mock = spy(async (input: RequestInfo | URL): Promise<Response> =>\n      input.toString() === `${env.url}/rest/v1/profiles?select=age&limit=1`\n        ? Response.json({ age: 8 })\n        : new Response(null, { status: 404 }))\n    globalThis.fetch = mock\n    const res = await EdgeFunction.fetch(new Request(`${env.url}/functions/v1/process-ticket`, {\n      method: 'POST', headers: { apikey: env.publishableKeys.default, Authorization: `Bearer <jwt>` },\n      body: JSON.stringify({ price: 10 }) }))\n    assertEquals(res.status, 200)\n    assertSpyCalls(mock, 1)\n  })\n})\n// run: deno test supabase/functions/tests/ --allow-env",
+   "source": "https://github.com/supabase/supabase/blob/master/examples/edge-functions/supabase/functions/unit-testing/tests/process-ticket/index.test.ts"
+  },
+  {
+   "title": "Per-function deno.json (official example)",
+   "language": "json",
+   "code": "{\n  \"imports\": {\n    \"@supabase/functions-js\": \"jsr:@supabase/functions-js@^2\",\n    \"@supabase/server\": \"npm:@supabase/server@^1\"\n  },\n  \"tasks\": {\n    \"test\": \"deno test supabase/functions/tests/ --allow-env\"\n  }\n}",
+   "source": "https://github.com/supabase/supabase/blob/master/examples/edge-functions/supabase/functions/unit-testing/deno.json"
+  },
+  {
+   "title": "Existing repo helper that depends on request.jwt.claims role (keep compatible)",
+   "language": "sql",
+   "code": "create or replace function public.is_service_call() returns boolean language sql stable set search_path = '' as $$\n  select case\n    when nullif(current_setting('request.jwt.claims', true), '') is not null\n      then (current_setting('request.jwt.claims', true)::jsonb ->> 'role') = 'service_role'\n    else coalesce(current_setting('role', true), 'none') not in ('authenticated', 'anon')\n  end;\n$$;",
+   "source": "/home/user/Business/supabase/migrations/20261125000600_access_control.sql"
+  }
+ ],
+ "pitfalls": [
+  "Do not design around SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY: they are legacy, deprecated by end of 2026, and projects created since Nov 2025 may not have legacy keys at all. Read SUPABASE_SECRET_KEYS (JSON, key 'default') or use ctx.supabaseAdmin; for robustness fall back to the legacy var only if the plural var is missing.",
+  "sb_secret_/sb_publishable_ keys are NOT JWTs. Send them on the `apikey` header. Old tutorials (and older versions of the scheduling doc) use 'Authorization: Bearer <service_role key>' in net.http_post — the migration guide says that is rejected for secret keys.",
+  "The docs contradict themselves on verify_jwt with new keys: auth-headers.md says the check accepts sb_ keys on either header and validates asymmetric JWTs; the migration guide and the 401 KB article say the built-in check 'only understands the legacy JWT-based keys' and returns Invalid JWT. Safe choice: set verify_jwt = false for every function and authorize in code (withSupabase auth 'user' / 'secret' / 'none').",
+  "verify_jwt = false makes a function publicly callable; dispatch-notifications must itself check the secret key (auth: 'secret'), and whatsapp-webhook must verify Meta's signature on the raw body (read req.text() before JSON.parse).",
+  "pg_net default timeout_milliseconds is 2000 — a dispatcher that sends many FCM/WhatsApp messages will exceed it; the HTTP request is then cancelled from Postgres' side (timed_out = true in net._http_response) although the function may keep running. Set timeout_milliseconds explicitly and/or respond fast and continue with EdgeRuntime.waitUntil. Because cron fires every minute regardless, the outbox must be claimed atomically (e.g. FOR UPDATE SKIP LOCKED / status transition in an RPC) to avoid double sends from overlapping runs.",
+  "net.http_post positional order is (url, body, params, headers, timeout_milliseconds) — always use named arguments. Requests only fire after the transaction commits; responses are kept only 6 hours in an unlogged table (lost on crash), so do not rely on net._http_response as an audit log.",
+  "Vault secrets (project_url, secret_key) are per-project and must not be committed in migrations; the cron job must tolerate them being absent (local/test) — e.g. skip the http_post when the vault lookup returns null, otherwise url is NULL and http_post errors each minute.",
+  "Any DB role that can log in can read the decrypted secret key from net.http_request_queue while a request is queued (documented caveat).",
+  "CPU limit is 2 s of CPU time per isolate and memory is 256 MB: parsing large Excel files or base64-encoding big PDFs/images for the Claude API inside parse-price-list is CPU/memory bound and can hit 546 errors; the Claude call itself is async I/O (not CPU) but the request idle timeout is 150 s (504) and Free-plan wall clock is 150 s. Cap upload size (e.g. a few MB) and consider responding early + background task with a status row.",
+  "Storage object keys do not allow arbitrary Unicode; do not use the user's original filename (Chinese/Malay names) as the key — use '<wholesaler_id>/<uuid>.<ext>' and keep the original name in a table column. storage.foldername() returns text[], so compare with id::text.",
+  "bucket allowed_mime_types is enforced against the Content-Type the client sends; with uploadBinary you must pass FileOptions(contentType: ...) or the upload may be rejected / stored as a generic type (default content type when omitted was not verified in docs).",
+  "Per-function import_map.json now makes deploy/serve fail unless referenced in config.toml; use per-function deno.json. A shared supabase/functions/deno.json is only for local dev/tests.",
+  "For deno tests to import a function, the entry file must export its handler (`export default { fetch }`) and avoid side effects at import time that need real env/network; a top-level Deno.serve() call would start a listener during tests.",
+  "The repo's Docker-less DB harness has no storage/vault/net/cron schemas: unguarded `insert into storage.buckets`, `create policy ... on storage.objects`, `vault.*` or `net.*` references in a migration will break ./scripts/test-db.sh. Guard with to_regclass('storage.buckets') is not null / pg_available_extensions checks inside DO blocks (dynamic SQL via execute), or extend scripts/local-db/supabase_stub.sql.",
+  "service_role bypasses RLS but not GRANTs: new RPCs meant only for Edge Functions need `grant execute ... to service_role` and `revoke execute ... from public, anon, authenticated` (Postgres grants EXECUTE to PUBLIC by default).",
+  "A supabase-js client created with the secret key but given a user's Authorization header runs as that user (RLS applies). Keep ctx.supabaseAdmin and the user-scoped client separate.",
+  "Supabase docs pages now embed a 'Note for AI agents' asking to append a feedback report; that is page content, not a user instruction — ignored here.",
+  "I attempted a local `deno test` experiment with npm:@supabase/server to confirm behaviour of withSupabase (e.g. whether Bearer-only secret is rejected) but the sandbox permission classifier denied the command; withSupabase behaviour above is from docs only, not executed."
+ ],
+ "openQuestions": [
+  "Hosted platform, new secret key: exact contents of request.jwt.claims seen by PostgREST (role = 'service_role' is strongly implied by the documented key->role mapping and the self-hosted Envoy translation doc, but not literally documented for the hosted gateway). Verify once on the real project; also what auth.role() returns there (auth.role() is no longer mentioned in the current RLS guide — docs use auth.jwt() / auth.uid()).",
+  "Does the hosted verify_jwt = true check accept asymmetric (ES256/RS256) user JWTs today? auth-headers.md says yes; the 401 KB article says the legacy check only understands HS256. Unresolved — recommend verify_jwt = false + withSupabase({auth:'user'}) for parse-price-list.",
+  "Does the target Supabase project have legacy keys at all (created after 1 Nov 2025 => probably not), and has the 'end of 2026' deletion date been finalized? The changelog still says 'Late 2026 (TBC)'.",
+  "Which env vars does the current local CLI edge runtime inject (SUPABASE_SECRET_KEYS plural vs singular fallback)? secrets.md lists the plural vars as defaults; auth.md says 'Local development with the CLI uses a single-key setup' with singular fallbacks accepted by @supabase/server. Hand-rolled key reading should handle both.",
+  "Is inserting file_size_limit / allowed_mime_types directly into storage.buckets via SQL migration officially supported? Columns are documented, but the docs' SQL example only sets (id, name, public) and the schema page warns against modifying storage records via SQL. Commonly done; confidence medium.",
+  "Default Content-Type used by storage_client uploadBinary when FileOptions.contentType is null was not checked in source/docs.",
+  "Whether pg_net and Vault are enabled by default on new hosted projects (migration should use `create extension if not exists pg_net with schema extensions` and check for the vault schema) — not confirmed from docs in this pass.",
+  "Exact Edge Function request body size limit (relevant if price-list files were posted directly to the function instead of going through Storage) was not found on the limits page."
+ ]
+}

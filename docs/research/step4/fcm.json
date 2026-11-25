@@ -1,0 +1,221 @@
+{
+ "topic": "Firebase Cloud Messaging: sending from a Supabase Edge Function (Deno) over HTTP v1, and receiving in Flutter 3.47 (firebase_messaging 17.x) — state as of 2026-11-25",
+ "facts": [
+  {
+   "claim": "FCM HTTP v1 send endpoint: POST https://fcm.googleapis.com/v1/projects/{PROJECT_ID}/messages:send with headers 'Authorization: Bearer <OAuth2 access token>' and 'Content-Type: application/json'; body is {\"message\": {...}} (optionally \"validate_only\": true for a dry run, which Google now recommends for token validation).",
+   "source": "https://firebase.google.com/docs/cloud-messaging/send/v1-api",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Required OAuth2 scope is https://www.googleapis.com/auth/firebase.messaging. A non-Firebase service account needs role roles/firebase.messagingAdmin; the Firebase-console-generated service account key (Project Settings > Service Accounts > Generate new private key) works as is.",
+   "source": "https://firebase.google.com/docs/cloud-messaging/send/v2-api",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Service-account token exchange (no library needed): build a JWT with header {alg:'RS256',typ:'JWT'} and claims iss=<client_email>, scope=<space-delimited scopes>, aud='https://oauth2.googleapis.com/token', iat, exp (max 1 hour after iat); sign RSA-SHA256 with the private key; POST to https://oauth2.googleapis.com/token as application/x-www-form-urlencoded with grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer and assertion=<JWT>. Response JSON has access_token, token_type 'Bearer', expires_in (3600 in the example); the token can be reused until expires_in elapses, so cache it in module scope with a safety margin.",
+   "source": "https://developers.google.com/identity/protocols/oauth2/service-account",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "The WebCrypto-only signing path works in Deno: strip the PEM armor of the service account private_key (it is PKCS#8, 'BEGIN PRIVATE KEY'), base64-decode, crypto.subtle.importKey('pkcs8', der, {name:'RSASSA-PKCS1-v1_5', hash:'SHA-256'}, false, ['sign']), then crypto.subtle.sign. I ran this locally on Deno 2.9.6 with a generated key and the signature verified (network exchange with Google NOT tested here).",
+   "source": "/tmp/claude-0/-home-user-Business/655a5d63-532a-5520-b2a9-3f98ee44e014/scratchpad/jwt_test.mjs",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Official Supabase guide exists: 'Sending Push Notifications' (Edge Functions examples) with an Expo section and a 'Firebase Cloud Messaging' section. FCM section: tables profiles(id, fcm_token text) and notifications(id, user_id, created_at, body); a Database Webhook on INSERT into notifications calls Edge Function 'push' (POST, timeout 1000); the function imports withSupabase from 'npm:@supabase/server@^1' (auth: 'secret', deployed with --no-verify-jwt), JWT from 'npm:google-auth-library@^10', and the service account via `import serviceAccount from '../service-account.json' with { type: 'json' }` (file saved under supabase/functions); it reads fcm_token with ctx.supabaseAdmin, gets an access token via jwtClient.authorize with the firebase.messaging scope, POSTs {message:{token, notification:{title, body}}} to the v1 endpoint, and throws on non-2xx. It has no token caching, no android/apns overrides, no dead-token cleanup, one token per user, and still uses the now-deprecated `token` target.",
+   "source": "https://supabase.com/docs/guides/functions/examples/push-notifications",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "CHANGED 2026: the v1 Message target field `token` is marked deprecated ('Deprecated: Use `fid` instead. During the transition period, this field also accepts a Firebase Installation ID (FID)'). New mutually exclusive target `fid` (Firebase Installation ID) exists alongside token/topic/condition. Both patterns are documented as 'fully co-supported' for now; no removal date for `token` was found.",
+   "source": "https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Message JSON fields: data (map string->string only; reserved keys: 'from', 'message_type', anything starting with 'google.' or 'gcm.notification.'), notification {title, body, image}, android {collapse_key, priority 'normal'|'high', ttl like '3600s' (max/default 4 weeks), restricted_package_name, data, notification {title, body, icon, color, sound, tag, click_action, channel_id, notification_priority, default_sound, ...}, direct_boot_ok}, apns {headers: map, payload: object incl. aps, fcm_options, live_activity_token}, webpush, fcm_options, android_v2. Payload limit 4096 bytes (2048 for topics).",
+   "source": "https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "android.notification.channel_id: the app must have created the channel before the notification arrives; if the id is missing or the channel does not exist, FCM falls back to the channel id declared in the app manifest. On Android 8+ notification_priority is ignored in favour of channel importance, so heads-up display depends on the app-created channel having high importance. android.priority HIGH is already the default for notification messages; NORMAL is the default for data-only messages.",
+   "source": "https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "apns.headers accepts APNs request headers such as apns-priority and apns-expiration; FCM defaults apns-priority to 10 and apns-expiration to 30 days when not set. Data-only messages to iOS may only use apns-priority '5'. apns.payload, if present, overrides notification.title/body, so put only {aps:{sound:'default', ...}} plus custom keys there unless you also supply aps.alert.",
+   "source": "https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Dead-registration errors: Google's registration-management guide says to delete the stored registration when messages:send returns UNREGISTERED (HTTP 404) or INVALID_ARGUMENT (HTTP 400) — but INVALID_ARGUMENT also covers bad payloads (too big, reserved data key, bad TTL, wrong field names), so it signals an invalid registration 'only if the payload is completely valid'. UNREGISTERED causes: app unregistered/uninstalled, APNs token invalid, token expired, Android registration inactive 270 days.",
+   "source": "https://firebase.google.com/docs/cloud-messaging/manage-tokens",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Other v1 error codes: SENDER_ID_MISMATCH 403 (token belongs to another Firebase project — also effectively dead for this sender), QUOTA_EXCEEDED 429 (retry with exponential backoff, min 1 minute), UNAVAILABLE 503 (retry, honour Retry-After), INTERNAL 500 (retry with backoff), THIRD_PARTY_AUTH_ERROR 401 (APNs key / web push key missing or invalid — a config problem, do NOT delete the token). The error code string is in the response body (error.status and error.details[].errorCode for the FcmError detail — exact JSON location not re-verified on the page this session).",
+   "source": "https://firebase.google.com/docs/reference/fcm/rest/v1/ErrorCode",
+   "confidence": "medium",
+   "loadBearing": true
+  },
+  {
+   "claim": "Legacy FCM send APIs (https://fcm.googleapis.com/fcm/send with server key, XMPP) were deprecated 2023-06-20 and the official page says 'shutdown begins on July 22, 2024'. The current docs only describe HTTP v1; I found no official sentence stating the shutdown is 100% complete, but the legacy API must be treated as gone. Separately (new in Sept 2026): the Instance ID server APIs (iid.googleapis.com info/topic/batchImport) and device groups are deprecated and will be decommissioned on 2027-09-29 — none are needed for this project.",
+   "source": "https://firebase.google.com/docs/cloud-messaging/troubleshooting.md.txt",
+   "confidence": "medium",
+   "loadBearing": false
+  },
+  {
+   "claim": "AndroidConfigV2 (message.android_v2 with remote_notification or background_sync, mutually exclusive with message.android) is a PREVIEW (Pre-GA) feature as of now; classic `android` (v1 AndroidConfig) will be supported 'for multiple years' after V2 goes GA. Recommendation: use the classic `android` block for this project.",
+   "source": "https://firebase.google.com/docs/cloud-messaging/send/v2-api",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Latest pub.dev versions (2026-11-16): firebase_messaging 17.1.0 and firebase_core 5.2.0, both requiring sdk ^3.12.0 / flutter >=3.44.0 — compatible with Flutter 3.47.9 / Dart 3.13.7. firebase_messaging 17.1.0 depends on firebase_core ^5.1.0. (17.0.x / core 5.0-5.1 only need Dart ^3.6 / Flutter >=3.27.) flutter_local_notifications latest is 23.0.4 (2026-11-23, sdk ^3.12.0, flutter >=3.44.0).",
+   "source": "https://pub.dev/api/packages/firebase_messaging",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "firebase_core 5.x / firebase_messaging 17.x are breaking majors: Firebase Android BoM 35 (core 5.2.0 pins 35.2.0) with minSdk 24 required, Firebase iOS SDK 13, iOS deployment target 15.0, Java 17. The repo's apps/mobile uses minSdk = flutter.minSdkVersion (must resolve to >= 24, otherwise set it explicitly) and IPHONEOS_DEPLOYMENT_TARGET = 15.0 (OK). The repo uses AGP 9.1.0 + Kotlin 2.4.0 with Kotlin-DSL gradle files; 17.1.0/5.2.0 specifically add 'migrate plugins to built-in Kotlin on Flutter 3.44', so prefer the newest versions.",
+   "source": "https://raw.githubusercontent.com/firebase/flutterfire/main/packages/firebase_core/firebase_core/CHANGELOG.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "CHANGED 2026 (firebase_messaging 17.0.0 'add FID registration APIs'): getToken(), onTokenRefresh and deleteToken() are annotated @Deprecated in 17.1.0 ('Use register() and onRegistered instead' / 'Use unregister() and onUnregistered instead'). New API: Future<void> register({String? vapidKey, String? serviceWorkerScriptPath}), Future<void> unregister(), Stream<String> get onRegistered (emits the FID to store server-side), Stream<String> get onUnregistered. The deprecated token APIs still exist and work; Google says not to use both families at the same time.",
+   "source": "/tmp/claude-0/-home-user-Business/655a5d63-532a-5520-b2a9-3f98ee44e014/scratchpad/dl/firebase_messaging-17.1.0/lib/src/messaging.dart",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "FID registration must be opted into natively: Android <meta-data android:name=\"firebase_messaging_installation_id_enabled\" android:value=\"true\"/> inside <application>; iOS Info.plist key FirebaseMessagingInstallationIdEnabled = true; nothing for web. With auto-init on (default) Android/Apple register at startup and onRegistered fires at startup, on routine sync, on every register() call and on FID change; subscribe to onRegistered BEFORE calling register(). register() is required on web. With FIDs no periodic refresh job is needed, but the server should still upsert a last-seen timestamp on each upload.",
+   "source": "https://firebase.google.com/docs/cloud-messaging/flutter/get-started",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Dart-only init: the official setup is `await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform)` with lib/firebase_options.dart generated by `flutterfire configure`; the doc says the CLI adds Gradle plugins only 'for Crashlytics or Performance Monitoring on Android' and does not list Cloud Messaging as needing the google-services plugin. firebase_core's Android code builds FirebaseOptions (apiKey, appId, messagingSenderId, projectId, ...) from the Dart values and initialises the native app, so foreground/background-process FCM works with explicit options. NOT confirmed by any official statement: behaviour of FCM on Android when the process is cold-started by a push with no google-services.json (no native default FirebaseApp until Dart runs). The plugin's own example app still applies 'com.google.gms.google-services'. Treat Dart-only on Android as 'probably works, must be device-tested'; adding google-services.json + the Gradle plugin is the safe path.",
+   "source": "https://firebase.google.com/docs/flutter/setup",
+   "confidence": "low",
+   "loadBearing": true
+  },
+  {
+   "claim": "In the background handler you must call Firebase.initializeApp again (separate isolate on Android) — with Dart-only config pass the same options: `await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform)` (the plugin example does exactly this). Handler rules: top-level, not anonymous, annotated @pragma('vm:entry-point'), registered via FirebaseMessaging.onBackgroundMessage early in main(); no UI/state access; long tasks (>30s) may get the process killed. 17.1.0 skips the Android background service entirely when no handler is registered.",
+   "source": "https://firebase.google.com/docs/cloud-messaging/flutter/receive-messages",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Foreground: notification messages arriving while the app is in the foreground are NOT displayed automatically on Android or iOS; they arrive on FirebaseMessaging.onMessage. iOS: call setForegroundNotificationPresentationOptions(alert:true, badge:true, sound:true) (persisted once set). Android: you must create a high-importance channel and post a local notification yourself — the plugin's example does this with flutter_local_notifications (createNotificationChannel with Importance.high + plugin.show(id:, title:, body:, notificationDetails:) using named parameters). An in-app banner/snackbar + list refresh is a valid alternative that avoids the extra dependency.",
+   "source": "https://firebase.google.com/docs/cloud-messaging/flutter/receive-messages",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Tap handling: FirebaseMessaging.instance.getInitialMessage() returns the RemoteMessage that opened the app from terminated state (consumed once; null if the Android notification was a locally shown one); static stream FirebaseMessaging.onMessageOpenedApp fires when a notification tap brings the app from background. Handle both; message.data carries the custom key/values (e.g. order_id) for go_router navigation. Since 16.7.0 Android no longer also fires onMessageOpenedApp for terminated taps.",
+   "source": "https://firebase.google.com/docs/cloud-messaging/flutter/get-started",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Android 13+ permission: the plugin's manifest already declares android.permission.POST_NOTIFICATIONS (merged automatically), and FirebaseMessaging.instance.requestPermission() triggers the runtime prompt on SDK >= 33 (returns current state without a prompt below 33). In 17.x the Android status is resolved as authorized / notDetermined (never asked) / denied (soft) / permanently denied; older docs still say Android 13 'denied' is ambiguous. No extra permission package is needed. Until granted, notification messages are delivered but not shown.",
+   "source": "/tmp/claude-0/-home-user-Business/655a5d63-532a-5520-b2a9-3f98ee44e014/scratchpad/dl/firebase_messaging-17.1.0/android/src/main/java/io/flutter/plugins/firebase/messaging/FlutterFirebaseMessagingPlugin.java",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "iOS requirements: upload an APNs authentication key (.p8 + key ID + Apple Team ID) in Firebase console > Project settings > Cloud Messaging; in Xcode enable the Push Notifications capability and Background Modes 'Background fetch' + 'Remote notifications'; method swizzling must stay enabled. The APNs token must be available before FCM API calls (iOS SDK >= 10.4): after requestPermission, check `await FirebaseMessaging.instance.getAPNSToken()` != null before getToken()/relying on registration. Push does not work on a simulator without APNs setup and needs a paid Apple Developer account.",
+   "source": "https://firebase.google.com/docs/cloud-messaging/flutter/get-started",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Web is skippable: web push needs a VAPID key (Firebase console > Cloud Messaging > Web Push certificates) passed to register()/getToken(vapidKey:), a web/firebase-messaging-sw.js that importScripts firebase-app-compat + firebase-messaging-compat, calls firebase.initializeApp({...}) and exposes `const messaging = firebase.messaging()`, registered from index.html. None of it is required for Android/iOS. If web is skipped, guard all messaging calls with `!kIsWeb` (or isSupported()) so the existing web build keeps working; the firebase_messaging_web dependency is pulled in transitively but is inert if never called.",
+   "source": "https://firebase.google.com/docs/cloud-messaging/flutter/receive-messages",
+   "confidence": "medium",
+   "loadBearing": false
+  },
+  {
+   "claim": "Android FCM needs Android 7.0+ with Google Play services. Relevant in Malaysia: Huawei devices without GMS cannot receive FCM (plan WhatsApp/in-app fallback).",
+   "source": "https://firebase.google.com/docs/cloud-messaging/flutter/get-started",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Deno library options instead of hand-rolled WebCrypto: jose (npm latest 6.2.18) — `import { SignJWT, importPKCS8 } from 'npm:jose@6'` — is pure WebCrypto and Deno-compatible; google-auth-library (npm latest 11.3.4; the Supabase guide pins ^10) works through Deno's Node compat but is heavy (slower cold start). The jose import line was not executed in this session.",
+   "source": "https://registry.npmjs.org/jose/latest",
+   "confidence": "medium",
+   "loadBearing": false
+  }
+ ],
+ "snippets": [
+  {
+   "title": "Deno/Edge Function: Google access token from service account with WebCrypto only (signing verified locally on Deno 2.9.6; token exchange not run)",
+   "language": "typescript",
+   "code": "// Secret: FCM_SERVICE_ACCOUNT = full JSON of the Firebase service account key\ntype ServiceAccount = { client_email: string; private_key: string; project_id: string }\nconst sa: ServiceAccount = JSON.parse(Deno.env.get('FCM_SERVICE_ACCOUNT')!)\n\nconst b64url = (b: ArrayBuffer | Uint8Array) =>\n  btoa(String.fromCharCode(...new Uint8Array(b as ArrayBuffer)))\n    .replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '')\nconst enc = (o: unknown) => b64url(new TextEncoder().encode(JSON.stringify(o)))\n\nasync function importPrivateKey(pem: string): Promise<CryptoKey> {\n  const body = pem.replace(/\\\\n/g, '\\n') // tolerate literal \\n from env\n    .replace(/-----(BEGIN|END) PRIVATE KEY-----/g, '').replace(/\\s+/g, '')\n  const der = Uint8Array.from(atob(body), (c) => c.charCodeAt(0))\n  return crypto.subtle.importKey('pkcs8', der,\n    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign'])\n}\n\nlet cached: { token: string; exp: number } | null = null // module scope: survives warm invocations\n\nexport async function getFcmAccessToken(): Promise<string> {\n  const now = Math.floor(Date.now() / 1000)\n  if (cached && cached.exp - 300 > now) return cached.token\n  const input = `${enc({ alg: 'RS256', typ: 'JWT' })}.${enc({\n    iss: sa.client_email,\n    scope: 'https://www.googleapis.com/auth/firebase.messaging',\n    aud: 'https://oauth2.googleapis.com/token',\n    iat: now,\n    exp: now + 3600, // max 1 hour\n  })}`\n  const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5',\n    await importPrivateKey(sa.private_key), new TextEncoder().encode(input))\n  const res = await fetch('https://oauth2.googleapis.com/token', {\n    method: 'POST',\n    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },\n    body: new URLSearchParams({\n      grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',\n      assertion: `${input}.${b64url(sig)}`,\n    }),\n  })\n  if (!res.ok) throw new Error(`google token ${res.status}: ${await res.text()}`)\n  const json = await res.json() as { access_token: string; expires_in: number }\n  cached = { token: json.access_token, exp: now + json.expires_in }\n  return cached.token\n}",
+   "source": "https://developers.google.com/identity/protocols/oauth2/service-account"
+  },
+  {
+   "title": "FCM v1 send with android + apns overrides and dead-registration detection",
+   "language": "typescript",
+   "code": "type SendResult = { ok: true; name: string } | { ok: false; status: number; code: string; dead: boolean; retryable: boolean }\n\n// `target` is either {fid: '...'} (new, recommended) or {token: '...'} (deprecated but still accepted)\nexport async function sendFcm(target: { fid: string } | { token: string }, p: {\n  title: string; body: string; data: Record<string, string>; collapseKey?: string\n}): Promise<SendResult> {\n  const res = await fetch(\n    `https://fcm.googleapis.com/v1/projects/${sa.project_id}/messages:send`, {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await getFcmAccessToken()}` },\n      body: JSON.stringify({\n        message: {\n          ...target,\n          notification: { title: p.title, body: p.body },\n          data: p.data, // string values only; no 'from', 'message_type', 'google.*', 'gcm.notification.*'\n          android: {\n            priority: 'high',\n            ttl: '86400s',\n            ...(p.collapseKey ? { collapse_key: p.collapseKey } : {}),\n            notification: { channel_id: 'orders', sound: 'default' }, // app must create channel 'orders'\n          },\n          apns: {\n            headers: { 'apns-priority': '10' },\n            payload: { aps: { sound: 'default' } },\n          },\n        },\n      }),\n    })\n  const json = await res.json().catch(() => ({}))\n  if (res.ok) return { ok: true, name: json.name }\n  // error.status is e.g. 'NOT_FOUND'/'INVALID_ARGUMENT'; the FCM code is in details[].errorCode (verify shape on first real error)\n  const code: string = json?.error?.details?.find((d: { errorCode?: string }) => d.errorCode)?.errorCode\n    ?? json?.error?.status ?? 'UNKNOWN'\n  const dead = res.status === 404 || code === 'UNREGISTERED' || code === 'SENDER_ID_MISMATCH'\n    // 400 INVALID_ARGUMENT means a bad registration ONLY when the payload is known-valid:\n    || (res.status === 400 && /registration|token|fid/i.test(json?.error?.message ?? ''))\n  const retryable = res.status === 429 || res.status >= 500\n  return { ok: false, status: res.status, code, dead, retryable }\n}",
+   "source": "https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages"
+  },
+  {
+   "title": "Official Supabase guide's access-token helper (Node google-auth-library via npm:, for comparison)",
+   "language": "typescript",
+   "code": "import { withSupabase } from 'npm:@supabase/server@^1'\nimport { JWT } from 'npm:google-auth-library@^10'\nimport serviceAccount from '../service-account.json' with { type: 'json' }\n\nconst getAccessToken = ({ clientEmail, privateKey }: { clientEmail: string; privateKey: string }): Promise<string> => {\n  return new Promise((resolve, reject) => {\n    const jwtClient = new JWT({\n      email: clientEmail,\n      key: privateKey,\n      scopes: ['https://www.googleapis.com/auth/firebase.messaging'],\n    })\n    jwtClient.authorize((err, tokens) => {\n      if (err) { reject(err); return }\n      resolve(tokens!.access_token!)\n    })\n  })\n}\n// fetch(`https://fcm.googleapis.com/v1/projects/${serviceAccount.project_id}/messages:send`, { ... body: { message: { token: fcmToken, notification: { title, body } } } })\n// deploy: supabase functions deploy push --no-verify-jwt",
+   "source": "https://supabase.com/docs/guides/functions/examples/push-notifications"
+  },
+  {
+   "title": "Flutter: init, background handler, FID registration (firebase_messaging 17.1.0 API)",
+   "language": "dart",
+   "code": "// pubspec: firebase_core: ^5.2.0, firebase_messaging: ^17.1.0\n@pragma('vm:entry-point')\nFuture<void> firebaseMessagingBackgroundHandler(RemoteMessage message) async {\n  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);\n  // no UI here; notification messages are shown by the OS automatically in background\n}\n\nFuture<void> main() async {\n  WidgetsFlutterBinding.ensureInitialized();\n  if (!kIsWeb) {\n    await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);\n    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);\n  }\n  runApp(const ProviderScope(child: App()));\n}\n\n// After sign-in (seller side):\nFuture<void> enablePush(Future<void> Function(String id) upload) async {\n  final m = FirebaseMessaging.instance;\n  final settings = await m.requestPermission(); // iOS dialog; Android 13+ POST_NOTIFICATIONS prompt\n  if (settings.authorizationStatus == AuthorizationStatus.denied) return;\n  await m.setForegroundNotificationPresentationOptions(alert: true, badge: true, sound: true); // iOS foreground\n  if (defaultTargetPlatform == TargetPlatform.iOS && await m.getAPNSToken() == null) {\n    // APNs token not ready yet; retry later\n  }\n  // New (17.x) FID flow -- requires manifest/Info.plist opt-in flags:\n  m.onRegistered.listen(upload);          // subscribe BEFORE register()\n  m.onUnregistered.listen((fid) {/* delete from server */});\n  await m.register();\n  // Deprecated-but-working alternative (do not mix with the FID flow):\n  //   final token = await m.getToken(); m.onTokenRefresh.listen(upload);\n}\n\nvoid wireMessageHandlers(void Function(Map<String, dynamic> data) open) async {\n  FirebaseMessaging.onMessage.listen((msg) {/* foreground: show in-app banner or local notification */});\n  FirebaseMessaging.onMessageOpenedApp.listen((msg) => open(msg.data));\n  final initial = await FirebaseMessaging.instance.getInitialMessage();\n  if (initial != null) open(initial.data);\n}",
+   "source": "https://firebase.google.com/docs/cloud-messaging/flutter/get-started"
+  },
+  {
+   "title": "Native opt-in for FID registration + Android default channel",
+   "language": "xml",
+   "code": "<!-- android/app/src/main/AndroidManifest.xml, inside <application> -->\n<meta-data android:name=\"firebase_messaging_installation_id_enabled\" android:value=\"true\" />\n<!-- fallback channel used when the message has no/unknown channel_id (standard FCM Android meta-data; not re-verified this session) -->\n<meta-data android:name=\"com.google.firebase.messaging.default_notification_channel_id\" android:value=\"orders\" />\n\n<!-- ios/Runner/Info.plist -->\n<key>FirebaseMessagingInstallationIdEnabled</key>\n<true/>",
+   "source": "https://firebase.google.com/docs/cloud-messaging/flutter/get-started"
+  }
+ ],
+ "pitfalls": [
+  "2026 migration in progress: FCM is moving from registration tokens to Firebase Installation IDs (FID). `message.token` and Flutter getToken/onTokenRefresh/deleteToken are deprecated (still working, no removal date found). Design the device table with a generic column (e.g. push_target text + target_kind 'fid'|'token') so either can be sent; `message.token` also accepts an FID during the transition. Do not mix both client API families in one app.",
+  "FID flow silently does nothing unless the native opt-in flags are set (Android meta-data firebase_messaging_installation_id_enabled, iOS FirebaseMessagingInstallationIdEnabled). Subscribe to onRegistered before calling register().",
+  "Do not blindly delete a registration on every HTTP 400: INVALID_ARGUMENT also means a bad payload (non-string data value, reserved data key, >4096 bytes, bad ttl). A payload bug would otherwise wipe every device row. Delete on 404 UNREGISTERED always; on 400 only when the error message/field points at the registration.",
+  "401 THIRD_PARTY_AUTH_ERROR (missing/invalid APNs key) and 403 SENDER_ID_MISMATCH are configuration problems; 429/500/503 are retryable with backoff — keep the outbox row pending instead of marking it failed permanently.",
+  "data values must all be strings (map<string,string>); numbers/booleans/nested objects cause INVALID_ARGUMENT. Serialize order_id etc. as strings.",
+  "Setting apns.payload overrides notification.title/body for iOS per the reference — keep apns.payload to {aps:{sound:...}} and test on a real iPhone that the alert text still shows; if not, add aps.alert {title, body} explicitly.",
+  "Android 8+: sound and heads-up come from the notification channel, not from the message. The app must create the 'orders' channel (high importance) before the first push arrives, otherwise FCM falls back to the manifest default channel / a silent 'Miscellaneous' channel. Creating a channel from Dart requires flutter_local_notifications (or a few lines of native Kotlin).",
+  "Foreground notification messages are not shown on Android or iOS by default; without onMessage handling the seller sees nothing while the app is open.",
+  "Background handler must be top-level + @pragma('vm:entry-point') and must call Firebase.initializeApp(options: ...) itself with the same explicit options when using Dart-only config; a plain Firebase.initializeApp() there fails without google-services.json.",
+  "Dart-only init on Android without google-services.json/Gradle plugin is not officially confirmed for FCM cold-start delivery; the plugin's own example still applies com.google.gms.google-services. Test a push to a force-closed/terminated app on a real device before relying on it, or add google-services.json + plugin (the repo uses Kotlin-DSL Gradle with AGP 9.1, so check google-services plugin compatibility).",
+  "firebase_core 5.x requires Android minSdk 24 and iOS 15; the app uses flutter.minSdkVersion — verify it resolves to >= 24 on Flutter 3.47 or the build fails at manifest merge.",
+  "flutter_local_notifications 23.x on Android requires core library desugaring (coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4' + isCoreLibraryDesugaringEnabled) per the FlutterFire example comment; its show() uses named parameters (id:, title:, body:, notificationDetails:).",
+  "The app has a web target: firebase_messaging calls on web without a service worker/VAPID key throw. Guard with kIsWeb / isSupported() and skip Firebase init on web unless web options are generated.",
+  "The Supabase guide imports the service-account JSON from a file inside supabase/functions (gets bundled and risks being committed). Prefer a secret (supabase secrets set FCM_SERVICE_ACCOUNT=...) and handle escaped \\n in private_key.",
+  "Edge Function isolates are short-lived: module-scope caching of the Google access token helps only on warm invocations; a per-minute cron will often mint a new token (one extra HTTPS round trip) — acceptable, but do not mint one per message inside a batch.",
+  "iOS: getToken()/registration can fail or hang if the APNs token is not yet available (simulator, missing capability, no APNs key in Firebase). Check getAPNSToken() first and retry later rather than treating it as a permanent failure.",
+  "Android registrations expire after 270 days of inactivity and devices without Google Play services (some Huawei) never get FCM — keep WhatsApp/in-app fallback for sellers."
+ ],
+ "openQuestions": [
+  "Does FCM on Android deliver notification messages to a terminated app when Firebase is initialised only from Dart (no google-services.json / google-services Gradle plugin) with firebase_core 5.2.0 / BoM 35.2.0? No official statement found; needs a real-device test.",
+  "Exact JSON shape of v1 error responses for an FID target (error.status vs error.details[].errorCode, and the error message text for an invalid FID) was not captured from a live call; confirm on the first real failure and adjust the dead-registration matcher.",
+  "No published removal date for the deprecated `message.token` field or Flutter getToken()/onTokenRefresh was found; choose FID-first or token-first accordingly (FID is what Google now recommends; token flow has years of field experience).",
+  "Whether the legacy fcm/send endpoint is fully shut down is not stated verbatim on the current official pages (only 'shutdown begins on July 22, 2024'); irrelevant for a new build but unconfirmed.",
+  "Does `flutterfire configure` (flutterfire_cli 1.5.0) still write android/app/google-services.json and apply the Gradle plugin by default for Kotlin-DSL/AGP 9 projects? A search result says yes (--[no-]apply-gradle-plugin) but I did not verify against the CLI source.",
+  "A Firebase project, Android/iOS app registrations (package name / bundle id), the service-account key and an APNs .p8 key must be supplied by the owner — none exist in the repo; without them only code paths with a stub/fake sender can be tested.",
+  "Whether apns.payload containing only aps.sound suppresses the alert text from message.notification on iOS (the reference says payload 'overrides' title/body) — needs a device test."
+ ]
+}

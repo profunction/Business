@@ -1,0 +1,853 @@
+[
+ {
+  "checked": [
+   {
+    "claim": "FCM HTTP v1 send endpoint: POST https://fcm.googleapis.com/v1/projects/{PROJECT_ID}/messages:send with 'Authorization: Bearer <OAuth2 access token>' and 'Content-Type: application/json'; body {\"message\": {...}} (optionally \"validate_only\": true for a dry run, which Google now recommends for token validation).",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages/send (validate_only is 'Flag for testing the request without actually delivering the message'; scopes firebase.messaging or cloud-platform; IAM permission cloudmessaging.messages.create; the path also accepts the project number). The validate_only recommendation is in https://firebase.google.com/docs/cloud-messaging/troubleshooting, aimed at users moving off the IID info API, not on the v1-api page."
+   },
+   {
+    "claim": "Required OAuth2 scope is https://www.googleapis.com/auth/firebase.messaging. A non-Firebase service account needs roles/firebase.messagingAdmin; the Firebase-console-generated service account key works as is.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://firebase.google.com/docs/cloud-messaging/send/v2-api ('If you're not using your Firebase service account, make sure to assign your dedicated account to the Firebase Cloud Messaging API Admin role (roles/firebase.messagingAdmin)'); https://firebase.google.com/docs/cloud-messaging/send/v1-api (scope; Settings > Service accounts > Generate New Private Key)"
+   },
+   {
+    "claim": "Service-account token exchange without a library: JWT header {alg:'RS256',typ:'JWT'}, claims iss/scope/aud='https://oauth2.googleapis.com/token'/iat/exp (max 1h), RSA-SHA256 signature, form-POST grant_type=urn:ietf:params:oauth:grant-type:jwt-bearer&assertion=<JWT>; the response has access_token, token_type Bearer, expires_in 3600; the token can be reused until it expires.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.google.com/identity/protocols/oauth2/service-account ('This value has a maximum of 1 hour after the issued time'; 'Access tokens can be reused during the duration window specified by the expires_in value'; invalid_grant if exp is more than 65 min after iat or the clock is skewed)"
+   },
+   {
+    "claim": "The WebCrypto-only signing path works in Deno (PKCS#8 PEM, strip armor, importKey('pkcs8', ..., RSASSA-PKCS1-v1_5/SHA-256), sign); verified locally on Deno 2.9.6; network exchange not tested.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "Re-run independently: /tmp/claude-0/-home-user-Business/655a5d63-532a-5520-b2a9-3f98ee44e014/scratchpad/fcverify/t.ts on Deno 2.9.6. The report's exact importPrivateKey/b64url code signed and verified for a correctly escaped PEM and for one with literal \\n. A bogus assertion POSTed to oauth2.googleapis.com/token got 400 invalid_request. No real exchange was done (no key) and Supabase Edge Runtime was not tested."
+   },
+   {
+    "claim": "CHANGED 2026: v1 Message `token` is deprecated ('Use `fid` instead. During the transition period, this field also accepts a FID'); new mutually exclusive target `fid`; both patterns are 'fully co-supported'; no removal date for `token`.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages (token (deprecated), fid, topic and condition are mutually exclusive); https://firebase.google.com/docs/cloud-messaging/manage-tokens ('both patterns are fully co-supported'). Found no removal date."
+   },
+   {
+    "claim": "Message JSON fields (data map string->string with reserved keys; notification {title, body, image}; android {...}; apns {headers, payload, fcm_options, live_activity_token}; webpush; fcm_options; android_v2). Payload limit 4096 bytes (2048 for topics).",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages (AndroidConfig also has bandwidth_constrained_ok and restricted_satellite_ok; android_v2 cannot be combined with android, and a request with both is rejected). The size limit and the 4-week TTL (0 to 2,419,200 s) are on https://firebase.google.com/docs/cloud-messaging/error-codes and the ErrorCode reference, not projects.messages."
+   },
+   {
+    "claim": "android.notification.channel_id: the app must create the channel first, otherwise FCM uses the manifest channel id; on Android 8+ notification_priority is ignored in favour of channel importance; android.priority HIGH is the default for notification messages and NORMAL for data messages.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages (channel_id, notification_priority and AndroidMessagePriority enum text match)"
+   },
+   {
+    "claim": "apns.headers takes APNs headers; FCM defaults apns-priority to 10 and apns-expiration to 30 days; data-only iOS messages may only use apns-priority '5'; apns.payload overrides notification.title/body, so put only {aps:{sound:'default'}} plus custom keys there unless you also supply aps.alert.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages (ApnsConfig.headers/payload and Message.data). Google's own example in https://firebase.google.com/docs/cloud-messaging/customize-messages/cross-platform pairs notification title/body with apns.payload.aps.category and no alert. So in practice aps keys are merged and title/body are replaced only when aps.alert is given, which matches the report's advice."
+   },
+   {
+    "claim": "Delete the registration on UNREGISTERED (404) or INVALID_ARGUMENT (400), but INVALID_ARGUMENT means an invalid registration 'only if the payload is completely valid'. UNREGISTERED causes: app unregistered/uninstalled, APNs token invalid, token expired, Android registration inactive 270 days.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://firebase.google.com/docs/cloud-messaging/manage-tokens (deletion rule, note and 270-day expiry); https://firebase.google.com/docs/cloud-messaging/error-codes (the UNREGISTERED causes list, which also includes 'client app is updated but the new version is not configured to receive messages')"
+   },
+   {
+    "claim": "Other v1 error codes: SENDER_ID_MISMATCH 403, QUOTA_EXCEEDED 429 (backoff, min 1 minute), UNAVAILABLE 503 (honour Retry-After), INTERNAL 500, THIRD_PARTY_AUTH_ERROR 401 (APNs/web push credential problem, do not delete token). The code is in error.status and error.details[].errorCode (exact JSON not re-verified).",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://firebase.google.com/docs/cloud-messaging/error-codes. JSON shape now verified: {error:{code,message,status,details:[{'@type':'type.googleapis.com/google.firebase.fcm.v1.FcmError', errorCode:'...'}]}}; payload errors carry '@type':'type.googleapis.com/google.rpc.BadRequest' with fieldViolations. Not mentioned in the claim: THIRD_PARTY_PERMISSION_DENIED (403, web push)."
+   },
+   {
+    "claim": "Legacy FCM APIs (fcm/send with server key, XMPP) deprecated 2023-06-20, 'shutdown begins on July 22, 2024'; treat as gone. IID server APIs and device groups deprecated (Sept 2026) and decommissioned 2027-09-29.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "The 'deprecated on June 20, 2023, and shutdown begins on July 22, 2024' sentence is on https://firebase.google.com/docs/cloud-messaging/migrate-v1, not the troubleshooting page. The IID/device-group decommission on September 29, 2027 is on https://firebase.google.com/docs/cloud-messaging/troubleshooting, which adds that new users cannot onboard those APIs after January 1, 2027."
+   },
+   {
+    "claim": "Latest pub.dev (2026-11-16): firebase_messaging 17.1.0 and firebase_core 5.2.0, both sdk ^3.12.0 / flutter >=3.44.0; firebase_messaging 17.1.0 depends on firebase_core ^5.1.0; 17.0.x / core 5.0-5.1 need Dart ^3.6 / Flutter >=3.27; flutter_local_notifications 23.0.4 (2026-11-23, sdk ^3.12.0, flutter >=3.44.0). Compatible with Flutter 3.47.9 / Dart 3.13.7.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://pub.dev/api/packages/firebase_messaging, /firebase_core, /flutter_local_notifications (queried 2026-11-25). Local SDK /opt/flutter is 3.47.9 with Dart 3.13.7."
+   },
+   {
+    "claim": "firebase_core 5.x / firebase_messaging 17.x: Android BoM 35 (core 5.2.0 pins 35.2.0), minSdk 24, iOS SDK 13, iOS 15.0, Java 17; repo minSdk = flutter.minSdkVersion must resolve to >= 24; IPHONEOS_DEPLOYMENT_TARGET 15.0 OK; 17.1.0/5.2.0 add 'migrate plugins to built-in Kotlin on Flutter 3.44'.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "flutterfire CHANGELOGs (5.0.0/17.0.0: 'build on Firebase BoM 35 and require minSdk 24', iOS SDK 13.0.0). Plugin archives: gradle.properties FirebaseSDKVersion=35.2.0, local-config.gradle minSdk=24 and javaVersion 17, podspec ios.deployment_target '15.0'. In Flutter 3.47.9 flutter.minSdkVersion is 24 (FlutterExtension.kt), so the repo is OK."
+   },
+   {
+    "claim": "firebase_messaging 17.x: getToken(), onTokenRefresh, deleteToken() are @Deprecated in 17.1.0; new register({vapidKey, serviceWorkerScriptPath}), unregister(), Stream<String> onRegistered, onUnregistered (instance members); do not mix both families.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "Independently downloaded firebase_messaging-17.1.0 lib/src/messaging.dart. onTokenRefresh's message is 'Use onRegistered instead.'; getToken's is 'Use register() and onRegistered instead.'; deleteToken's is 'Use unregister() and onUnregistered instead.' https://firebase.google.com/docs/cloud-messaging/flutter/get-started has the caution against using both."
+   },
+   {
+    "claim": "FID opt-in: Android meta-data firebase_messaging_installation_id_enabled=true; iOS Info.plist FirebaseMessagingInstallationIdEnabled=true; nothing for web; onRegistered emits at startup/routine sync, on every register(), and on FID change; subscribe before register(); register() required on web; no periodic refresh job needed but upsert last-seen timestamp.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://firebase.google.com/docs/cloud-messaging/flutter/get-started; https://firebase.google.com/docs/cloud-messaging/manage-tokens. Extra point: register() itself asks for notification permission if it has not been granted."
+   },
+   {
+    "claim": "Dart-only init via DefaultFirebaseOptions; the setup doc says the CLI adds Gradle plugins only for Crashlytics/Performance; firebase_core Android builds FirebaseOptions from Dart values; cold-start-by-push without google-services.json unconfirmed; example app applies google-services; adding google-services.json + plugin is the safe path.",
+    "verdict": "corrected",
+    "correction": "The doc wording is quoted correctly, but the FlutterFire CLI does more than it says. In flutterfire_cli 1.5.0 (latest, 2026-11-09), --apply-gradle-plugins defaults to true ('add the Firebase related Gradle plugins ... and create the google-services.json file in your ./android/app folder'). FirebaseAndroidWrites.apply() writes android/app/google-services.json and adds com.google.gms.google-services to settings/app gradle (Kotlin DSL is supported). So a default `flutterfire configure` already gives the 'safe path'; a Dart-only setup needs --no-apply-gradle-plugins. firebase_core's Android plugin does build FirebaseOptions from the Dart values (FlutterFirebaseCorePlugin.kt). The cold-start behaviour without google-services.json is still unverified.",
+    "source": "pub.dev flutterfire_cli 1.5.0 archive lib/src/commands/config.dart and lib/src/firebase/firebase_android_writes.dart; https://firebase.google.com/docs/flutter/setup"
+   },
+   {
+    "claim": "In the background handler you must call Firebase.initializeApp again (with options for Dart-only config); handler must be top-level, not anonymous, @pragma('vm:entry-point'), registered early in main(); no UI/state; >30s may be killed; 17.1.0 skips the Android background service when no handler is registered.",
+    "verdict": "corrected",
+    "correction": "Not strictly 'must'. The official doc says to call initializeApp in the handler 'if you're going to use other Firebase services in the background'. Its example does call it (with no options), and the plugin example passes DefaultFirebaseOptions.currentPlatform, so doing it is recommended. Everything else is confirmed: top-level, not anonymous, @pragma('vm:entry-point') on Flutter >= 3.3, a separate isolate on Android only, no UI/state access, a 30 s kill risk, and 17.1.0 'skip the background service when no handler is registered'. On iOS a message that arrives before the handler is registered waits up to 10 s for it.",
+    "source": "https://firebase.google.com/docs/cloud-messaging/flutter/receive-messages; firebase_messaging 17.1.0 CHANGELOG and example/lib/main.dart; messaging.dart onBackgroundMessage doc"
+   },
+   {
+    "claim": "Foreground notification messages are not shown automatically on Android/iOS; iOS setForegroundNotificationPresentationOptions(alert, badge, sound) is persisted; Android needs a high-importance channel plus a local notification (example uses flutter_local_notifications createNotificationChannel(Importance.high) + show(id:, title:, body:, notificationDetails:)); an in-app banner is an alternative.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://firebase.google.com/docs/cloud-messaging/flutter/receive-messages; messaging.dart ('Options set to true are persisted'); firebase_messaging 17.1.0 example/lib/main.dart (which pins flutter_local_notifications ^21.0.0). flutter_local_notifications 23.0.4 show({required int id, String? title, String? body, NotificationDetails? notificationDetails, String? payload}) has the same named signature."
+   },
+   {
+    "claim": "getInitialMessage() returns the opening RemoteMessage from terminated state (consumed once; null for a locally shown Android notification); onMessageOpenedApp fires from background; handle both; since 16.7.0 Android no longer also fires onMessageOpenedApp for terminated taps.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://firebase.google.com/docs/cloud-messaging/flutter/get-started; messaging.dart getInitialMessage doc ('on Android, if the message was received in the foreground, and the notification was pressed whilst the app is in a background/terminated state, this will return null'); CHANGELOG 16.7.0 'skip onMessageOpenedApp for terminated notification taps'"
+   },
+   {
+    "claim": "iOS: upload APNs .p8 key + key ID + Team ID; Xcode Push Notifications + Background Modes (Background fetch, Remote notifications); swizzling required; APNs token must be available (iOS SDK >= 10.4) so check getAPNSToken() != null; push does not work on a simulator without APNs setup and needs a paid Apple Developer account.",
+    "verdict": "corrected",
+    "correction": "Everything is confirmed except the simulator point. Firebase's Flutter setup lists 'Set up a physical Apple device' as a prerequisite for Cloud Messaging on Apple platforms, so plan on testing on a physical device, not 'a simulator with APNs setup'. The paid Apple Developer Program requirement is Apple's rule; it is not stated in the Firebase docs and was not verified here. Related: since 16.7.0 the plugin registers for APNs only after Dart Firebase.initializeApp().",
+    "source": "https://firebase.google.com/docs/cloud-messaging/flutter/get-started; https://firebase.google.com/docs/flutter/setup; https://firebase.google.com/docs/cloud-messaging/ios/get-started (swizzling required)"
+   },
+   {
+    "claim": "Web is skippable: VAPID key, web/firebase-messaging-sw.js with importScripts app-compat + messaging-compat, firebase.initializeApp, `const messaging = firebase.messaging()`, registered from index.html; guard messaging calls with !kIsWeb; firebase_messaging_web is pulled in transitively but inert if never called.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://firebase.google.com/docs/cloud-messaging/flutter/receive-messages ('The file must import both the app and messaging SDKs, initialize Firebase and expose the messaging variable'). firebase_messaging_web 4.4.0 registerWith only calls FirebaseCoreWeb.registerService('messaging') and sets the platform instance. No JS is loaded unless Firebase.initializeApp runs on web, which supports the 'inert' claim (code reading, not a runtime test)."
+   },
+   {
+    "claim": "Deno library options: jose (npm latest 6.2.18), `import { SignJWT, importPKCS8 } from 'npm:jose@6'`, pure WebCrypto and Deno-compatible; google-auth-library npm latest 11.3.4, Supabase guide pins ^10, heavy; jose import not executed.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://registry.npmjs.org/jose/latest (6.2.18, published 2026-11-18, no dependencies) and https://registry.npmjs.org/google-auth-library/latest (11.3.4). The jose import line was executed in this check (/tmp/claude-0/-home-user-Business/655a5d63-532a-5520-b2a9-3f98ee44e014/scratchpad/fcverify/jose_t.ts, Deno 2.9.6): importPKCS8 + SignJWT RS256 signed and jwtVerify passed. The Supabase guide (https://supabase.com/docs/guides/functions/examples/push-notifications) uses npm:google-auth-library@^10 and npm:@supabase/server@^1. 'Heavy/slower cold start' is an opinion and was not measured."
+   }
+  ],
+  "missing": [
+   "flutter_local_notifications 23.0.4 has Android build requirements that the repo does not meet yet. Its README says compileSdk must be at least 37, but the repo uses flutter.compileSdkVersion, which is 36 in Flutter 3.47.9. It also requires core library desugaring (coreLibraryDesugaring com.android.tools:desugar_jdk_libs:2.1.4) and recommends AGP 9.1.1 or later (the repo has 9.1.0). Its initialize() now takes a required named `settings:` parameter. Taps on notifications it shows arrive through onDidReceiveNotificationResponse, not onMessageOpenedApp or getInitialMessage.",
+   "The repo's apps/mobile has no lib/firebase_options.dart and no android/app/google-services.json yet. A default `flutterfire configure` (CLI 1.5.0) creates both and adds the com.google.gms.google-services Gradle plugin; on macOS it also writes GoogleService-Info.plist.",
+   "FCM on Android needs Android 7.0 (API 24) or later with Google Play services; emulators must use a Google Play image. firebase_messaging already declares POST_NOTIFICATIONS in its manifest. On Android 13+, an authorizationStatus of `denied` means either denied or not yet asked, so the app has to track whether it already prompted.",
+   "Dead-registration snippet: matching on raw HTTP 404 is risky; prefer details[].errorCode === 'UNREGISTERED' (FcmError). The regex on the 400 message can match BadRequest field violations such as \"Invalid value at 'message.token'\", so only treat a 400 as dead when details holds an FcmError and no google.rpc.BadRequest.",
+   "Two different HTTP 401s must be told apart. An invalid or expired OAuth token gives 401 with status UNAUTHENTICATED and no details (probed live); the fix is to clear the cached token and retry once, which the snippet does not do. THIRD_PARTY_AUTH_ERROR is also HTTP 401 and is identified by details[].errorCode.",
+   "THIRD_PARTY_PERMISSION_DENIED (HTTP 403, web push) exists. FCM considers a registration stale after one month without connecting and recommends pruning stored FIDs by their last-upload timestamp.",
+   "android_v2 (AndroidConfigV2) is a pre-GA preview that needs an EAP Android SDK (firebase-messaging 26.1.0-eap01 from a local Maven repo). It cannot be combined with `android` in the same request, so do not use it in this project.",
+   "Google's service-account doc has an addendum: APIs whose service definition is published in googleapis accept a self-signed JWT (aud=https://SERVICE.googleapis.com/) directly as the bearer, skipping the token exchange. Whether FCM accepts this was not verified.",
+   "Flutter snippet bugs: the getAPNSToken()==null branch does not return, so register() still runs before the APNs token exists. Each enablePush() call adds another onRegistered/onUnregistered listener (duplicate uploads) unless the subscriptions are kept and cancelled. register() itself prompts for permission.",
+   "The WebCrypto and jose paths were tested only on the Deno 2.9.6 CLI, not on the Supabase Edge Runtime. The official Supabase guide imports a bundled ../service-account.json; keeping the key in a Supabase secret (as the report does) avoids committing it. The guide triggers the function from a database webhook and deploys it with --no-verify-jwt.",
+   "HTTP v1 sends one message per request (no multicast in the REST API). The project quota is 600K quota tokens per minute; QUOTA_EXCEEDED needs backoff starting at 1 minute or more.",
+   "The FCM `data` map rejects non-string values with 400 INVALID_ARGUMENT/BadRequest (official example: \"Invalid value at 'message.data[0].value' (TYPE_STRING), 12\"), so the Edge Function must stringify order IDs and similar values."
+  ]
+ },
+ {
+  "checked": [
+   {
+    "claim": "Graph API versions: v27.0 latest (2026-11-04); v26.0 2026-07-29; v25.0 2026-02-18 until 2028-07-29; v24.0 2025-10-08 until 2028-02-18; v23.0 until 2027-10-08; v20.0 and older expired; WhatsApp doc examples use v27.0; pin one version in a constant",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/docs/graph-api/changelog (table: v26/v27 'TBD' expiry, v20.0 expired 2026-09-24, v21.0 until 2027-01-21, v22.0 until 2027-05-20 still live). Small caveat: only some WhatsApp pages use v27.0 (send-messages, components). The template overview and utility-templates examples still use v23.0, and one components example uses v16.0."
+   },
+   {
+    "claim": "Send endpoint POST https://graph.facebook.com/<ver>/<PHONE_NUMBER_ID>/messages, Bearer + JSON headers, system-user or business token, version optional and defaults to newest",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/utility-templates/utility-templates.md (API_VERSION: 'Optional. If omitted, defaults to the newest API version available to your app')"
+   },
+   {
+    "claim": "Send body shape; success response contacts[{input,wa_id}], messages[{id,message_status:'accepted'}]; message_status only for template sends; 200 = accepted not delivered; wa_id may differ from input",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages.md and templates/template-pacing.md ('Cloud API will always include a message_status property ... accepted ... held_for_quality_assessment for messages that are held')"
+   },
+   {
+    "claim": "Phone format: + - ( ) and spaces accepted; without '+' the business number's country code is prepended; send E.164 '+60...'",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages.md#whatsapp-user-phone-number-formats"
+   },
+   {
+    "claim": "Body params: named {type:text,parameter_name,text} in any order; positional in order; parameter_format named|positional (default positional) at creation; named = lowercase + underscores",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview.md#parameter-formats"
+   },
+   {
+    "claim": "Quick-reply send component {type:button,sub_type:quick_reply,index,parameters:[{type:payload,payload}]}; payload optional, echoed in messages.button.payload; only shown on carousel page; URL-button example uses index \"0\" at top level",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/media-card-carousel-templates.md (syntax table types BUTTON_INDEX as Integer, but the worked example itself sends \"index\": \"0\" as a string) and templates/components.md (URL button send example at top level, index \"0\"). I searched the utility, custom-marketing, coupon, LTO, location, booking and template-management pages: none has a top-level quick_reply send example."
+   },
+   {
+    "claim": "Template quick-reply payload length limit not documented; interactive reply-button id max 256; 'CONFIRM:<uuid>' is 44 chars; without a payload the webhook payload equals the label",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/interactive-reply-buttons-messages.md (BUTTON_ID max 256, label max 20). The button webhook syntax shows payload = <BUTTON_LABEL_TEXT>, and the Direct Send page says that reference 'shows the same value in payload and text'. No Meta page I fetched states a payload limit for template quick replies."
+   },
+   {
+    "claim": "If buttons use variables, the type and order of button components must match the template and index cannot reorder them; use index 0 and 1 for [Confirm, Out of stock]",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/media-card-carousel-templates.md (BUTTON_INDEX note). Nuance: templates/components.md says 'When using the API to send a template that has multiple quick reply buttons, you can use the index property to designate the order in which buttons appear', so the two pages are inconsistent. Sending in template order (0, 1) is the safe choice."
+   },
+   {
+    "claim": "Language codes zh_CN, ms, en, en_US, en_GB, en_MY, zh_HK, zh_TW; language.code must match a created translation (else 132001); same name in multiple languages allowed, each counts toward the limit; Meta does not translate",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/supported-languages.md; templates/overview.md#languages; support/error-codes.md (132001)"
+   },
+   {
+    "claim": "Categories MARKETING/UTILITY/AUTHENTICATION; utility rules; Order Management objective; mixed or unclear content becomes MARKETING; since 2025-04-09 a mis-categorized UTILITY submission is approved as MARKETING; check the create response category and template_category_update",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-categorization.md"
+   },
+   {
+    "claim": "Create via WhatsApp Manager or POST /<WABA_ID>/message_templates; response {id,status,category}; must be APPROVED; automated + manual review up to 24 h; message_template_status_update webhook; GET /<TEMPLATE_ID>?fields=status; 100 creations/hour; name lowercase alphanumerics and underscores, max 512",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview.md; templates/template-review.md ('combination of automated systems and manual reviews', 'up to 24 hours')"
+   },
+   {
+    "claim": "Component limits: body 1024 (only required component); text header 60 with 1 param; footer 60; QR label 25 (utility doc adds 'alphanumeric only'); up to 10 buttons / 10 quick replies; QR buttons grouped; >3 buttons shows 2 + 'See all options'; 4+ buttons or QR mixed with other types not viewable on desktop; examples required for variables",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/components.md; templates/utility-templates/utility-templates.md"
+   },
+   {
+    "claim": "Rejection reasons: mismatched braces, special characters in variables, non-sequential params, too many variables for the length, leading/trailing variable, duplicate body+footer wording",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-review.md; support/error-codes.md (2388293 parameter/word ratio, 2388299 leading/trailing params)"
+   },
+   {
+    "claim": "GET verification hub.mode/hub.challenge/hub.verify_token; respond 200 with the challenge, otherwise non-200; sent whenever Callback URL or Verify token is set or edited; valid non-self-signed TLS",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/create-webhook-endpoint.md"
+   },
+   {
+    "claim": "X-Hub-Signature-256: sha256=<hex> = HMAC-SHA256 of the body keyed with the app secret; compare to the part after 'sha256='; respond 200",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/create-webhook-endpoint.md (hashing the raw bytes is correct practice; the doc only says 'JSON payload')"
+   },
+   {
+    "claim": "Batches of up to 1000 updates; retries immediately then with decreasing frequency for up to 7 days, so dedupe; no API for historical webhooks; latency median <=250 ms, <1% over 1 s",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/create-webhook-endpoint.md (batching, retries, no historical API). The latency standard is on throughput.md, not the endpoint page. webhooks/overview.md adds that retries go to all subscribed apps and can produce duplicates, and that payloads can be up to 3 MB."
+   },
+   {
+    "claim": "Template quick-reply tap arrives as messages[] type 'button' with context.{from,id}, from, from_user_id, id, timestamp, button.{payload,text}; field 'messages'; object 'whatsapp_business_account'; interactive replies use interactive.button_reply",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/button.md (also optional contacts[].profile.username, parent_user_id, identity_key_hash, from_parent_user_id)"
+   },
+   {
+    "claim": "wa_id and from are digits without '+' in JSON examples; may differ; normalize to digits; metadata.phone_number_id identifies the receiving number",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/text.md (the parameter table oddly gives the 'from' example as '+16505551234', which is another reason to normalize)"
+   },
+   {
+    "claim": "BSUID since April 2026 (contacts[].user_id, messages[].from_user_id, statuses recipient_user_id); format CC.<=128 alphanumerics; wa_id/from omitted for username users unless there was contact within 30 days on that business number or the user is in the contact book; BSUID support required; send via 'recipient' since July 2026",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/business-scoped-user-ids.md (BSUIDs are scoped per business portfolio and regenerated when the user changes phone number; recipient_user_id is omitted on failed statuses when the message was sent to a phone number)"
+   },
+   {
+    "claim": "Inbound text message item shape",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/text.md"
+   },
+   {
+    "claim": "Inbound audio item {mime_type 'audio/ogg; codecs=opus', sha256, id, url, voice}; url rolled out gradually from 2025-11-12",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/audio.md"
+   },
+   {
+    "claim": "statuses[] shape; errors only on failed; pricing only on sent and one of delivered/read; contacts omitted on failed; delivered may be skipped when read; conversation omitted for v24.0+ except free-entry-point; biz_opaque_callback_data echoed",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/status.md (pricing.billable is slated for deprecation; use pricing.type + category)"
+   },
+   {
+    "claim": "Media download: GET /<MEDIA_ID> (optional phone_number_id) then GET url with Bearer token; URL valid 5 min; 404 means refetch; webhook media IDs downloadable for 7 days; >100 MB gives 131052",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/media.md"
+   },
+   {
+    "claim": "Per-delivered-message pricing since 2025-07-01 by category x market; user-to-business free; categories marketing/utility/authentication/service/Meta Business Agent (2026-07-01, token-priced); changes only on quarter starts",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing.md"
+   },
+   {
+    "claim": "From 2026-10-01 utility templates inside the customer service window are charged (pricing.type 'regular'); service messages charged after 1,000 free per number per month (no rollover, resets at account timezone); without a payment method, service messages past the free tier are not delivered; only FEP (7 days) and the free tier remain free",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing.md#effective-october-1-2026 (FEP window 'may remain open for up to 7 days'). Not mentioned in the claim: eligible governments and non-profits get free service messages ('paid_exempt' subtype) through 2027-12-31."
+   },
+   {
+    "claim": "24 h customer service window opens/resets on each user message or call; a quick-reply tap opens it; free-form only inside the window; 131047 outside it; opt-in always required",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages.md#customer-service-windows; direct-send page ('fails with error 131047 if there's no open service window'). That a button tap opens the window is inferred, since it is a user message; no Meta page says so explicitly."
+   },
+   {
+    "claim": "Opt-in: have the mobile number plus opt-in naming the business; may be general; SMS/website/IVR/paper allowed",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/getting-opt-in.md (must also comply with applicable law)"
+   },
+   {
+    "claim": "Error shape {error:{message,type,code,error_data:{messaging_product,details},fbtrace_id}}; handle on code/details; error_subcode deprecated; many failures arrive asynchronously via status webhooks",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/support/error-codes.md"
+   },
+   {
+    "claim": "Key error code list (131047, 131026 'permanent, do not retry', 132001, 132000, 132012, 132015, 132016, 132007, 131008, 131009, 100, 190, 0/3/10/200-299, 131042, 131031/368, 131045/133010, 131049, 131050, 131051, 131052, 131053, 131021, 131057, 131064)",
+    "verdict": "corrected",
+    "correction": "All codes and meanings match the current page, but Meta does not call 131026 'permanent / do not retry'. Its listed causes are: not a WhatsApp number, recipient has not accepted the new ToS, or an old app version. Meta's fix is to ask the user through a non-WhatsApp channel to confirm they can message you, accept the ToS and update the app. Treat it as non-retryable until the user acts, not as permanently dead. Meta's explicit 'Do not retry' wording belongs to 131050 and 130403 (business blocked the user). Codes the list leaves out: 131062 (authentication template sent to a BSUID), 131037, 131063.",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/support/error-codes.md"
+   },
+   {
+    "claim": "Retryable/throttling: 130429, 131056, 80007, 4, 131048, 131016/133004, 131000; Meta's backoff 4^X seconds",
+    "verdict": "corrected",
+    "correction": "The 4^X backoff (X starts at 0 and goes up by 1 per failure) is not on the error-codes page. It is on about-the-platform.md (Pair rate limits) and is specifically for post-burst 131056 throttling. The pair limit is 1 message every 6 s to the same user (about 10/min, 600/h), with bursts of up to 45 that borrow from future quota. 131048 is listed under throttling, but Meta's remedy is to check the number's quality rating (too many blocks or spam flags), so blind retries won't help. For 131016 and 133004, Meta says to check the status page before retrying.",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/about-the-platform.md#pair-rate-limits; support/error-codes.md#throttling-errors"
+   },
+   {
+    "claim": "Direct Send: \"category\":\"utility\" on a normal /messages body; reply taps arrive as type 'button' with button.payload = button id; ineligible accounts get error 100 with the quoted details; eligibility shown in WhatsApp Manager",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/direct-send/send-utility-and-authentication-messages.md; direct-send/supported-message-types.md"
+   }
+  ],
+  "missing": [
+   "Supabase Edge Functions require a valid Supabase JWT by default, and Meta's webhook calls carry none. The webhook function must be configured with [functions.<name>] verify_jwt = false in supabase/config.toml, or deployed with --no-verify-jwt; otherwise both the GET handshake and the POSTs fail. Once JWT checks are off, the X-Hub-Signature-256 check is the only protection (https://supabase.com/docs/guides/functions/function-configuration).",
+   "Messaging limits: a new business portfolio can send business-initiated (outside the service window) messages to only 250 unique users per rolling 24 h. The limit scales to 2,000 (via a scaling path or identity verification), then 10,000 and unlimited automatically. It is shared by all numbers in the portfolio (messaging-limits.md).",
+   "Pair rate limit: 1 message every 6 s to the same recipient (bursts of up to 45). Several orders to the same wholesaler in quick succession can hit 131056, so queue per recipient (about-the-platform.md).",
+   "Template pacing: message_status can be 'held_for_quality_assessment' rather than 'accepted'. Held messages can later fail with status 'failed', code 132015, if the template is paused. Utility templates are paced only after one of your utility templates has been paused (template-pacing.md).",
+   "Default message TTL is 30 days for non-authentication messages, and utility templates can have a custom TTL. An order notification could be delivered days late unless a TTL is set. Delivery order across multiple messages is not guaranteed (send-messages.md, time-to-live).",
+   "Template parameter values reportedly cannot contain newlines or tabs, or more than 4 consecutive spaces (error 100/131009). This is from third-party sources only; I found no Meta page stating it. Join multi-line item lists with a separator such as '; ', as the report's example does.",
+   "Webhook prerequisites: the token or system user needs the whatsapp_business_messaging permission for messages webhooks (whatsapp_business_management for others). The system user needs asset access to both the WhatsApp account and the Messaging account. The 'messages' field must be subscribed in App Dashboard > WhatsApp > Configuration. Separately, the app must be subscribed to the WABA via POST /<WABA_ID>/subscribed_apps; I did not verify that step on a current page.",
+   "New Messaging-account model: if the token can reach more than one Messaging account on the phone number, send messaging_account_id in the /messages body. It becomes required in the newest Graph version in H1 2027 and on all versions in H1 2028. paid_messaging_account_id is deprecated; migrate by 2026-12-31 (account-model-evolution/messaging.md).",
+   "Template count limits: 250 templates per Messaging account if the portfolio is unverified; 6,000 if it is verified and has an approved display name. Templates inactive for 12 months are archived, then deleted after 28 days (templates/overview.md).",
+   "Misclassification enforcement: an account that submits marketing content as UTILITY can be rate-limited on utility volume, or have all its utility templates recategorized to MARKETING for 7 to 30 days. Sends can then fail with 131064 (template-categorization.md, error-codes.md).",
+   "BSUIDs are scoped per business portfolio and regenerated when the user changes phone number. A system messages webhook (user_changed_number / user_changed_user_id, with previous_user_id) reports the change, so a stored from_user_id must be updatable. The handler should also process messages[].type 'system', 'unsupported' and value.errors.",
+   "Conflicting index guidance: components.md says index can 'designate the order' of multiple quick-reply buttons, while the carousel page forbids reordering. Send in template order.",
+   "Not established: whether Chinese (zh_CN) quick-reply labels pass review, given the utility doc's 'alphanumeric characters only' note; this needs a real submission. The documented label maximum is 25 characters.",
+   "Inbound media constraints: audio/ogg must be OPUS (mono); the audio size limit is 16 MB (100 MB for documents). Webhook media IDs expire after 7 days, so download right after receipt.",
+   "Small snippet issue: in the failed-status example, the 'href' value in Meta's own example is '/docs/whatsapp/cloud-api/support/error-codes/', not the path the report shows. Treat href as opaque."
+  ]
+ },
+ {
+  "checked": [
+   {
+    "claim": "Each function should have its own deno.json; a global supabase/functions/deno.json works locally but is 'not recommended for deployment'; import_map.json is legacy and deploy/serve/start fail on a per-function import_map.json unless config.toml import_map or --import-map points at it; deno.json wins if both exist.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/functions/dependencies.md (fetched 2026-11-25). Supabase CLI v3.4.0 (latest on npm) contains the matching error string 'import_map.json in a function directory is no longer supported ... Rename it to deno.json, or set functions.<name>.import_map'."
+   },
+   {
+    "claim": "Default Edge Function env vars: SUPABASE_URL, SUPABASE_DB_URL, SUPABASE_PUBLISHABLE_KEYS (JSON dict), SUPABASE_SECRET_KEYS (JSON dict), SUPABASE_JWKS. Legacy SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY 'still exist in the runtime ... deprecated path'. Hosted only: SB_REGION, SB_EXECUTION_ID, DENO_DEPLOYMENT_ID.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/functions/secrets.md has the variable tables. The quoted 'still exist in the runtime ... deprecated path' sentence is on https://supabase.com/docs/guides/getting-started/api-keys.md, not on the secrets page."
+   },
+   {
+    "claim": "The new-key env vars are plural JSON objects read with JSON.parse(Deno.env.get('SUPABASE_SECRET_KEYS')!)['default']. No singular SUPABASE_SECRET_KEY is injected on the platform; @supabase/server only accepts the singular form as a fallback for self-hosted or manual setups.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "docs/environment-variables.md in the npm package @supabase/server@1.9.2 says: 'On Supabase Platform and Local Development (CLI), all variables are auto-provisioned'; singular = 'Self-hosted, if manually exported'; plural wins when both are set. Caveat: supabase.com/docs/guides/functions/auth.md says 'Local development with the CLI uses a single-key setup', which slightly contradicts the package docs."
+   },
+   {
+    "claim": "Legacy anon/service_role keys are deprecated 'by the end of 2026'. From 1 Nov 2025, new and restored projects get no legacy keys; legacy keys are deleted 'Late 2026 (TBC)'. A project created now most likely has only sb_publishable_/sb_secret_ keys.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/getting-started/api-keys.md and https://github.com/orgs/supabase/discussions/29260, which says 'New projects no longer have anon and service_role available for use' and 'Projects restored from 1st November 2025 will no longer be restored with the legacy API keys'."
+   },
+   {
+    "claim": "Custom secrets: locally in supabase/functions/.env (loaded on supabase start), via --env-file, or via [edge_runtime.secrets] with env(); in production via Dashboard, `supabase secrets set` or `--env-file`, and `supabase secrets list`. New secrets are readable without redeploy. Names must not start with SUPABASE_. Limits: 100 secrets, name up to 256 chars, value up to 48 KiB.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/functions/secrets.md ; https://supabase.com/docs/guides/functions/limits.md (also gives 48 KiB as 24,576 characters). Extra: creating or deleting production secrets needs the Owner or Admin role. CLI v3.4.0 also supports per-function .env files ('--env-file ... Overrides supabase/functions/.env and per-Function .env files')."
+   },
+   {
+    "claim": "verify_jwt = false under [functions.<name>] in config.toml, or the --no-verify-jwt flag on serve and deploy, disables the per-function JWT check. The default verify_jwt = true inspects the Authorization header before code runs and returns 401 otherwise.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/functions/function-configuration.md ; https://supabase.com/docs/guides/functions/auth-headers.md ; the CLI v3.4.0 binary defines no-verify-jwt ('Disable JWT verification for the Function.') on both deploy and serve. Caveat: the default check also accepts publishable/secret keys on either header, including apikey alone, so passing it is not caller authentication."
+   },
+   {
+    "claim": "Cron/pg_net-called functions: verify_jwt = false plus withSupabase({ auth: 'secret' }), which checks the apikey header against the secret key named 'default' and provides ctx.supabaseAdmin. 'secret:<name>' and 'secret:*' select other keys. The platform check 'doesn't authenticate a caller that sends only an API key'.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/functions/auth.md ; the quoted sentence is on https://supabase.com/docs/guides/functions/auth-headers.md and api-keys.md, not auth.md. @supabase/server docs/auth-modes.md: bare 'secret' does not fall back to named keys; the comparison is timing-safe."
+   },
+   {
+    "claim": "External webhooks: verify_jwt = false plus withSupabase({ auth: 'none' }) or a plain handler, then verify the provider signature on the raw body (await req.text()) with a custom secret; ctx.supabaseAdmin is still available.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/functions/auth.md (External webhooks section, Stripe example). @supabase/server api-reference.md says withSupabase buffers the request body at entry, so reading it in the handler works."
+   },
+   {
+    "claim": "Edge Function limits (hosted): 256 MB memory; wall clock 150 s Free / 400 s paid; 2 s CPU per isolate (async I/O excluded; soft limit retires the isolate, hard limit kills it with 546); 150 s request idle timeout (504); 20 MB bundle via CLI; no Web Workers; no multithreaded native libs; ports 25/587 blocked; HTML rewritten to text/plain without a custom domain.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/functions/limits.md ; https://supabase.com/kb/troubleshooting/edge-function-limits.md. Also documented: 5 MB bundle limit when bundled server-side (Dashboard or Management API); 100 functions per project on Free."
+   },
+   {
+    "claim": "The current 'Scheduling Edge Functions' SQL stores project_url and secret_key in Vault, and pg_cron calls net.http_post with 'apikey' set from vault.decrypted_secrets (not Authorization: Bearer). The page says to disable verify_jwt and use auth: 'secret'.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/functions/schedule-functions.md. The snippet matches the page exactly. The page also warns that the decrypted key sits in net.http_request_queue, readable by any login role, until the request is sent."
+   },
+   {
+    "claim": "net.http_post(url text, body jsonb default '{}', params jsonb default '{}', headers jsonb default '{\"Content-Type\": \"application/json\"}', timeout_milliseconds int default 2000) returns bigint; positional order is url, body, params, headers, so use named args; JSON POST bodies only; no PUT/PATCH.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/database/extensions/pg_net.md (signature and Limitations section). http_get and http_delete also exist."
+   },
+   {
+    "claim": "pg_net is async: http_post only queues into net.http_request_queue and the request starts after commit; default timeout 2000 ms. Responses go to the unlogged table net._http_response (columns as listed) and are kept 6 h (pg_net.ttl). Failed-request query as given. Designed for up to 200 req/s. API is beta.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/database/extensions/pg_net.md. Changing pg_net.ttl needs a superuser grant from Support ('grant alter system on parameter pg_net.ttl') plus net.worker_restart()."
+   },
+   {
+    "claim": "Vault: vault.create_secret(secret, name unique optional, description optional) returns uuid; read via vault.decrypted_secrets.decrypted_secret by name; vault.update_secret(id, secret, name, description); delete from vault.secrets where id = ...; values are per-project, so create them per environment rather than in a committed migration.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/database/vault.md. The 'not in a migration' part is sound advice but the docs don't state it. The docs warn that anyone who can read the decrypted_secrets view sees the plaintext, and that a manual pg_dump/restore into a new project can't decrypt secrets without copying the root key."
+   },
+   {
+    "claim": "pg_cron: cron.schedule(name, schedule, command) upserts by name; sub-minute '30 seconds' schedules need Postgres 15.1.1.61 or later; cron.unschedule(name); cron.alter_job(job_id, schedule, command, database, username, active); history in cron.job_run_details; times are UTC.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/cron/quickstart.md (examples labelled GMT). Also documented: job names are case sensitive and can't be edited; cron.job_run_details is never cleaned automatically (schedule a cleanup job); https://supabase.com/docs/guides/cron.md recommends at most 8 concurrent jobs, each under 10 minutes."
+   },
+   {
+    "claim": "Buckets can be created with insert into storage.buckets (id, name, public). Columns include id, name, public, file_size_limit bigint, allowed_mime_types text[], owner_id. Docs otherwise say to treat the storage schema as read-only and use the Storage API; the bucket insert is the documented exception.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/storage/buckets/creating-buckets.md ; https://supabase.com/docs/guides/storage/schema/design.md. The docs never call the SQL insert an 'exception': the creating-buckets page shows it, while the schema page says to treat all records as read-only. The two pages are in tension, not reconciled."
+   },
+   {
+    "claim": "Storage denies uploads until storage.objects policies exist. Upload needs INSERT; upsert adds SELECT and UPDATE; createSignedUrl and download need SELECT. Folder pattern uses (storage.foldername(name))[1] = <text> (1-indexed text[]). Signed-URL transfers and public-bucket public URLs skip the policy check.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/storage/security/access-control.md ; https://supabase.com/docs/guides/storage/schema/helper-functions.md ; createSignedUrl reference pages (Swift/Kotlin) say 'objects table permissions: select'. Extra: storage.allow_only_operation() and allow_any_operation() can tell list apart from download under SELECT."
+   },
+   {
+    "claim": "Server-side Storage from an Edge Function uses a supabase-js client built with the secret key (SUPABASE_SECRET_KEYS['default'] or ctx.supabaseAdmin), which bypasses storage RLS; storage.from(bucket).download / upload(path, body, {contentType, cacheControl, upsert}) / createSignedUrl(path, seconds).",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/functions/storage-caching.md ; https://supabase.com/docs/guides/storage/security/access-control.md ('Service keys entirely bypass RLS policies'). Caveat from row-level-security.md: if the request also carries a user access token, it runs under that user's RLS."
+   },
+   {
+    "claim": "Free-plan global file size limit is at most 50 MB; per-bucket file_size_limit can't exceed it. Repo config.toml has [storage] file_size_limit = \"50MiB\". Allowed object-name characters are as listed, so sanitize user file names into uuid-based keys.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/storage/uploads/file-limits.md ; /home/user/Business/supabase/config.toml line 91. Note: config.toml only configures the local stack; the hosted global limit is set in Dashboard Storage Settings. 50MiB (about 52.4 MB) is slightly above the 50 MB Free cap."
+   },
+   {
+    "claim": "Flutter storage_client 2.8.1 (via supabase_flutter 2.18.3) has uploadBinary(path, Uint8List, {fileOptions, retryAttempts, retryController}), FileOptions defaults cacheControl '3600' and upsert false, plus createSignedUrl(path, expiresIn, {transform, download, cacheNonce}) and download(path). uploadBinary returns the full path, works on web, and upload(File) is not for web.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "/root/.pub-cache/hosted/pub.dev/storage_client-2.8.1/lib/src/storage_file_api.dart and types.dart; /home/user/Business/apps/mobile/pubspec.lock pins supabase_flutter 2.18.3 and storage_client 2.8.1, the latest on pub.dev as of 2026-11-25. The returned string is the API's 'Key', which includes the bucket id prefix (for example 'price-lists/<wid>/<uuid>.pdf'; storage-js documents fullPath 'avatars/public/avatar1.png')."
+   },
+   {
+    "claim": "Edge Functions can be tested with plain deno test, no Docker or running Supabase: test pure modules directly, and test the whole function by importing its default export and calling EdgeFunction.fetch(new Request(...)) with globalThis.fetch mocked and env vars set (--allow-env). The function must export default { fetch }. Deno 2.9.6 is at /opt/node22/bin/deno.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/functions/unit-test (HTML code blocks) ; https://github.com/supabase/supabase/tree/master/examples/edge-functions/supabase/functions/unit-testing ; `/opt/node22/bin/deno --version` prints 2.9.6. The official test swaps Deno.env for a Map-backed mock and sets the vars in beforeEach, after the module is imported. That only works because withSupabase reads env per request: top-level env reads at import time would break this pattern."
+   },
+   {
+    "claim": "Key-to-role mapping: publishable key without user = anon, with user = authenticated, secret key = service_role (BYPASSRLS). Grants are still checked for service_role. A secret-key client that also carries a user access token runs under that user's RLS.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/getting-started/api-keys.md ; https://supabase.com/docs/guides/database/postgres/row-level-security.md ('A secret key bypasses RLS only when the request carries no user access token')."
+   },
+   {
+    "claim": "How request.jwt.claims gets role=service_role with secret keys is documented only for the self-hosted Envoy gateway (opaque sb_secret_ is translated to a pre-signed ES256 service_role JWT and Authorization is synthesized). No hosted page shows request.jwt.claims for sb_secret_ requests, so is_service_call() should work but must be checked on the real project.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/self-hosting/self-hosted-envoy.md (SERVICE_ROLE_KEY_ASYMMETRIC 'Pre-signed ES256 service_role JWT (translation target)', 'Authorization synthesis'; the translation is skipped on /functions/v1/). I also found no hosted-platform statement in api-keys.md, migrating-to-new-api-keys.md or discussion 29260. The hosted behaviour remains unverified."
+   },
+   {
+    "claim": "The Docker-less pgTAP harness (scripts/test-db.sh + scripts/local-db/supabase_stub.sql) stubs only roles anon/authenticated/service_role, the auth schema (users, uid(), role(), jwt()) and the extensions schema; it has no storage, vault, net or cron schemas, so new migrations touching them must be guarded or the stub extended.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "/home/user/Business/scripts/local-db/supabase_stub.sql ; /home/user/Business/scripts/test-db.sh (runs every migration with ON_ERROR_STOP=1) ; /home/user/Business/supabase/migrations/20261125000800_schedules_realtime.sql (pg_available_extensions guard)."
+   },
+   {
+    "claim": "Realtime from an Edge Function: use channel.httpSend(event, payload) (supabase-js 2.76.0 or later) instead of subscribing; public Realtime connections using only a publishable/secret key last at most 24 h unless upgraded with user auth.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/functions/development-tips.md ; https://supabase.com/docs/guides/getting-started/api-keys.md (Known limitations). The current supabase-js is 2.119.2."
+   },
+   {
+    "claim": "Snippet 'Per-function deno.json (official example)' with imports @supabase/functions-js and @supabase/server and task 'deno test supabase/functions/tests/ --allow-env'.",
+    "verdict": "corrected",
+    "correction": "The content matches the official file, but it is not a per-function deno.json. It sits at the root of the example functions project (sibling of _shared/, process-ticket/ and tests/; the guide's tree shows it as supabase/deno.json), and the test task path assumes it is run from the repository root. For deployment, each function still needs its own deno.json with the imports it uses, e.g. @supabase/server.",
+    "source": "https://raw.githubusercontent.com/supabase/supabase/master/examples/edge-functions/supabase/functions/unit-testing/deno.json ; https://supabase.com/docs/guides/functions/unit-test"
+   },
+   {
+    "claim": "Snippet: @supabase/server usage (npm:@supabase/server@1, withSupabase, createSupabaseContext, auth modes 'user' | 'secret' | 'publishable' | 'none', 'secret:<name>' / 'secret:*').",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "npm @supabase/server latest = 1.9.2; dist/index.mjs exports withSupabase and createSupabaseContext; docs/auth-modes.md and docs/api-reference.md in the package."
+   }
+  ],
+  "missing": [
+   "The default verify_jwt=true check accepts publishable or secret keys on either header, including just 'apikey: sb_publishable_...'. With verify_jwt on, a request carrying only the public publishable key reaches the handler, so every function must authorize in code (withSupabase), not rely on the platform check.",
+   "@supabase/server rejects legacy anon/service_role keys and legacy HS256 user JWTs. auth:'user' requires a 'kid' in the token header, i.e. asymmetric JWT signing keys. If the project still signs user tokens with the legacy JWT secret, auth:'user' fails with INVALID_JWT, so check or migrate the project's JWT signing keys first (package docs/auth-modes.md).",
+   "@supabase/server pitfalls. A malformed SUPABASE_SECRET_KEYS silently resolves to {}. Bare auth:'secret' matches only the key named 'default' and never falls back to named keys. The secret_key stored in Vault for pg_cron must therefore be the 'default' secret key, or the function must use 'secret:<name>' / 'secret:*'. Rotating or renaming the default key breaks cron calls until Vault is updated.",
+   "Security caveat on the official cron pattern: pg_net writes the decrypted secret key into net.http_request_queue until the request is sent, and any role that can log in to the database can read it (schedule-functions.md caution). Also, anyone who can select from vault.decrypted_secrets sees plaintext.",
+   "pg_net's default 2000 ms timeout may be shorter than an Edge Function cold start plus run time; the cron quickstart example uses timeout_milliseconds:=5000. pg_net does not retry failed requests. Failures are visible only in net._http_response for 6 h, so dispatch logic should be idempotent and re-pick pending work on the next tick.",
+   "cron.job_run_details is never cleaned automatically, even after unschedule, so add a cleanup job. Supabase recommends at most 8 concurrent jobs, each under 10 minutes. Job names are case sensitive and can't be renamed.",
+   "Flutter uploadBinary/upload return the API 'Key', which includes the bucket id (e.g. 'price-lists/<wid>/<uuid>.pdf'). Store the bucket-relative path you passed in, not the return value, when later calling createSignedUrl/download, or the bucket name ends up doubled.",
+   "Bucket privacy choice: the RLS snippet creates a public bucket ('avatars', public=true), and public-bucket URLs skip RLS entirely. Price lists or other private documents should use public=false and serve files through createSignedUrl (SELECT policy needed). Optionally set file_size_limit/allowed_mime_types on the bucket.",
+   "Deleting rows from storage.objects with SQL does not delete the underlying file, which stays billed. Deletes must go through the Storage API (schema/design.md).",
+   "supabase/config.toml [storage] file_size_limit and any [storage.buckets.*] entries only configure the local stack. Hosted buckets and policies must be created by migration or Dashboard, and the hosted global file size limit is set in Dashboard Storage Settings (Free plan cap 50 MB).",
+   "Hosted platform confirmation that sb_secret_ requests reach PostgREST with request.jwt.claims role = 'service_role' is still undocumented. The repo's public.is_service_call() depends on it, so verify it once against the real project. The Envoy docs also note the key-to-JWT translation is skipped on /functions/v1/.",
+   "Other Edge Function platform limits not covered: 5 MB bundle limit when deployed via Dashboard or Management API (server-side bundling); 100 functions per project on Free; 10,000-character log messages and 100 log events per 10 s; 30 nested or recursive function calls per trace per 60 s.",
+   "withSupabase handles CORS and OPTIONS preflight and adds CORS headers, which matters for functions invoked from Flutter web. It also buffers the request body at entry. For exact-byte HMAC verification (Meta X-Hub-Signature-256), await req.arrayBuffer() is the safest raw-body read.",
+   "Current tool versions: Supabase CLI 3.4.0 (npm 'supabase'), @supabase/server 1.9.2, supabase-js 2.119.2, supabase_flutter 2.18.3 / storage_client 2.8.1 (both latest). The CLI also supports per-function .env files in addition to supabase/functions/.env."
+  ]
+ },
+ {
+  "checked": [
+   {
+    "claim": "@anthropic-ai/sdk 1.0.0 came out 2026-10-21; releases 1.1.0 through 1.14.0 followed; latest is 1.14.0 (2026-11-24T21:07Z); 1.13.0 was published 2026-11-23T18:41Z; pin npm:@anthropic-ai/sdk@1.13.0.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://registry.npmjs.org/@anthropic-ai/sdk (fetched 2026-11-25T02:00Z). dist-tags.latest=1.14.0; time 1.0.0=2026-10-21T16:00:53Z, 1.13.0=2026-11-23T18:41:42Z, 1.14.0=2026-11-24T21:07:30Z; the last 0.x is 0.137.0. The 1.14.0 CHANGELOG lists only Admin/compliance API additions, so pinning 1.13.0 loses nothing for this use case."
+   },
+   {
+    "claim": "Deno 2.9.6 refuses npm:@anthropic-ai/sdk@1.14.0 under the minimum dependency age policy (default 24h); 1.13.0 works; pin an older version or set minimumDependencyAge / --minimum-dependency-age.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "Reproduced with deno 2.9.6 and a fresh DENO_DIR. The hint says 'blocked by the minimum dependency age policy ... (the default is 24 hours)', names --minimum-dependency-age/--min-dep-age and \"minimumDependencyAge\" in deno.json, and links docs.deno.com/go/minimum-dependency-age. 1.14.0 becomes eligible around 2026-11-25T21:07Z. This is a local Deno 2.9 behavior; it is not shown to apply to Supabase's hosted runtime or bundler."
+   },
+   {
+    "claim": "SDK 1.13.0 imports and runs in Deno 2.9.6 via npm: specifiers (messages.create/parse/stream, beta.messages.stream with fallbacks and output_config, zodOutputFormat; deno check passes); the README lists Deno v1.28.0 or higher.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "Independently re-ran in deno 2.9.6. Imports of @anthropic-ai/sdk, @anthropic-ai/sdk/helpers/zod (zodOutputFormat) and @anthropic-ai/sdk/helpers/beta/zod (betaZodOutputFormat; zodOutputFormat is NOT exported from helpers/beta/zod) resolve. `deno check` passes on the report's beta.messages.stream call (betas, fallbacks:'default', output_config.effort+format, system cache_control, image+document blocks typed as Anthropic.Beta.BetaContentBlockParam). The 1.13.0/1.14.0 npm tarball README says 'Deno v1.28.0 or higher.' I did not re-run the mock round trip."
+   },
+   {
+    "claim": "Hosted Supabase Edge Functions run a 'Deno 2.1 compatible release' in all regions since 2025-08-15; you can fall back to Deno 1.45 with header x-deno-version: 1; the SDK was not tested on the real edge-runtime.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/changelog/37941-all-regions-now-run-deno-2-1-compatible-release (2025-08-15; header x-deno-version: 1 or query forceDenoVersion=1). The Supabase Edge Functions changelog through 2026-11 shows no later Deno upgrade."
+   },
+   {
+    "claim": "In deno.json, subpath imports need \"@anthropic-ai/sdk/\": \"npm:/@anthropic-ai/sdk@1.13.0/\"; the form without the slash after npm: fails to resolve subpaths; Supabase recommends one deno.json per function.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "Reproduced in deno 2.9.6. The npm:/ form resolves helpers/zod and helpers/beta/zod. The npm:@... form fails with 'Failed to resolve the specifier ... could not be URL-parsed relative to the URL prefix \"npm:@anthropic-ai/sdk@1.13.0/\"'. https://supabase.com/docs/guides/functions/dependencies says 'Each function should have its own deno.json file'. Supabase CLI v3 also makes a per-function import_map.json fail: rename it to deno.json."
+   },
+   {
+    "claim": "SDK 1.x sends anthropic-version: 2026-10-21 by default; on that version temperature/top_p/top_k give a 400 on every model.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "The npm tarball for 1.13.0 has package/client.mjs line 982 'anthropic-version': '2026-10-21'. https://platform.claude.com/docs/en/api/migration-2026-10-21 says 'a request that sends temperature, top_p, or top_k returns a 400 error, even at the parameter's default value'. Bundled skill shared/api-version-migration.md change 1 agrees, and its table gives TypeScript 1.0.0 as the first release that sends 2026-10-21."
+   },
+   {
+    "claim": "Structured outputs are GA with no beta header via output_config.format {type:'json_schema', schema}; JSON comes back in the text block; deprecated output_format needs beta structured-outputs-2025-11-13 or returns 400; claude-opus-5-5 is supported.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://platform.claude.com/docs/en/build-with-claude/structured-outputs.md: frontmatter status: stable, supportedModels includes claude-opus-5-5; 'How it works' step 3 (text content block); 'Migrating from the beta' quotes the structured-outputs-2025-11-13 header and the 400."
+   },
+   {
+    "claim": "Supported schema features (basic types, enum/const primitives, anyOf/allOf, $ref/$defs, default, required, additionalProperties:false, limited string formats, minItems 0/1); not supported: recursive, oneOf, not, numeric and string-length constraints, other array constraints, additionalProperties other than false; unsupported features give 400.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "structured-outputs.md#json-schema-limitations. Additional detail: anyOf may not sit in the same schema object as type/properties; allOf is restricted; complex types in enums and external $ref are not supported; simple regex `pattern` is supported. The documented formats are date-time, time, date, duration, email, hostname, uri, ipv4, ipv6, uuid."
+   },
+   {
+    "claim": "Complexity limits across the whole request: 24 optional params and 16 union-typed params; exceeding them gives 400 'Schema is too complex for compilation'; one-time compile latency then 24h grammar cache; required properties are emitted first.",
+    "verdict": "corrected",
+    "correction": "The 24-optional, 16-union and 20-strict-tools limits are correct, and so are the 24h cache (counted from last use) and the required-first ordering. But the docs give the message 'Schema is too complex for compilation' for the separate internal grammar-size limits, which can trip 'even if each individual limit in the preceding table is satisfied'. There is also a 180-second compilation timeout. The cache is invalidated by changes to the schema structure, not by changes to name/description. Changing output_config.format also invalidates the prompt cache.",
+    "source": "structured-outputs.md: Schema complexity limits (Explicit limits; Additional internal limits); Grammar compilation and caching; Prompt modification and token costs; Property ordering"
+   },
+   {
+    "claim": "Enum capitalization is not guaranteed; refusal or max_tokens can produce non-matching output; citations + output_config.format is a 400; prefill is incompatible.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "structured-outputs.md#invalid-outputs (Enum value casing: 'typically in the first letter of a word following a space', no error and no special stop_reason) and #feature-compatibility (Citations 400; 'Prefilling is incompatible with JSON outputs')."
+   },
+   {
+    "claim": "messages.parse / beta.messages.parse throw AnthropicError('Failed to parse structured output...') on max_tokens truncation; on an empty-content refusal parsed_output is null; beta.messages.parse adds beta header structured-outputs-2025-12-15; recommended: beta.messages.stream().finalMessage(), check stop_reason, then JSON.parse + zod safeParse.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "1.13.0 tarball: lib/beta-parser.mjs and lib/parser.mjs JSON.parse every text block and throw `Failed to parse structured output: ${error}`, with no stop_reason check; with no text blocks parsed_output stays null. resources/beta/messages/messages.mjs parse() appends 'structured-outputs-2025-12-15'. BetaMessageStream only auto-parses when the format object has a .parse (zod helper), so a raw JSON-schema stream + finalMessage() never throws on bad JSON. That supports the recommendation. Note that parse() parses each text block separately, so content split across several text blocks (e.g. after a mid-stream fallback) would also throw."
+   },
+   {
+    "claim": "Image block {type:'image', source:{type:'base64', media_type jpeg|png|gif|webp, data}}; URL/file sources exist; 10 MB per image base64, 8000x8000 px max, 600 images/request on 1M models; >20 images triggers a stricter limit (keep <=3000 px); request limit 128 MB.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://platform.claude.com/docs/en/build-with-claude/vision.md (Request limits; Supported formats). 600 applies to all non-200k-context models; 5 MB on Amazon Bedrock. SDK type media_type: 'image/jpeg'|'image/png'|'image/gif'|'image/webp'. Not mentioned in the claim: Claude 4.7+ models (incl. Opus 5.5) use the high-resolution tier, max long edge 2,576 px / 4,784 visual tokens, and larger images are downscaled."
+   },
+   {
+    "claim": "PDF block shape; limits 128 MB request, 600 pages (100 under 1M context), no encrypted/password PDFs; each page = text + image (<=1,568 visual tokens, plus 1,500-3,000 text tokens); put PDF before text; .xlsx/.docx not accepted in document blocks.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://platform.claude.com/docs/en/build-with-claude/pdf-support.md (Check PDF requirements table; How PDF support works; Estimate your costs; 'Place PDFs before text'; note that binary .xlsx/.docx are not supported in document blocks). The bundled skill SKILL.md is stale here: it still says '32 MB request, 600 pages (100 for 200k-context models)' and does not mention xlsx/docx. The live docs are authoritative."
+   },
+   {
+    "claim": "On claude-opus-5-5 thinking is always on; {type:'disabled'} and {type:'enabled', budget_tokens} both 400 at every effort; omit or send adaptive; effort low|medium|high|xhigh|max in output_config.effort, default medium (Opus 5 defaulted high); thinking counts toward max_tokens; display 'omitted' returns empty thinking text.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://platform.claude.com/docs/en/build-with-claude/effort.md (Claude Opus 5.5: 'medium is the default ... Claude Opus 5 and earlier Opus models default to high'; disabled returns 400 at every effort level). Bundled skill shared/model-migration.md 'Migrating to Claude Opus 5.5' Breaking change 1 (both error strings; read by block type). The SDK 1.13.0 type has effort?: 'low'|'medium'|'high'|'xhigh'|'max'."
+   },
+   {
+    "claim": "Forced tool_choice {type:'any'} and {type:'tool'} return a 400 on claude-opus-5-5; use output_config.format for extraction.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "Bundled skill shared/model-migration.md, Migrating to Claude Opus 5.5, Breaking change 2 (error text 'tool_choice: type \"tool\" and \"any\" are not supported for this model.'; this also applies to Batches and count_tokens)."
+   },
+   {
+    "claim": "The TS SDK throws 'Streaming is required...' for non-streaming requests above about 21,333 max_tokens; the skill defaults to streaming + finalMessage, ~64k streaming / ~16k non-streaming; the TS timeout is in ms.",
+    "verdict": "corrected",
+    "correction": "The threshold math is right: 3,600,000 ms x max_tokens / 128,000 > 600,000 ms when max_tokens > 21,333. But in 1.13.0, messages.create and beta.messages.create only run calculateNonstreamingTimeout when no timeout is set on the request or the client (`if (!body.stream && timeout == null)`). The report's client sets timeout: 300_000, so a non-streaming call with max_tokens 32000 would NOT throw; it would just be limited by the 300 s timeout. The snippet comment '>21,333 requires streaming in the TS SDK' is therefore only true without an explicit timeout. The skill defaults (~16k non-streaming, ~64k streaming, TS timeout in ms, default 10 min) are confirmed.",
+    "source": "npm tarball @anthropic-ai/sdk-1.13.0: client.mjs calculateNonstreamingTimeout (lines 925-933); resources/messages/messages.mjs lines 305-309; resources/beta/messages/messages.mjs lines 36-40; bundled skill SKILL.md (Common Pitfalls max_tokens; Client config)."
+   },
+   {
+    "claim": "Refusals are HTTP 200 with stop_reason 'refusal'; stop_details has category (cyber|bio|frontier_llm|reasoning_extraction|general_harms|null) and explanation; content is empty before output or partial mid-stream (discard); branch on stop_reason.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://platform.claude.com/docs/en/build-with-claude/refusals-and-fallback.md (What a refusal looks like; Common pitfalls). One more field: stop_details.recommended_model is present when the request sets fallbacks."
+   },
+   {
+    "claim": "Refusal billing: a decline before any output is billed only for bio, frontier_llm and reasoning_extraction; every refusal counts against rate limits; a reasoning/thinking/trace JSON field can trigger reasoning_extraction; a short explanation/notes field is fine.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "refusals-and-fallback.md (How refusals are billed: 'as of September 2026', categories may change; Keep reasoning in thinking blocks). A mid-stream refusal bills the input and the output already streamed."
+   },
+   {
+    "claim": "Supabase Edge Function limits: 256 MB memory; wall clock 150 s Free / 400 s paid; 2 s CPU per worker (async I/O excluded); request idle timeout 150 s, then 504; EdgeRuntime.waitUntil for background work; [edge_runtime] policy = \"per_worker\" for local background-task testing.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/functions/limits (same values; function size 20 MB CLI-bundled / 5 MB server-side); https://supabase.com/docs/guides/functions/background-tasks (waitUntil; duration 'capped based on the wall-clock, CPU, and memory limits'; config.toml [edge_runtime] policy = \"per_worker\")."
+   },
+   {
+    "claim": "SheetJS current release 0.20.3 (2024-07-18), CDN-only; npm xlsx stuck at 0.18.5 (2022-03-24); official Deno import via @deno-types + cdn.sheetjs.com xlsx.mjs; cpexcel.full.mjs + set_cptable for codepages.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://cdn.sheetjs.com/xlsx.lst (last 0.20.3); https://git.sheetjs.com/sheetjs/sheetjs/tags.rss (v0.20.3, 18 Jul 2024); https://registry.npmjs.org/xlsx (latest 0.18.5, 2022-03-24); https://docs.sheetjs.com/docs/getting-started/installation/deno (exact import lines; cpexcel.full.mjs + XLSX.set_cptable; 'The official Deno registry is out of date')."
+   },
+   {
+    "claim": "Do not use npm xlsx@0.18.5 or deno.land/x/sheetjs: CVE-2023-30533 (prototype pollution reading crafted files, fixed 0.19.3) and CVE-2024-22363 (ReDoS, CVSS 7.5, fixed 0.20.2).",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://cdn.sheetjs.com/advisories/CVE-2023-30533 (through 0.19.2, CVSS 5.3, upgrade to 0.19.3); https://cdn.sheetjs.com/advisories/CVE-2024-22363 (through 0.20.1, CVSS 7.5 High, upgrade to 0.20.2)."
+   },
+   {
+    "claim": "SheetJS 0.20.3 works in Deno 2.9.6 but needs --allow-import=cdn.sheetjs.com; sheet_to_json(header:1, raw:false, defval:'', blankrows:true) returns formatted text (120.5 -> 'RM120.50'); __rowNum__ is not set on header:1 arrays; ~200 ms for a 5,000-row xlsx.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "Reproduced in deno 2.9.6. Without the flag: 'Requires import access to \"cdn.sheetjs.com:443\", run again with the --allow-import flag'. With it: version 0.20.3; a cell with z '\"RM\"0.00' came back as 'RM120.50'; (rows[0]).__rowNum__ === undefined. I did not re-measure the timing."
+   },
+   {
+    "claim": "CSV pitfall: XLSX.read(bytes,{type:'array'}) on BOM-less UTF-8 CSV gives mojibake; decode with TextDecoder('utf-8',{fatal:true}) and fall back to gb18030, then XLSX.read(text,{type:'string'}).",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "Reproduced in deno 2.9.6: type:'array' turned '塑料盒' into 'å¡æç'; the TextDecoder + type:'string' path returned '塑料盒'; TextDecoder('gb18030') decodes in Deno. I did not test the codepage:65001 alternative."
+   },
+   {
+    "claim": "encodeBase64 from jsr:@std/encoding@1/base64 (latest 1.0.11) works; native Uint8Array.prototype.toBase64 exists in Deno 2.9.6 but should not be relied on in the hosted Deno-2.1-compatible runtime.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://jsr.io/@std/encoding/meta.json latest=1.0.11. In deno 2.9.6, typeof Uint8Array.prototype.toBase64 === 'function' and encodeBase64 via the jsr:/@std/encoding@1.0.11/ import map works. The hosted-runtime caveat is a reasonable inference from the Deno 2.1 baseline and was not tested."
+   }
+  ],
+  "missing": [
+   "Timeouts vs Supabase limits: Opus 5.5 at medium effort, emitting thinking plus about 100-150 JSON rows, can easily run past 150 s. The function must start returning a response, or hand the work to EdgeRuntime.waitUntil with a DB status row or Realtime update, before the 150 s request idle timeout. Total work is still capped at 150 s wall clock on Free and 400 s on paid. The snippet's client (timeout 300_000 ms, maxRetries 2) can wait up to about 15 min, far beyond either cap. Size the timeout, the retries and the chunk size to the plan's wall clock.",
+   "Server-side fallback changes the response shape. content starts with a {type:'fallback'} block. After a mid-stream decline, the fallback model continues from the partial text, so the JSON can be split across text blocks on either side of the fallback block. Code must join the text blocks, not read 'the' text block. SDK parse() would throw here because it parses each text block separately. The docs do not say whether the default fallback model keeps the json_schema grammar when it resumes mid-JSON; test this or treat it as a validation failure and retry.",
+   "Detecting which model served: read response.model and usage.iterations (a fallback_message entry). Sticky routing can send later requests straight to the fallback model for about 1 h. The docs recommend logging refusals and fallback-served responses as their own metrics, because both are HTTP 200.",
+   "Image resolution and cost: Opus 5.5 (Claude 4.7+) uses the high-resolution tier, max 2,576 px long edge and up to 4,784 visual tokens per image, and downscales anything larger. Resizing client-side to 2,576 px or less cuts upload size and function memory with no quality loss.",
+   "PDF pages are always fitted to the Standard tier (at most 1,568 visual tokens per page), even on Opus 5.5. A dense, small-font scanned price list may read better if each page is rendered and sent as an image at up to 2,576 px.",
+   "HEIC is not accepted. iPhone camera photos default to HEIC, so the mobile app should convert to JPEG before upload; rejecting on the server alone gives poor UX.",
+   "Memory budget: a 256 MB function holding the raw upload, its base64 copy (+33%), the JSON request body and the SDK buffers can run out on large PDFs. Consider uploading to Supabase Storage and streaming the file, or the Anthropic Files API (GA, no beta header) with a file_id reference.",
+   "The 2 s CPU-per-worker limit also covers SheetJS parsing, base64 encoding and zod validation. Large workbooks (tens of thousands of rows, many sheets) may exceed it. The report's 200 ms per 5,000 rows was measured on a dev machine, not on the edge runtime.",
+   "Supabase CLI v3 (2026-11-04) is breaking: unattended or agent runs of functions deploy and secrets set need --yes (otherwise HostedMutationConsentRequiredError). A per-function import_map.json now fails; use deno.json. In v3.1.0, [edge_runtime.secrets] and supabase/functions/<slug>/.env are read for local serve.",
+   "It is not shown whether Supabase's deploy bundler and hosted runtime accept https://cdn.sheetjs.com imports without extra configuration (Deno 2 needs --allow-import locally). Vendoring xlsx.mjs into _shared/ avoids the question.",
+   "SDK 1.x type change: MessageParam and BetaMessageParam are now unions per role (User/Assistant/System). Generic message-handling code must narrow on role. API keys are now sent as Authorization: Bearer, which matters if any proxy or gateway inspects X-Api-Key.",
+   "Per-request cost was not estimated. Opus 5.5 costs $4/$20 per MTok input/output and cache reads $0.20/MTok. Thinking tokens bill as output even though they are omitted from the response. Structured outputs add an injected system prompt, and changing the schema invalidates the prompt cache.",
+   "Error handling and rate limits were not covered: SDK typed errors (RateLimitError, APIConnectionError, etc.), 429 retry-after, and what the function should return to the app on refusal, max_tokens or validation failure (e.g. split the chunk and retry, or mark rows for manual entry).",
+   "The sniff() helper labels any ZIP container (including .docx, .ods and other zips) as xlsx, and CSV cannot be sniffed at all. Validate XLSX via the workbook structure after XLSX.read, and decide CSV by extension or content heuristics."
+  ]
+ },
+ {
+  "checked": [
+   {
+    "claim": "Latest versions as of 2026-11-25 (pdf 3.13.1, printing 5.15.1, share_plus 13.3.1, image_picker 1.2.4, file_picker 13.4.1, url_launcher 6.3.3, supabase_flutter 2.18.3), their SDK constraints and dates, and that 'flutter pub add' resolves them cleanly against apps/mobile/pubspec.yaml",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "curl https://pub.dev/api/packages/<name> (all 7 match on version, publish date and environment). I re-ran 'flutter pub add pdf printing share_plus image_picker file_picker' on a fresh scratch copy of apps/mobile/pubspec.yaml: no conflicts, and it wrote ^3.13.1, ^5.15.1, ^13.3.1, ^1.2.4, ^13.4.1. Locked transitives: storage_client 2.8.1, functions_client 2.7.1, supabase 2.16.5, image_picker_ios 0.8.13+16 (needs Flutter >=3.47.0 / Dart ^3.13.0), image_picker_android 0.8.13+25, url_launcher_android 6.3.35, url_launcher_ios 6.4.2."
+   },
+   {
+    "claim": "Flutter 3.47.9 defaults are minSdk 24, compileSdk 36, targetSdk 36 and iOS 15.0. Package minimums: printing 21 / iOS 13 (podspec 8.0), share_plus 21 / 13, image_picker_android 24 / image_picker_ios 15, android_file_picker 21 / file_picker_darwin 14, url_launcher_android 24 / url_launcher_ios 13. image_picker_ios 0.8.13+12 and later require iOS 15.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "/opt/flutter/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt (compileSdk 36, minSdk 24, targetSdk 36); ios.tmpl project.pbxproj.tmpl (15.0); /opt/flutter/bin/cache/flutter.version.json (3.47.9 / Dart 3.13.7). Each package's build.gradle, podspec and Package.swift in ~/.pub-cache match the claim. The image_picker_ios CHANGELOG 0.8.13+12 says 'Updates minimum iOS version to 15'. The app uses flutter.minSdkVersion and IPHONEOS_DEPLOYMENT_TARGET 15.0. Note: the image_picker README platform table still says 'iOS 13+'."
+   },
+   {
+    "claim": "printing 5.15.1 still uses a Groovy android/build.gradle (AGP 7.3.0 classpath, compileSdk 34, Java 1.8, lintOptions). The AGP 9.0 Removed DSL list does not include lintOptions. Issue DavBfr/dart_pdf#1975 reports printing 5.15.0 with Flutter 3.47.0 and AGP 9.1.0 giving only 'source value 8 is obsolete' warnings.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "printing-5.15.1/android/build.gradle (exactly as described). The AGP 9.0.0 release notes 'Removed DSL' list has no lintOptions. Issue #1975 ('bump Android Java source/target from 8 to 17', opened 2026-09-19) lists source and target value 8 warnings. It never says the build succeeded or failed, and a bot closed it as stale on 2026-10-16. Key caveat: AGP 9 uses only the new DSL by default. This works because the Flutter 3.47 template, and apps/mobile/android/gradle.properties, set android.newDsl=false and android.builtInKotlin=false. The app runs AGP 9.1.0 on Gradle 9.3.1."
+   },
+   {
+    "claim": "PdfGoogleFonts.notoSansSCRegular()/Bold() first loads the asset 'google_fonts/NotoSansSC-Regular.ttf' (or -Bold) if it is in the AssetManifest. Otherwise it downloads the gstatic v37 TTF into PdfMemoryCache, which clears 20 minutes after last use. If the download fails it returns Font.helvetica() and prints the error only in debug builds.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "printing-5.15.1 lib/src/fonts/font.dart (assetPrefix 'google_fonts/', a print inside assert, then Font.helvetica()); gfonts.dart lines 45816-45852 (the exact URLs); cache.dart (Timer of 20 minutes, reset on get and add); manifest.dart (if the AssetManifest fails to load, it is treated as not containing the font). Both gstatic URLs return 200, about 10.56 MB and 10.55 MB, with access-control-allow-origin: *."
+   },
+   {
+    "claim": "Noto Sans SC alone renders Chinese, Malay and English, including bold. The fonts embed as CID TrueType, Identity-H, uni yes, and are subset: a 2-page sheet is 12 KB and a 200-line sheet is 21.8 KB, built in about 65 ms AOT. Helvetica draws CJK as tofu boxes.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "I re-ran it in my own scratch output dir: the 2-page sheet is 12048 bytes and the 200-line sheet is 21770 bytes, built in 61 ms and 81 ms AOT. pdffonts shows NotoSansSC-Regular and NotoSansSC-Bold as CID TrueType, Identity-H, emb yes, uni yes (the 'sub' column says 'no' only because there is no subset tag in the name; the data is subset by TtfWriter.withChars). I rendered the page with pdftoppm and looked at it: bold renders and the Helvetica CJK shows as tofu boxes."
+   },
+   {
+    "claim": "pdf uses Type0/CID only for TrueType-outline fonts (0x00010000). CFF/OTF ('OTTO') fonts fall back to the simple TrueType path, which covers only codes 32-255, so use the TTF, not the noto-cjk .otf.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "pdf-3.13.1 lib/src/pdf/obj/ttffont.dart:55 '_useType0 => font.unicode && !settings.simpleTrueTypeFonts'; ttf_parser.dart:219 'unicode => bytes.getUint32(0) == 0x10000'; _buildTrueType sets charMin 32 / charMax 255; the base PdfFont.putText uses latin1.encode, which throws on CJK."
+   },
+   {
+    "claim": "Printing.layoutPdf({required onLayout, name='Document', format=PdfPageFormat.standard (a4), dynamicLayout=true, usePrinterSettings=false, outputType=generic, forceCustomPrintPaper=false, windowsModernDialog=false}) returns true if printed and false if cancelled. Printing.sharePdf({required bytes, filename='document.pdf', bounds, subject, body, emails}). LayoutCallback = FutureOr<Uint8List> Function(PdfPageFormat).",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "printing-5.15.1 lib/src/printing.dart:52-73 and :197-215; callback.dart:24; pdf page_format.dart:84 'standard = a4'. Web caveat: on desktop browsers layoutPdf always returns true after calling iframe print(), so a cancel is not detected. On mobile browsers it falls back to opening or downloading the PDF. sharePdf on web just downloads the PDF (printing_web.dart)."
+   },
+   {
+    "claim": "share_plus 13: SharePlus.instance.share(ShareParams(...)) returns Future<ShareResult> (status success/dismissed/unavailable, raw String). Share.share/shareUri/shareXFiles are deprecated. share() throws ArgumentError for empty text, uri plus text, or no content.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "share_plus-13.3.1 lib/share_plus.dart:73-104 (also throws if files is an empty list or the fileNameOverrides length does not match). The Share class is @Deprecated('Use SharePlus instead') and its methods are @Deprecated('Use SharePlus.instance.share() instead'). share_plus_platform_interface-7.2.0 ShareParams also has previewThumbnail; ShareResult(raw, status)."
+   },
+   {
+    "claim": "image_picker 1.2.4 pickImage signature as stated. XFile.readAsBytes() works on all platforms. imageQuality compresses only JPEG (plus PNG and WebP on Android). Call retrieveLostData() at startup on Android.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "image_picker-1.2.4 lib/image_picker.dart:72-79 and its dartdoc; README 'Handling MainActivity destruction'. Nuance: the Android code (ImageResizer.java) re-encodes as JPEG, or as PNG without compression when the bitmap has alpha, so in practice the 'PNG/WebP on Android' line in the docs does not hold."
+   },
+   {
+    "claim": "iOS needs NSPhotoLibraryUsageDescription (required by App Store policy even with requestFullMetadata: false) and NSCameraUsageDescription; NSMicrophoneUsageDescription only for video. Android needs no config, and on Android 16+ gallery picks always use the Photo Picker. The app's Info.plist has neither key.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "image_picker-1.2.4 README Setup; image_picker_android-0.8.13+25 README 'On Android 16 and above ... always use the Android Photo Picker'. The image_picker README itself still says Android 13+. apps/mobile/ios/Runner/Info.plist has no NSCamera or NSPhotoLibrary keys (it only has LSApplicationQueriesSchemes tel)."
+   },
+   {
+    "claim": "image_picker_android re-encodes to JPEG (PNG if alpha) when maxWidth, maxHeight or imageQuality<100 is set, naming the file '/scaled_'+original. image_picker_ios detects only JPEG/PNG/GIF by first byte; other types are saved with jpegData and a .jpg suffix.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "image_picker_android-0.8.13+25 ImageResizer.java:42 (shouldScale), :85 ('/scaled_' + name), :182-191 (hasAlpha gives PNG, otherwise JPEG). image_picker_ios-0.8.13+16 ImagePickerMetaDataUtil.swift (0xFF/0x89/0x47, default '.jpg', default branch uses jpegData)."
+   },
+   {
+    "claim": "file_picker API changed in 11.0.0 (2026-04-04, static methods), 12.0.0 (2026-08-14, federated, FilePickerResult removed, pickFiles returns List<PlatformFile> with an empty list on cancel, pickFile returns PlatformFile?) and 13.0.0 (2026-09-14, removed withData, withReadStream, allowMultiple, readSequential, lockParentWindow, cancelUploadOnWindowBlur). FilePicker.platform.pickFiles(withData: true) no longer compiles.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "pub.dev versions JSON (the dates match); file_picker-13.4.1 CHANGELOG and README 'Migrating to v13/v12'; lib/src/file_picker.dart. 13.0.0 also removed androidSafOptions and changed PlatformFile.length() to Future<int?>. My flutter analyze run reports undefined_getter for 'FilePicker.platform', and undefined_named_parameter for withData on FilePicker.pickFiles(withData: true)."
+   },
+   {
+    "claim": "PlatformFile (file_picker_platform_interface 4.3.0) is an abstract base class with name, extension, uri, path (file: URIs only), xFile, lengthSync(), length(), readAsBytes(), readAsByteStream().",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "~/.pub-cache/hosted/pub.dev/file_picker_platform_interface-4.3.0/lib/src/platform_file.dart"
+   },
+   {
+    "claim": "storage_client 2.8.1 uploadBinary signature; returns response['Key']; FileOptions defaults; contentType is guessed by lookupMimeType from the extension with octet-stream fallback; upsert is sent as the x-upsert header; each path segment is percent-encoded.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "storage_client-2.8.1 storage_file_api.dart:111-130 and :40-49 (Uri(pathSegments:)); types.dart:244-279; fetch.dart:21-24 and :134-171. Running mime 2.1.0 gives pdf, xlsx, xls, csv, jpg and heic all mapped. The Supabase Dart docs example assigns the result to 'final String fullPath'. Note: the docs say retryAttempts 'Defaults to 10', but the supabase client default is 0, and network errors surface as http.ClientException, not StorageException."
+   },
+   {
+    "claim": "Uploads need INSERT on storage.objects, and upsert also needs SELECT and UPDATE. Docs example per-user policy uses (storage.foldername(name))[1] = (select auth.jwt()->>'sub'). Supabase advises against overwriting (CDN), recommends standard upload up to 6 MB (TUS for larger), and infers content type from the extension. config.toml file_size_limit = \"50MiB\".",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/storage/security/access-control ; https://supabase.com/docs/guides/storage/uploads/standard-uploads (all quotes match); supabase/config.toml line 91."
+   },
+   {
+    "claim": "functions_client 2.7.1 invoke signature; Content-Type is set automatically (Uint8List gives octet-stream, String gives text/plain, anything else is JSON); response data is decoded by content type.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "functions_client-2.7.1 lib/src/functions_client.dart:118-253. Small nuances: text/event-stream gives a stream only on 2xx, and an empty application/json body gives \"\"."
+   },
+   {
+    "claim": "A non-2xx response throws FunctionsHttpException, x-relay-error throws FunctionsRelayException, and a transport failure throws FunctionsFetchException (status 0). All extend FunctionException and are exported through supabase_flutter.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "functions_client-2.7.1 lib/src/types.dart:29-74; functions_client.dart:201-269. Export chain: supabase-2.16.5/lib/supabase.dart exports functions_client, and supabase_flutter.dart exports supabase."
+   },
+   {
+    "claim": "functions.invoke attaches the user's JWT automatically through AuthHttpClient (getSession() before each request, putIfAbsent Authorization and apikey). With an sb_publishable_ key and no session, no Bearer is sent. A manually passed Authorization header takes precedence and skips the refresh. The app uses Supabase.initialize(url:, publishableKey:).",
+    "verdict": "corrected",
+    "correction": "Automatic attachment, omitNewApiKeyAsBearer and the publishableKey init are correct. But a manual Authorization header does NOT skip the refresh: AuthHttpClient.send always awaits _getAccessToken(), and so getSession() and any refresh, before putIfAbsent. A manual header only overrides which token is sent, so a stale manual token is still sent. Also, if the refresh fails, the AuthException is thrown inside client.send(), and functions.invoke catches it and rethrows it as FunctionsFetchException(status: 0, details: AuthException). The caller sees a FunctionException, not an AuthException.",
+    "source": "supabase-2.16.5 lib/src/auth_http_client.dart (send), supabase_client.dart:168-178 and :277-293; gotrue-2.27.3 gotrue_client.dart:206-234 (getSession); functions_client-2.7.1 functions_client.dart:201-208 (catch, then FunctionsFetchException); apps/mobile/lib/main.dart:22"
+   },
+   {
+    "claim": "Edge Functions default to verify_jwt = true (the platform validates the JWT before the handler runs). Service-to-service functions set [functions.<name>] verify_jwt = false in config.toml.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://supabase.com/docs/guides/functions/auth ('The default is verify_jwt = true, so the platform validates the JWT before your handler runs'). Note: supabase/config.toml currently has no [functions.*] sections and there is no supabase/functions directory yet."
+   },
+   {
+    "claim": "url_launcher 6.3.3 launchUrl signature; platformDefault opens http(s) in-app (Custom Tabs on Android, SFSafariViewController on iOS); use externalApplication for wa.me; on Android 11+ externalNonBrowserApplication adds FLAG_ACTIVITY_REQUIRE_NON_BROWSER and returns false when no non-browser app can handle the URL.",
+    "verdict": "corrected",
+    "correction": "The signature, the platformDefault behaviour and the externalApplication advice are correct. But on Android, launchUrl never returns false when nothing can handle the intent. url_launcher_android catches ActivityNotFoundException natively, then the Dart side throws PlatformException(code: 'ACTIVITY_NOT_FOUND'). That covers externalNonBrowserApplication without WhatsApp installed, and tel: on a device with no dialer. Only iOS returns false (LaunchResult.failure). So the report's `if (!await launchUrl(...)) {fallback}` never reaches the fallback on Android; wrap the call in try/catch on PlatformException as well.",
+    "source": "url_launcher-6.3.3 lib/src/url_launcher_uri.dart:39-70; url_launcher_android-6.3.35 lib/url_launcher_android.dart:76-127 (throws PlatformException ACTIVITY_NOT_FOUND when !succeeded) and UrlLauncher.kt:55-74; url_launcher_ios-6.4.2 lib/url_launcher_ios.dart:71-136"
+   },
+   {
+    "claim": "WhatsApp click-to-chat is https://wa.me/<number> (full international number, no zeros, brackets, dashes or '+'), with ?text=<urlencoded>. wa.me/?text= opens a contact chooser. Malaysia 012-345 6789 becomes wa.me/60123456789.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "https://faq.whatsapp.com/5913398998672934 (the '+' is shown only inside its 'Don't use' example; the official example uses %20 for spaces). Malaysia's country code is 60 and the trunk 0 is dropped."
+   },
+   {
+    "claim": "Uri.https(..., {'text': msg}) encodes spaces as '+', while Uri(query: 'text=${Uri.encodeComponent(msg)}') encodes them as %20; both percent-encode CJK as UTF-8. %20 is safer.",
+    "verdict": "confirmed",
+    "correction": "",
+    "source": "Ran locally: Uri.https gives 'text=Hi+%E9%99%88%E8%AE%B0%2C+order+%2312+%26+3+ctn', and Uri(query:) gives 'text=Hi%20%E9%99%88%E8%AE%B0%2C%20order%20%2312%20%26%203%20ctn'. The url_launcher README 'Encoding URLs' section describes the '+' issue."
+   },
+   {
+    "claim": "All snippet code passes flutter analyze with no issues on Flutter 3.47.9, and a scratch web app using these packages built with 'flutter build web --release' with a successful Wasm dry run.",
+    "verdict": "corrected",
+    "correction": "The snippets as shown in the report do not analyze cleanly. Snippets 4, 5 and 6 use Uint8List without `import 'dart:typed_data';` (error undefined_class / non_type_as_type_argument; supabase_flutter does not export it). Snippet 3 uses Rect without importing dart:ui or package:flutter (error undefined_class). Their passing check.dart was a single file with those imports added at the top. With the imports added, analyze reports only 6 warnings from placeholder variables (printed, len, fullPath, data, two unused catch variables), not 'no issues'. With the imports added, I independently confirmed that 'flutter build web --release' succeeds and prints 'Wasm dry run succeeded'.",
+    "source": "My own copy of the snippets, verbatim, in scratchpad/fcsnip run through flutter analyze and flutter build web on Flutter 3.47.9; compared with /tmp/claude-0/-home-user-Business/655a5d63-532a-5520-b2a9-3f98ee44e014/scratchpad/resolve/lib/check.dart"
+   }
+  ],
+  "missing": [
+   "Storage RLS mismatch with this schema: wholesalers.id is its own gen_random_uuid() and staff are linked through wholesaler_members, so the docs' per-user policy `(storage.foldername(name))[1] = auth.jwt()->>'sub'` would reject the snippet's `$wholesalerId/...` paths. The existing migration supabase/migrations/20261127000100_seller.sql (_setup_seller_storage) already creates membership policies using `(storage.foldername(name))[1] in (select id::text from my_wholesaler_ids())`. Those are what applies, not the docs example.",
+   "The 'price-lists' bucket in that migration has file_size_limit 10485760 (10 MiB, stricter than the 50MiB in config.toml) and allowed_mime_types that exclude image/heic. An upload whose contentType is inferred from a .heic name (e.g. Android's '/scaled_x.heic' file holding JPEG bytes) will be rejected. Derive the MIME from the bytes (e.g. lookupMimeType(name, headerBytes: bytes)) or force image/jpeg after resizing.",
+   "pw.TableHelper.fromTextArray only applies theme.tableHeader (bold, 0.8x size) when `context:` is passed. In the report's snippet the headers are not bold. Verified: a pdf with withFont(bold: ...) and fromTextArray without context embeds only NotoSansSC-Regular. Pass `context: ctx`.",
+   "url_launcher on Android throws PlatformException('ACTIVITY_NOT_FOUND') instead of returning false, so the WhatsApp and tel: snippets need try/catch for the fallback to work.",
+   "printing's legacy Groovy build (lintOptions, buildscript AGP 7.3.0, project.android.hasProperty) depends on the Flutter template's android.newDsl=false (also android.builtInKotlin=false) in apps/mobile/android/gradle.properties. Removing those opt-outs (AGP 10 is said to remove them) would likely break printing.",
+   "Web specifics for printing: pdf.js 6.2.108 loads at runtime from unpkg.com (override with dartPdfJsBaseUrl to self-host). layoutPdf on desktop browsers always returns true, so cancel cannot be detected. On mobile browsers it only opens or downloads the PDF, and sharePdf on web is a download.",
+   "Without bundled assets, PdfGoogleFonts downloads about 21 MB (Regular plus Bold) once per app session (memory cache only, 20 min). Offline, release builds silently fall back to Helvetica, so CJK prints as tofu. Bundling google_fonts/*.ttf (about 21 MB added to the app) is the only offline-safe option. On web the gstatic fetch works (CORS *).",
+   "Storage upload error handling: network failures throw http.ClientException (not StorageException), and the supabase client's default storage retryAttempts is 0 (the docs say 10). The snippet's `on StorageException` does not catch connectivity errors.",
+   "printing README step 3 (`use_frameworks!` in ios/Podfile) applies only to CocoaPods. The app has no Podfile and uses Swift Package Manager (Runner.xcodeproj has SPM references), so the report should have said this step can be skipped.",
+   "file_picker on Android: if a custom MainActivity overrides onActivityResult it must call super, or picking fails silently (android_file_picker README). file_picker 13 also changed PlatformFile.length() to Future<int?>."
+  ]
+ }
+]

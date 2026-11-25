@@ -1,0 +1,285 @@
+{
+ "topic": "Flutter packages for the seller (wholesaler) screens on Flutter 3.47.9 / Dart 3.13.7: pdf + printing (CJK delivery sheet), share_plus, image_picker, file_picker, supabase_flutter 2.18.3 storage uploadBinary + functions.invoke, and url_launcher (wa.me / tel:). Checked by resolving all packages in a scratch copy of apps/mobile/pubspec.yaml (flutter pub add), running flutter analyze on the API snippets below with no issues, a successful flutter build web --release (Wasm dry run passed), and a PDF made with pdf 3.13.1 and Noto Sans SC, then rendered to PNG to check the glyphs.",
+ "facts": [
+  {
+   "claim": "Latest versions as of 2026-11-25, all compatible with Dart 3.13.7 / Flutter 3.47.9: pdf 3.13.1 (sdk >=3.12.0, published 2026-09-19), printing 5.15.1 (sdk >=3.12.0, flutter >=3.41.0, 2026-09-19), share_plus 13.3.1 (sdk >=3.10, flutter >=3.38.1, 2026-10-01), image_picker 1.2.4 (sdk ^3.11.0, flutter >=3.41.0, 2026-10-06), file_picker 13.4.1 (sdk >=3.10, flutter >=3.38.0, 2026-11-21), url_launcher 6.3.3 (already in the app), supabase_flutter 2.18.3 (already in the app; it is the latest version). Running 'flutter pub add pdf printing share_plus image_picker file_picker' against a scratch copy of apps/mobile/pubspec.yaml resolved with no conflicts and gave pdf ^3.13.1, printing ^5.15.1, share_plus ^13.3.1, image_picker ^1.2.4, file_picker ^13.4.1.",
+   "source": "https://pub.dev/api/packages/pdf ; https://pub.dev/api/packages/printing ; https://pub.dev/api/packages/share_plus ; https://pub.dev/api/packages/image_picker ; https://pub.dev/api/packages/file_picker ; https://pub.dev/api/packages/url_launcher ; https://pub.dev/api/packages/supabase_flutter",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Platform implementations that resolve on Flutter 3.47.9: image_picker_android 0.8.13+25 (needs flutter >=3.44), image_picker_ios 0.8.13+16 (needs Dart ^3.13.0 and flutter >=3.47.0), image_picker_for_web 3.1.1, android_file_picker 2.2.1, file_picker_darwin 2.5.2, file_picker_web 4.2.2, share_plus_platform_interface 7.2.0. Notable transitive versions: cross_file 0.3.5+5 (0.4.0 exists, but share_plus and file_picker constrain it to ^0.3.5), image 4.13.1, xml 7.1.0, archive 4.7.1, win32 6.4.0.",
+   "source": "https://pub.dev/api/packages/image_picker_ios ; https://pub.dev/api/packages/image_picker_android ; https://pub.dev/api/packages/cross_file ; pubspec.lock from the scratch resolve",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Flutter 3.47.9 defaults are Android minSdk 24, compileSdk 36 and targetSdk 36 (FlutterExtension.kt), and IPHONEOS_DEPLOYMENT_TARGET 15.0 in the iOS app template. The app uses flutter.minSdkVersion and iOS 15.0. Package minimums: printing Android 21 / iOS 13.0 (SPM; podspec says 8.0); share_plus Android 21 / iOS 13.0; image_picker_android 24 / image_picker_ios 15.0; android_file_picker 21 / file_picker_darwin iOS 14.0; url_launcher_android 24 / url_launcher_ios 13.0. None of the packages needs a higher minimum than the Flutter 3.47 defaults. image_picker_ios 0.8.13+12 and later require exactly iOS 15, so the app's deployment target cannot go below 15.",
+   "source": "/opt/flutter/packages/flutter_tools/gradle/src/main/kotlin/FlutterExtension.kt ; /opt/flutter/packages/flutter_tools/templates/app/ios.tmpl/Runner.xcodeproj/project.pbxproj.tmpl ; build.gradle, podspec and Package.swift files in each package archive (https://pub.dev/packages/image_picker_ios/changelog)",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Swift Package Manager is enabled by default on the stable channel in Flutter 3.47 (features.dart: swiftPackageManager stable enabledByDefault: true), and apps/mobile/ios has no Podfile. printing 5.15.0 added SPM support; share_plus, image_picker_ios, file_picker_darwin and url_launcher_ios all ship a Package.swift. The printing README step 'add use_frameworks! to ios/Podfile' therefore does not apply to this app.",
+   "source": "/opt/flutter/packages/flutter_tools/lib/src/features.dart ; https://pub.dev/packages/printing/changelog (5.15.0: Add Swift Package Manager support)",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "The Android toolchain meets share_plus 13's requirements. share_plus 12+ requires AGP >=8.12.1, Gradle wrapper >=8.13, Kotlin 2.2.0 and Java 17. The app uses AGP 9.1.0, Kotlin 2.4.0, Gradle 9.3.1, android.newDsl=false and android.builtInKotlin=false. share_plus 13.3.1 applies the Kotlin Gradle plugin itself unless built-in Kotlin is enabled.",
+   "source": "https://pub.dev/packages/share_plus (Requirements) ; apps/mobile/android/settings.gradle.kts ; apps/mobile/android/gradle.properties ; https://pub.dev/packages/share_plus/changelog",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "printing 5.15.1 still uses a Groovy android/build.gradle with buildscript classpath AGP 7.3.0, compileSdk = 34, Java 1.8 and the old lintOptions block. The AGP 9.0 'Removed DSL' list does not include lintOptions. GitHub issue DavBfr/dart_pdf#1975 (Sept 2026) reports printing 5.15.0 with Flutter 3.47.0 and AGP 9.1.0 producing only 'source value 8 is obsolete' javac warnings. No Android SDK is installed here, so an APK build was not run to confirm this.",
+   "source": "printing-5.15.1 android/build.gradle (https://pub.dev/packages/printing) ; https://developer.android.com/build/releases/agp-9-0-0-release-notes ; https://github.com/DavBfr/dart_pdf/issues/1975",
+   "confidence": "medium",
+   "loadBearing": true
+  },
+  {
+   "claim": "PdfGoogleFonts.notoSansSCRegular() (also ...SCBold() and the other weights) in printing first looks for the asset 'google_fonts/NotoSansSC-Regular.ttf' (or 'google_fonts/NotoSansSC-Bold.ttf') in the AssetManifest and loads it from rootBundle if present. Otherwise it downloads https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYxNbPzS5HE.ttf over HTTP into PdfMemoryCache, which clears 20 minutes after last use. If the download fails it returns Font.helvetica(), and the error is only printed in debug builds (inside an assert).",
+   "source": "printing-5.15.1 lib/src/fonts/font.dart, lib/src/fonts/gfonts.dart, lib/src/cache.dart (https://pub.dev/packages/printing)",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Font sizes: NotoSansSC-Regular.ttf from gstatic is 10,560,616 bytes and NotoSansSC-Bold.ttf is 10,550,352 bytes (about 6.28 MB after gzip -9). Noto Sans Regular/Bold (Latin only) are about 583 KB each. The gstatic response sends access-control-allow-origin: *, so the runtime download also works on Flutter web.",
+   "source": "curl -I https://fonts.gstatic.com/s/notosanssc/v37/k3kCo84MPvpLmixcA63oeAL7Iqp5IZJF9bmaG9_FnYxNbPzS5HE.ttf (content-length, access-control-allow-origin headers); local download",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Noto Sans SC alone renders Chinese, Malay and English in one pw.Text. A test A4 MultiPage PDF made with pdf 3.13.1 and ThemeData.withFont(base: NotoSansSC-Regular, bold: NotoSansSC-Bold) rendered all three scripts correctly, including bold. pdffonts showed the fonts embedded as 'CID TrueType, Identity-H, uni yes'. pdf subsets the font (TtfWriter.withChars), so a 2-page sheet was 12 KB and a 200-line sheet was 21.8 KB. Generating the 200-line sheet, including parsing the 10.5 MB font, took about 65 ms AOT on this Linux box. CJK text drawn with Helvetica comes out as tofu boxes.",
+   "source": "Local test: pdf 3.13.1 + NotoSansSC TTFs, checked with pdffonts, pdftotext and pdftoppm (scratchpad pdftest); pdf lib/src/pdf/obj/ttffont.dart _buildType0",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "The pdf package embeds a font as a Unicode CID (Type0) font only when the file is TrueType-outline (sfnt version 0x00010000): '_useType0 => font.unicode && !settings.simpleTrueTypeFonts' and 'unicode => bytes.getUint32(0) == 0x10000'. CFF/OTF fonts ('OTTO', e.g. Noto Sans CJK .otf) fall back to the simple TrueType path, which covers only character codes 32 to 255. Use the TTF from Google Fonts or gstatic, not the .otf from the noto-cjk releases.",
+   "source": "pdf-3.13.1 lib/src/pdf/obj/ttffont.dart ; lib/src/pdf/font/ttf_parser.dart (https://pub.dev/packages/pdf)",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Mixed-script fallback: TextStyle.fontFallback (or ThemeData.withFont(fontFallback: [...])) is checked glyph by glyph. When the main font lacks a rune, the first fallback font that has it is used. If none has it, a placeholder is drawn and a debug-only message suggests adding a fontFallback.",
+   "source": "pdf-3.13.1 lib/src/widgets/text.dart (lines ~850-920), lib/src/widgets/theme.dart ThemeData.withFont",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Printing API in 5.15.1: 'static Future<bool> layoutPdf({required LayoutCallback onLayout, String name = 'Document', PdfPageFormat format = PdfPageFormat.standard /* = a4 */, bool dynamicLayout = true, bool usePrinterSettings = false, OutputType outputType = OutputType.generic, bool forceCustomPrintPaper = false, bool windowsModernDialog = false})', where LayoutCallback = FutureOr<Uint8List> Function(PdfPageFormat). Also 'static Future<bool> sharePdf({required Uint8List bytes, String filename = 'document.pdf', Rect? bounds, String? subject, String? body, List<String>? emails})'. layoutPdf returns true if the job was printed and false if cancelled.",
+   "source": "printing-5.15.1 lib/src/printing.dart ; lib/src/callback.dart ; pdf lib/src/pdf/page_format.dart (standard = a4)",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "printing on web: in desktop Chrome, Safari and Firefox, layoutPdf loads the PDF blob into a hidden iframe and calls print(). In mobile browsers (UA contains 'Mobile') it opens the PDF blob in a new tab (target _blank) instead of printing. sharePdf on web triggers a download using the filename. PdfPreview on web loads pdf.js from https://unpkg.com/pdfjs-dist (6.2.108), which window.dartPdfJsBaseUrl or dartPdfJsVersion in web/index.html can override; layoutPdf and sharePdf do not need pdf.js.",
+   "source": "printing-5.15.1 lib/printing_web.dart ; https://pub.dev/packages/printing (README step 5)",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "share_plus 13.x API: SharePlus.instance.share(ShareParams(text: ..., subject:, title:, sharePositionOrigin:, uri:, files:, fileNameOverrides:, downloadFallbackEnabled = true, mailToFallbackEnabled = true, excludedCupertinoActivities:)) returns Future<ShareResult> (status: success, dismissed or unavailable; raw: String). The static Share.share, Share.shareUri and Share.shareXFiles still exist but are @Deprecated('Use SharePlus instead'); flutter analyze reports deprecated_member_use for them. share() throws ArgumentError if text is empty, if both uri and text are set, or if none of text, uri or files is set.",
+   "source": "share_plus-13.3.1 lib/share_plus.dart ; share_plus_platform_interface-7.2.0 lib/platform_interface/share_plus_platform.dart ; https://pub.dev/packages/share_plus",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "share_plus opens the system share sheet (ACTION_SEND or UIActivityViewController); it cannot target a specific WhatsApp contact. On web it uses navigator.share when navigator.canShare() is true; otherwise text falls back to a mailto: link (mailToFallbackEnabled). On iPad, sharePositionOrigin should be passed; since 13.3.0 omitting it anchors the popover at screen centre instead of failing.",
+   "source": "share_plus-13.3.1 lib/src/share_plus_web.dart ; https://pub.dev/packages/share_plus (iPad section, CHANGELOG 13.3.0/13.3.1)",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "image_picker 1.2.4 API: 'Future<XFile?> pickImage({required ImageSource source, double? maxWidth, double? maxHeight, int? imageQuality /*0-100*/, CameraDevice preferredCameraDevice = CameraDevice.rear, bool requestFullMetadata = true})'. Bytes come from XFile.readAsBytes() on every platform, web included. imageQuality only compresses JPEG (plus PNG and WebP on Android). On Android, call ImagePicker().retrieveLostData() at startup in case the activity was killed.",
+   "source": "image_picker-1.2.4 lib/image_picker.dart ; https://pub.dev/packages/image_picker",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "image_picker iOS setup: Info.plist needs NSPhotoLibraryUsageDescription (App Store policy requires it even with requestFullMetadata: false) and NSCameraUsageDescription. NSMicrophoneUsageDescription is needed only for video. Android needs no configuration; on Android 16+ gallery picks always use the Android Photo Picker. The app's current Info.plist has neither usage key.",
+   "source": "https://pub.dev/packages/image_picker (Setup) ; https://pub.dev/packages/image_picker_android ; apps/mobile/ios/Runner/Info.plist",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "image_picker on web: XFile.path is a blob: URL and readAsBytes() works. maxWidth, maxHeight and imageQuality are honoured except for GIF, and imageQuality affects only JPEG and WebP. ImageSource.camera relies on the input 'capture' attribute, which mobile browsers may honour; desktop browsers just open a file chooser. The 'accept' filter is not validation.",
+   "source": "https://pub.dev/packages/image_picker_for_web",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "image_picker_android re-encodes the image as JPEG (PNG if it has alpha) when maxWidth, maxHeight or imageQuality < 100 is set, and names the file '/scaled_' + the original name. A HEIC source can therefore produce JPEG bytes under a .heic name. image_picker_ios recognises only JPEG, PNG and GIF by first byte; other types (e.g. HEIC) are written with UIImage.jpegData and a .jpg suffix.",
+   "source": "image_picker_android-0.8.13+25 android/src/main/java/io/flutter/plugins/imagepicker/ImageResizer.java ; image_picker_ios-0.8.13+16 ios/image_picker_ios/Sources/image_picker_ios/ImagePickerMetaDataUtil.swift and ImagePickerPhotoAssetUtil.swift",
+   "confidence": "medium",
+   "loadBearing": false
+  },
+  {
+   "claim": "file_picker's API changed in three steps. 11.0.0 (2026-04-04) moved to static methods. 12.0.0 (2026-08-14) made the plugin federated, removed FilePickerResult, and made pickFiles() return List<PlatformFile> (empty list on cancel); pickFile() returns PlatformFile?. 13.0.0 (2026-09-14) removed withData, withReadStream, allowMultiple, readSequential, lockParentWindow and cancelUploadOnWindowBlur. Current usage is FilePicker.pickFile(type: FileType.custom, allowedExtensions: [...]) and then await file.readAsBytes(). 'FilePicker.platform.pickFiles(withData: true)' now fails to compile (undefined_getter 'platform', undefined_named_parameter 'withData'), confirmed with flutter analyze.",
+   "source": "https://pub.dev/packages/file_picker (Migrating to v13 / v12) ; https://pub.dev/packages/file_picker/changelog ; file_picker-13.4.1 lib/src/file_picker.dart ; local flutter analyze",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "PlatformFile in file_picker_platform_interface 4.3.0 is an abstract base class with: String name; String? extension; Uri uri; String? path (only for file: URIs); XFile xFile; int? lengthSync(); Future<int?> length(); Future<Uint8List> readAsBytes(); Stream<Uint8List> readAsByteStream().",
+   "source": "file_picker_platform_interface-4.3.0 lib/src/platform_file.dart (https://pub.dev/packages/file_picker_platform_interface)",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "file_picker platform notes: pickFile and pickFiles work on Android, iOS, web and desktop. iOS needs 14.0+ and uses UIDocumentPickerViewController(forOpeningContentTypes:asCopy: true), mapping custom extensions with UTType(filenameExtension:); the README lists no iOS Info.plist keys. On Android, custom extensions become EXTRA_MIME_TYPES through MimeTypeMap, with csv forced to text/csv for Google Drive. A custom MainActivity that overrides onActivityResult must call super.",
+   "source": "https://pub.dev/packages/file_picker_darwin ; https://pub.dev/packages/android_file_picker ; android_file_picker-2.2.1 FileUtils.kt ; file_picker_darwin-2.5.2 IOSFilePickerHandler.swift",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "storage_client 2.8.1 (locked by supabase_flutter 2.18.3) signature: 'Future<String> uploadBinary(String path, Uint8List data, {FileOptions fileOptions = const FileOptions(), int? retryAttempts, StorageRetryController? retryController})'. It returns response['Key'], which the Dart docs call fullPath (bucket id plus path). 'const FileOptions({String cacheControl = '3600', bool upsert = false, String? contentType, Map<String, dynamic>? metadata, Map<String, String>? headers})'. When contentType is null it is guessed from the path extension with lookupMimeType (pdf, xlsx, xls, csv, jpg and heic are all mapped), falling back to application/octet-stream. upsert is sent as the x-upsert header. Each path segment is percent-encoded.",
+   "source": "~/.pub-cache/hosted/pub.dev/storage_client-2.8.1/lib/src/storage_file_api.dart, lib/src/types.dart, lib/src/fetch.dart ; https://supabase.com/docs/reference/dart/storage-from-upload",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Storage RLS: an upload needs INSERT on storage.objects, and upsert additionally needs SELECT and UPDATE. The docs' example policy for per-user folders is: for insert to authenticated with check (bucket_id = 'my_bucket_id' and (storage.foldername(name))[1] = (select auth.jwt()->>'sub')). Supabase advises against overwriting files because of CDN propagation, recommends standard uploads only for files up to 6 MB (TUS for larger), and infers content type from the extension unless contentType is set. The local supabase/config.toml has [storage] file_size_limit = \"50MiB\".",
+   "source": "https://supabase.com/docs/guides/storage/security/access-control ; https://supabase.com/docs/guides/storage/uploads/standard-uploads ; https://supabase.com/docs/reference/dart/storage-from-upload ; supabase/config.toml",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "functions_client 2.7.1 signature: 'Future<FunctionResponse> invoke(String functionName, {Map<String, String>? headers, Object? body, Iterable<http.MultipartFile>? files, Map<String, dynamic>? queryParameters, HttpMethod method = HttpMethod.post, String? region, Future<void>? abortSignal})'. Content-Type is set automatically when absent: Uint8List gives application/octet-stream, String gives text/plain, anything else is JSON-encoded as application/json. FunctionResponse.data is decoded by response content type (application/json gives a decoded object, application/octet-stream gives Uint8List, text/event-stream gives a stream, anything else gives a String).",
+   "source": "~/.pub-cache/hosted/pub.dev/functions_client-2.7.1/lib/src/functions_client.dart, lib/src/types.dart ; https://supabase.com/docs/reference/dart/functions-invoke",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Error types: a non-2xx response throws FunctionsHttpException(status, details, reasonPhrase). An x-relay-error: true response throws FunctionsRelayException. A transport failure throws FunctionsFetchException with status 0. All three extend FunctionException and are exported through supabase_flutter.",
+   "source": "functions_client-2.7.1 lib/src/types.dart, lib/src/functions_client.dart ; supabase-2.16.5 lib/supabase.dart (exports)",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "supabase.functions.invoke sends the signed-in user's JWT without any extra code. supabase 2.16.5 gives FunctionsClient an AuthHttpClient that calls auth.getSession() before every request (refreshing an expired token, or throwing AuthException if the refresh fails) and does putIfAbsent('Authorization', 'Bearer <access_token>') and putIfAbsent('apikey', key). With the new sb_publishable_ key and no session, no Bearer header is sent (omitNewApiKeyAsBearer: true). Because of putIfAbsent, a manually passed Authorization header (as in the docs example) takes precedence and skips the refresh. The app initialises with Supabase.initialize(url:, publishableKey:).",
+   "source": "~/.pub-cache/hosted/pub.dev/supabase-2.16.5/lib/src/supabase_client.dart (_functionsHttpClient, _getAccessToken), lib/src/auth_http_client.dart ; apps/mobile/lib/main.dart",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Edge Functions default to verify_jwt = true, so the platform validates the caller's JWT before the handler runs. Service-to-service functions (e.g. whatsapp-webhook, or dispatch-notifications called from pg_net) set [functions.<name>] verify_jwt = false in config.toml.",
+   "source": "https://supabase.com/docs/guides/functions/auth",
+   "confidence": "medium",
+   "loadBearing": false
+  },
+  {
+   "claim": "url_launcher 6.3.3 signature: 'Future<bool> launchUrl(Uri url, {LaunchMode mode = LaunchMode.platformDefault, WebViewConfiguration webViewConfiguration, BrowserConfiguration browserConfiguration, String? webOnlyWindowName})'. With platformDefault, Android opens http(s) URLs in-app (Custom Tabs) and iOS in SFSafariViewController. Pass LaunchMode.externalApplication so https://wa.me/... goes to the WhatsApp app (or the browser if WhatsApp is not installed). On Android 11+ (API 30+), LaunchMode.externalNonBrowserApplication adds FLAG_ACTIVITY_REQUIRE_NON_BROWSER and returns false when no non-browser app can handle the URL.",
+   "source": "~/.pub-cache/hosted/pub.dev/url_launcher-6.3.3/lib/src/url_launcher_uri.dart ; url_launcher_android-6.3.35 lib/url_launcher_android.dart + UrlLauncher.kt ; url_launcher_ios-6.4.2 lib/url_launcher_ios.dart",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "On Android, launchUrl just calls startActivity and catches ActivityNotFoundException, so it needs no <queries>. Only canLaunchUrl needs <queries> entries on Android 11+ and LSApplicationQueriesSchemes entries on iOS. The app already declares tel in both (AndroidManifest <queries> DIAL/tel; Info.plist LSApplicationQueriesSchemes tel). https://wa.me needs no extra entry if canLaunchUrl is not used.",
+   "source": "url_launcher_android-6.3.35 android/src/main/kotlin/io/flutter/plugins/urllauncher/UrlLauncher.kt ; https://pub.dev/packages/url_launcher (Configuration) ; apps/mobile/android/app/src/main/AndroidManifest.xml ; apps/mobile/ios/Runner/Info.plist",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "url_launcher on web: the launch must come from a direct user gesture, and awaiting a Future before launchUrl can get it blocked (use webOnlyWindowName: '_self' or build the Uri synchronously). launchUrl always returns true on web because the window is opened with noopener.",
+   "source": "https://pub.dev/packages/url_launcher_web",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "WhatsApp click-to-chat format: https://wa.me/<number>, where <number> is the full international number with no zeros, brackets or dashes (and no '+'), with an optional ?text=<urlencoded text>. https://wa.me/?text=... opens a contact chooser. For Malaysia, 012-345 6789 becomes wa.me/60123456789.",
+   "source": "https://faq.whatsapp.com/5913398998672934",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "In Dart, Uri.https('wa.me', '/6012...', {'text': msg}) encodes spaces as '+'. Uri(scheme: 'https', host: 'wa.me', path: '/6012...', query: 'text=${Uri.encodeComponent(msg)}') encodes them as %20, and both forms encode CJK text as UTF-8 percent sequences (checked by running both). Whether wa.me decodes '+' as a space was not confirmed, so the %20 form is the safer choice.",
+   "source": "Local dart run (scratchpad dartcheck/u.dart); https://pub.dev/packages/url_launcher (Encoding URLs)",
+   "confidence": "medium",
+   "loadBearing": false
+  },
+  {
+   "claim": "All snippet code below (PdfGoogleFonts + pw.MultiPage + Printing.layoutPdf/sharePdf, SharePlus.instance.share(ShareParams), ImagePicker().pickImage(...).readAsBytes(), FilePicker.pickFile(...).readAsBytes(), storage.from().uploadBinary(fileOptions: FileOptions(contentType:, upsert:)), functions.invoke with FunctionException, and launchUrl with LaunchMode.externalApplication) passes flutter analyze with no issues on Flutter 3.47.9. A scratch web app using all of these packages built with 'flutter build web --release', and the Wasm dry run succeeded.",
+   "source": "Local: /tmp/claude-0/-home-user-Business/655a5d63-532a-5520-b2a9-3f98ee44e014/scratchpad/resolve/lib/check.dart (flutter analyze + flutter build web)",
+   "confidence": "high",
+   "loadBearing": true
+  }
+ ],
+ "snippets": [
+  {
+   "title": "pubspec.yaml additions (apps/mobile) plus optional bundled CJK font assets read automatically by PdfGoogleFonts",
+   "language": "yaml",
+   "code": "dependencies:\n  pdf: ^3.13.1\n  printing: ^5.15.1\n  share_plus: ^13.3.1\n  image_picker: ^1.2.4\n  file_picker: ^13.4.1\n  # already present: url_launcher: ^6.3.3, supabase_flutter: ^2.18.3\n\nflutter:\n  assets:\n    # optional: when present, PdfGoogleFonts.notoSansSCRegular()/notoSansSCBold() load these\n    # instead of downloading 10.5 MB each from fonts.gstatic.com (adds ~10.5 MB per weight to the app)\n    - google_fonts/NotoSansSC-Regular.ttf\n    - google_fonts/NotoSansSC-Bold.ttf",
+   "source": "https://pub.dev/api/packages/<name> ; printing-5.15.1 lib/src/fonts/font.dart (assetPrefix 'google_fonts/', name 'NotoSansSC-Regular' / 'NotoSansSC-Bold')"
+  },
+  {
+   "title": "A4 delivery sheet with Chinese/Malay/English, then print or share (verified with flutter analyze)",
+   "language": "dart",
+   "code": "import 'dart:typed_data';\nimport 'package:pdf/pdf.dart';\nimport 'package:pdf/widgets.dart' as pw;\nimport 'package:printing/printing.dart';\n\nFuture<Uint8List> buildDeliverySheet(PdfPageFormat format) async {\n  final base = await PdfGoogleFonts.notoSansSCRegular(); // covers CJK + Latin\n  final bold = await PdfGoogleFonts.notoSansSCBold();\n  final doc = pw.Document(\n    title: 'Deliveries',\n    theme: pw.ThemeData.withFont(base: base, bold: bold, fontFallback: [base]),\n  );\n  doc.addPage(pw.MultiPage(\n    pageFormat: PdfPageFormat.a4,\n    build: (ctx) => [\n      pw.Text('今日送货 / Penghantaran hari ini / Today\\'s deliveries',\n          style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),\n      pw.TableHelper.fromTextArray(\n        headers: ['客户 Pelanggan', '数量 Qty'],\n        data: [\n          ['陈记 Kedai A', '3 ctn'],\n        ],\n      ),\n    ],\n  ));\n  return doc.save();\n}\n\nFuture<void> printSheet() async {\n  final printed = await Printing.layoutPdf(\n    onLayout: buildDeliverySheet,\n    name: 'deliveries-2026-11-25',\n    format: PdfPageFormat.a4,\n  ); // false = cancelled\n  final bytes = await buildDeliverySheet(PdfPageFormat.a4);\n  await Printing.sharePdf(bytes: bytes, filename: 'deliveries-2026-11-25.pdf');\n}",
+   "source": "printing-5.15.1 lib/src/printing.dart ; pdf-3.13.1 lib/src/widgets/theme.dart ; local flutter analyze"
+  },
+  {
+   "title": "Share the delivery list text (share_plus 13)",
+   "language": "dart",
+   "code": "import 'package:share_plus/share_plus.dart';\n\nFuture<void> shareText(String text, Rect? origin) async {\n  // text must be non-empty; do not combine text with uri\n  final ShareResult r = await SharePlus.instance.share(\n    ShareParams(text: text, subject: 'Deliveries', sharePositionOrigin: origin),\n  );\n  if (r.status == ShareResultStatus.success) { /* r.raw = chosen app id (Android/iOS/macOS) */ }\n}",
+   "source": "https://pub.dev/packages/share_plus ; share_plus-13.3.1 lib/share_plus.dart"
+  },
+  {
+   "title": "Pick a price-list photo (camera or gallery) and get compressed bytes",
+   "language": "dart",
+   "code": "import 'package:image_picker/image_picker.dart';\n\nFuture<Uint8List?> pickPhoto(bool camera) async {\n  final XFile? f = await ImagePicker().pickImage(\n    source: camera ? ImageSource.camera : ImageSource.gallery,\n    maxWidth: 2000,\n    maxHeight: 2000,\n    imageQuality: 85,\n    requestFullMetadata: false,\n  );\n  if (f == null) return null; // cancelled\n  return f.readAsBytes(); // works on Android/iOS/web\n}",
+   "source": "image_picker-1.2.4 lib/image_picker.dart ; https://pub.dev/packages/image_picker"
+  },
+  {
+   "title": "Pick a PDF/Excel/CSV and read the bytes (file_picker 13: static API, no withData)",
+   "language": "dart",
+   "code": "import 'package:file_picker/file_picker.dart';\n\nFuture<(String, Uint8List)?> pickDoc() async {\n  final PlatformFile? file = await FilePicker.pickFile(\n    type: FileType.custom,\n    allowedExtensions: const ['pdf', 'xlsx', 'xls', 'csv'],\n  );\n  if (file == null) return null; // cancelled\n  final int? len = file.lengthSync() ?? await file.length();\n  return (file.name, await file.readAsBytes()); // all platforms incl. web\n}",
+   "source": "https://pub.dev/packages/file_picker (Migrating to v13) ; file_picker-13.4.1 lib/src/file_picker.dart"
+  },
+  {
+   "title": "Upload to Supabase Storage, then call an Edge Function (the user's JWT is attached automatically)",
+   "language": "dart",
+   "code": "import 'package:supabase_flutter/supabase_flutter.dart';\n\nFuture<void> uploadAndParse(SupabaseClient supabase, String wholesalerId, String ext,\n    Uint8List bytes, String mime) async {\n  // ASCII-only key; first folder = owner id for RLS (storage.foldername(name))[1]\n  final path = '$wholesalerId/${DateTime.now().millisecondsSinceEpoch}.$ext';\n  try {\n    final String fullPath = await supabase.storage.from('price-lists').uploadBinary(\n          path,\n          bytes,\n          fileOptions: FileOptions(contentType: mime, upsert: false),\n        );\n    final FunctionResponse res = await supabase.functions.invoke(\n      'parse-price-list',\n      body: {'storage_path': path}, // Map -> JSON, Content-Type set automatically\n    ); // do NOT pass headers: {'Authorization': ...}; AuthHttpClient adds a refreshed JWT\n    final data = res.data; // decoded JSON if the function returns application/json\n  } on StorageException catch (e) {\n    // e.statusCode, e.message\n  } on FunctionException catch (e) {\n    // FunctionsHttpException (non-2xx) / FunctionsFetchException (status 0) / FunctionsRelayException\n    // e.status, e.details, e.reasonPhrase\n  }\n}",
+   "source": "storage_client-2.8.1 lib/src/storage_file_api.dart + types.dart ; functions_client-2.7.1 lib/src/functions_client.dart + types.dart ; supabase-2.16.5 lib/src/auth_http_client.dart"
+  },
+  {
+   "title": "Open a WhatsApp chat with prefilled text, and dial a number",
+   "language": "dart",
+   "code": "import 'package:url_launcher/url_launcher.dart';\n\n/// digits: international, no '+', no leading 0, e.g. '60123456789'\nFuture<void> openWhatsApp(String digits, String text) async {\n  final uri = Uri(\n    scheme: 'https',\n    host: 'wa.me',\n    path: '/$digits',\n    query: 'text=${Uri.encodeComponent(text)}', // %20 instead of '+'\n  );\n  // externalApplication: avoid Custom Tabs / SFSafariViewController so the WhatsApp app opens\n  if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {\n    // show error / copy text fallback\n  }\n}\n\nFuture<void> call(String digits) => launchUrl(Uri(scheme: 'tel', path: '+$digits'));",
+   "source": "https://faq.whatsapp.com/5913398998672934 ; url_launcher-6.3.3 lib/src/url_launcher_uri.dart ; url_launcher_android lib/url_launcher_android.dart"
+  },
+  {
+   "title": "iOS Info.plist keys needed for image_picker (add to apps/mobile/ios/Runner/Info.plist)",
+   "language": "xml",
+   "code": "<key>NSCameraUsageDescription</key>\n<string>拍摄价格表照片，用于生成商品草稿 / Take a photo of your price list</string>\n<key>NSPhotoLibraryUsageDescription</key>\n<string>从相册选择价格表照片 / Choose a price-list photo from your library</string>\n<!-- NSMicrophoneUsageDescription only if recording video -->",
+   "source": "https://pub.dev/packages/image_picker (Setup > iOS)"
+  }
+ ],
+ "pitfalls": [
+  "If the gstatic download fails, PdfGoogleFonts silently uses Helvetica in release builds (the error is printed only inside an assert), and every Chinese character prints as a tofu box. This was confirmed by rendering a Helvetica + CJK PDF. Either bundle google_fonts/NotoSansSC-Regular.ttf (and -Bold) as assets, which PdfGoogleFonts picks up automatically, or load the font with fontFromAssetBundle or pw.Font.ttf. Also check the font family or show an error when offline rather than printing a broken sheet.",
+  "Without bundling, the 10.5 MB font is held only in PdfMemoryCache, which clears 20 minutes after last use, so it is downloaded again after that; each weight is about 10.5 MB. For a persistent runtime cache, set PdfBaseCache.defaultCache to a file-backed implementation.",
+  "Do not use the Noto Sans CJK .otf (CFF/'OTTO') files. The pdf package writes them as simple TrueType fonts covering only character codes 32 to 255. Use the TrueType-outline TTF from Google Fonts or gstatic.",
+  "file_picker 11, 12 and 13 broke the API three times in 2026. FilePicker.platform, FilePickerResult, result.files, withData: true, allowMultiple and PlatformFile.size are all gone. Use FilePicker.pickFile() or pickFiles() (which returns a List, empty on cancel), then file.readAsBytes(), lengthSync() or length() (Future<int?>). Most online examples and older LLM answers use the removed API.",
+  "Share.share, Share.shareXFiles and Share.shareUri are deprecated. Use SharePlus.instance.share(ShareParams(...)). ShareParams(text: '') throws ArgumentError, and so does setting both text and uri.",
+  "share_plus cannot pick a WhatsApp recipient. Use wa.me through url_launcher to target a number. On desktop web without the Web Share API, a text share falls back to opening a mailto: link.",
+  "url_launcher's platformDefault opens https links in an in-app browser on Android (Custom Tabs) and iOS (SFSafariViewController). For wa.me, pass LaunchMode.externalApplication. On web, call launchUrl synchronously inside the tap handler; an awaited Future first can get the popup blocked.",
+  "Uri.https(..., queryParameters) encodes spaces as '+'. Use query: 'text=${Uri.encodeComponent(msg)}' for %20. Normalise Malaysian numbers: strip non-digits, turn a leading 0 into 60, and never include '+' in the wa.me path.",
+  "image_picker on Android: a resized or compressed image is re-encoded as JPEG (PNG if it has alpha) but keeps its original file name with a 'scaled_' prefix, so the extension can be wrong (e.g. .heic). Detect the content type from the magic bytes (FF D8 for JPEG, 89 50 for PNG) before uploadBinary, rather than trusting XFile.name or mimeType (mimeType is usually null on mobile).",
+  "Claude vision accepts JPEG, PNG, GIF and WebP, not HEIC. Setting maxWidth or imageQuality in image_picker makes Android re-encode to JPEG, and iOS writes unrecognised types such as HEIC as JPEG. HEIC files chosen through file_picker are not converted.",
+  "The image_picker Info.plist keys are missing from the app today: NSCameraUsageDescription (the camera fails without it) and NSPhotoLibraryUsageDescription (required by App Store policy even with requestFullMetadata: false). On Android, call retrieveLostData() at startup for cases where the activity was killed.",
+  "Supabase Storage has a long-open issue (supabase/storage#133) where non-ASCII or special characters in object keys fail. Generate ASCII keys (an id plus the extension) under the owner's id folder, and keep the original file name in the database or in FileOptions.metadata.",
+  "Avoid upsert: true on storage uploads. It needs extra SELECT and UPDATE RLS policies, and Supabase warns about CDN propagation of overwritten files. Write each upload to a new path instead. Standard uploads are recommended only up to 6 MB, and the local config limit is 50 MiB.",
+  "Don't pass headers: {'Authorization': 'Bearer ${currentSession?.accessToken}'} to functions.invoke even though the docs example does. The SDK already adds a refreshed token, and a manual header takes precedence because of putIfAbsent, so a stale token could be sent.",
+  "The printing README's 'use_frameworks! in Podfile' step is CocoaPods-era guidance. This app uses SPM (the Flutter 3.47 default) and has no Podfile; printing has supported SPM since 5.15.0.",
+  "printing still uses a Groovy android/build.gradle with compileSdk 34, Java 1.8 and lintOptions. It is reported to work with AGP 9.1.0 and Flutter 3.47 (warnings only), but this was not built here. Run 'flutter build apk' early, on a machine with the Android SDK.",
+  "On mobile web, Printing.layoutPdf does not open a print dialog; it opens the PDF in a new tab. sharePdf on web just downloads the file. PdfPreview on web loads pdf.js from unpkg.com, which matters if a CSP is added or the app must work offline."
+ ],
+ "openQuestions": [
+  "Not verified: an Android APK build with printing 5.15.1, share_plus 13.3.1, image_picker_android, android_file_picker and the app's AGP 9.1.0 / android.newDsl=false / builtInKotlin=false setup. This container has no Android SDK. The only evidence is dart_pdf issue #1975, which reports warnings only on AGP 9.1.0.",
+  "Unconfirmed: whether wa.me decodes '+' in ?text= as a space (the %20 form avoids the question), and the maximum prefilled text length wa.me accepts for long delivery lists.",
+  "Not measured: how much a bundled 10.5 MB NotoSansSC TTF actually adds to the APK, AAB or IPA. It depends on asset compression; gzip -9 gives about 6.3 MB. Subsetting the font offline (e.g. to GB2312 plus Latin) would shrink it but could drop rare characters in product names.",
+  "iOS HEIC-to-JPEG conversion in image_picker_ios was inferred from source reading only. Confirm on a real device what bytes and MIME type come back for camera and gallery HEIC photos.",
+  "No official Supabase page lists the characters allowed in Storage object keys. The non-ASCII failure is known from supabase/storage#133 and community reports."
+ ]
+}

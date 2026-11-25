@@ -1,0 +1,312 @@
+{
+ "topic": "WhatsApp Business Platform Cloud API (Meta) for order notifications to wholesalers with Confirm / Out-of-stock quick-reply buttons, webhook handling, media download, pricing and errors — verified against Meta's live docs on 2026-11-25",
+ "facts": [
+  {
+   "claim": "Latest Graph API version is v27.0 (introduced 2026-11-04). v26.0 = 2026-07-29, v25.0 = 2026-02-18 (available until 2028-07-29), v24.0 = 2025-10-08 (until 2028-02-18), v23.0 (until 2027-10-08). v20.0 and older have already expired. Meta's own WhatsApp doc examples now use v27.0. Recommendation: pin v27.0 (or v25.0 if a fixed long expiry date is preferred) in a single constant/env var.",
+   "source": "https://developers.facebook.com/docs/graph-api/changelog",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Send endpoint: POST https://graph.facebook.com/<API_VERSION>/<WHATSAPP_BUSINESS_PHONE_NUMBER_ID>/messages with headers 'Authorization: Bearer <ACCESS_TOKEN>' and 'Content-Type: application/json'. Token should be a system-user token (or business token). If the version segment is omitted it defaults to the newest version available to the app.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/utility-templates/utility-templates.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Common send body: {\"messaging_product\":\"whatsapp\",\"recipient_type\":\"individual\",\"to\":\"<phone>\",\"type\":\"template\",\"template\":{\"name\":...,\"language\":{\"code\":...},\"components\":[...]}}. Success response: {\"messaging_product\":\"whatsapp\",\"contacts\":[{\"input\":\"<as sent>\",\"wa_id\":\"<WhatsApp ID>\"}],\"messages\":[{\"id\":\"wamid....\",\"message_status\":\"accepted\"}]}. message_status is only included for template sends (pacing). A 200 only means the request was ACCEPTED, not delivered; delivery comes via status webhooks. wa_id may not equal the input number.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Recipient phone format on send: plus signs, hyphens, parentheses and spaces are accepted. Meta highly recommends including '+' and the country calling code; if '+' is omitted, the BUSINESS number's country code is prepended (risk of misdelivery). So send as '+60123456789' (E.164).",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Body variables at send time: component {\"type\":\"body\",\"parameters\":[...]}. Named format: {\"type\":\"text\",\"parameter_name\":\"order_number\",\"text\":\"...\"} (any order). Positional format: {\"type\":\"text\",\"text\":\"...\"} in the order {{1}},{{2}}... A template's format is set at creation via \"parameter_format\": \"named\" | \"positional\" (default positional). Named parameter names must be lowercase letters and underscores.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Quick-reply button payload at send time is a component: {\"type\":\"button\",\"sub_type\":\"quick_reply\",\"index\":0,\"parameters\":[{\"type\":\"payload\",\"payload\":\"<QUICK_REPLY_BUTTON_PAYLOAD>\"}]}. The payload is OPTIONAL and is 'the value to be included in messages webhooks (messages.button.payload) when the button is tapped'. index is the zero-based button position. The current docs show this exact object only inside the media-card-carousel send example (index as integer 0); the URL-button example at top level of template.components uses the same shape with index as string \"0\". Placing the quick_reply button component at top level of template.components (next to the body component) for a normal template is the long-standing behaviour but that exact combined example is not on a current doc page that I could fetch.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/media-card-carousel-templates.md",
+   "confidence": "medium",
+   "loadBearing": true
+  },
+  {
+   "claim": "Payload length limit for template quick-reply payloads: NOT stated in any current Meta doc page I could fetch. Related documented limits: interactive (non-template) reply-button id max 256 characters; third-party sources claim 256 for template quick-reply payloads too (unverified). 'CONFIRM:<uuid>' is 44 chars, far below any plausible limit. If a button is sent WITHOUT a payload parameter, the webhook's button.payload equals the button label text.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/interactive-reply-buttons-messages.md",
+   "confidence": "low",
+   "loadBearing": false
+  },
+  {
+   "claim": "Button index rule: if any buttons use variables, the type and order of button components in the send request must match the order defined on the template; you cannot use index to reorder. For a template with two quick-reply buttons [Confirm, Out of stock], use index 0 and 1.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/media-card-carousel-templates.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Template language codes (exact, from the supported list): Simplified Chinese = zh_CN ('Chinese (CHN)'); Malay = ms; English = en (generic), also en_US, en_GB and en_MY ('English (MYS)') exist. Traditional: zh_HK, zh_TW. The code sent in template.language.code must exactly match the language a template translation was created with, otherwise error 132001. Templates with the same name in different languages are allowed, and each language counts as one template toward the template limit. Meta does not translate; you supply each translation.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/supported-languages.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Template categories: MARKETING, UTILITY, AUTHENTICATION. Utility must be (1) non-promotional AND (2) specific to/requested by the user (their order, account, services or transactions) or essential/critical. 'Order Management — confirm, update, or cancel an order or transaction ... using specific order or transaction details in the body' is a listed utility objective. New-order notifications with order number/items fit UTILITY. Mixed content or unclear content (e.g. body only '{{1}}') is categorized as MARKETING. Since 2025-04-09, a template submitted as UTILITY that Meta judges to be marketing is APPROVED AS MARKETING (not rejected) — check the 'category' in the create response and the template_category_update webhook.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-categorization.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Templates can be created either in WhatsApp Manager (Message templates panel) or via API: POST https://graph.facebook.com/<ver>/<WHATSAPP_BUSINESS_ACCOUNT_ID>/message_templates with {name, language, category, parameter_format, components}. Response {id, status (e.g. PENDING), category}. Status must be APPROVED before sending. Review is automated+manual and 'can take up to 24 hours'. Status changes arrive via the message_template_status_update webhook; status can be polled with GET /<TEMPLATE_ID>?fields=status. Max 100 template creations per hour per account. Template name: lowercase alphanumerics and underscores, max 512 chars.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Template component rules: body max 1024 chars (required, only required component); text header max 60 chars with max 1 parameter; footer max 60 chars; quick-reply button label max 25 chars (utility doc adds 'alphanumeric characters only' — Chinese labels should be tested in review); up to 10 buttons total, max 10 quick replies; quick-reply buttons must be grouped contiguously (not interleaved with URL/phone buttons). If a template has more than 3 buttons only 2 show plus 'See all options'. Templates with 4+ buttons, or a quick reply mixed with other button types, cannot be viewed on WhatsApp desktop clients. Every variable needs an example value at creation.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/components.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Common template rejection reasons: mismatched/missing curly braces; variables containing special characters (#, $, %); non-sequential positional variables; too many variables relative to message length; template starting or ending with a variable (dangling parameter); duplicate body+footer wording of an existing template. So an order template body must have fixed text before the first and after the last variable.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-review.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Editing limits: only APPROVED/REJECTED/PAUSED templates can be edited; approved templates can be edited 10 times per 30 days or once per 24 hours; category of an approved template cannot be edited; editing replaces all components. Deleting an approved template blocks reuse of its name for 30 days. Template count limit: 250 per account if the business portfolio is unverified, 6,000 if verified with an approved display name. Templates unused for 12 months are auto-archived.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/template-management.md",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Webhook verification (GET): Meta calls GET <CALLBACK_URL>?hub.mode=subscribe&hub.challenge=<random>&hub.verify_token=<your string>. Compare hub.verify_token to your stored string; if it matches respond HTTP 200 with the hub.challenge value as the body; otherwise respond non-200 (e.g. 403). Sent whenever the Callback URL or Verify token is set/edited in App Dashboard > WhatsApp > Configuration. Endpoint needs valid (non-self-signed) TLS.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/create-webhook-endpoint.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Webhook signature: POST carries header 'X-Hub-Signature-256: sha256=<hex>' where the hex is HMAC-SHA256 of the request body using the Meta APP SECRET as the key. Validate by computing HMAC over the raw bytes received (before JSON.parse) and comparing to everything after 'sha256='. Respond 200 on success.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/create-webhook-endpoint.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Webhook delivery semantics: notifications may be batched (up to 1000 updates per POST; entry[] and changes[] and messages[]/statuses[] are arrays — iterate all). Failed deliveries are retried immediately then with decreasing frequency for up to 7 days, so the handler MUST be idempotent/deduplicate (use messages[].id / statuses[].id+status as a unique key). No API exists to fetch historical webhooks. Target latency: median <= 250 ms, <1% over 1 s — so persist and return 200 quickly.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/create-webhook-endpoint.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Quick-reply tap on a TEMPLATE button arrives as entry[].changes[].value.messages[] item with type 'button': {\"context\":{\"from\":\"<business display number>\",\"id\":\"<wamid of the template message that contained the button>\"},\"from\":\"<user phone>\",\"from_user_id\":\"<BSUID>\",\"id\":\"wamid...\",\"timestamp\":\"<unix seconds as string>\",\"type\":\"button\",\"button\":{\"payload\":\"...\",\"text\":\"<button label>\"}}. changes[].field is 'messages' and top-level object is 'whatsapp_business_account'. (Taps on free-form interactive reply buttons are different: type 'interactive' with interactive.button_reply.{id,title}.)",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/button.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Sender identity in inbound webhooks: value.contacts[0].wa_id and messages[0].from hold the user's number as digits with country code and NO plus sign in all JSON examples (e.g. '16505551234'; Malaysia would be '60123456789'). Docs warn wa_id and phone number 'may not always match'. Normalize both stored numbers and inbound 'from' to digits-only before comparing. value.metadata.phone_number_id identifies which of your business numbers received it.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/text.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "CHANGED IN 2026 (BSUID / usernames): since April 2026 every messages webhook also carries a business-scoped user ID: contacts[].user_id and messages[].from_user_id (format '<ISO country>.<up to 128 alphanumerics>', e.g. 'MY.1349...'); statuses carry recipient_user_id. If a user adopts a WhatsApp username, wa_id and 'from' are OMITTED unless you messaged/called or were messaged by that phone number within the last 30 days on that business number, or the user is in your contact book. Meta: 'Supporting BSUID is required for all ... directly-integrated businesses'. Sending to a BSUID uses the 'recipient' property instead of 'to' (supported since July 2026). For this app, button taps always follow a template we sent to the phone number within 30 days, so 'from' should be present, but code must treat from/wa_id as optional and should correlate taps primarily by context.id (our stored wamid) and the payload, and store from_user_id.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/business-scoped-user-ids.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Inbound text message: messages[] item {\"from\":\"16505551234\",\"from_user_id\":\"US....\",\"id\":\"wamid...\",\"timestamp\":\"1749416383\",\"type\":\"text\",\"text\":{\"body\":\"...\"}}.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/text.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Inbound audio message: messages[] item {\"from\":...,\"id\":...,\"timestamp\":...,\"type\":\"audio\",\"audio\":{\"mime_type\":\"audio/ogg; codecs=opus\",\"sha256\":\"<base64>\",\"id\":\"<MEDIA_ID>\",\"url\":\"https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=...\",\"voice\":true}}. 'voice' is true for in-app voice recordings. The 'url' property was rolled out gradually from 2025-11-12 and may be absent — always fall back to the media id.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/audio.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Status updates arrive in value.statuses[] (not messages[]): {\"id\":\"<wamid of the message you sent>\",\"status\":\"sent|delivered|read|failed|played\",\"timestamp\":\"...\",\"recipient_id\":\"<user phone digits>\",\"recipient_user_id\":\"<BSUID>\",\"pricing\":{\"billable\":true,\"pricing_model\":\"PMP\",\"type\":\"regular|free_customer_service|free_entry_point\",\"category\":\"utility|service|marketing|...\",\"subtype\":\"free_tier\"},\"errors\":[{\"code\":131049,\"title\":\"...\",\"message\":\"...\",\"error_data\":{\"details\":\"...\"},\"href\":\"...\"}]}. 'errors' only on failed; 'pricing' only on sent and one of delivered/read; 'contacts' omitted on failed. If a message is read while the chat is open, the 'delivered' webhook may be skipped (read implies delivered). The 'conversation' object is omitted entirely for webhooks v24.0+ (except free-entry-point). Optional 'biz_opaque_callback_data' echoes a string you set on the send request.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/status.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Media download is two steps: (1) GET https://graph.facebook.com/<ver>/<MEDIA_ID> (optional ?phone_number_id=<id>) with 'Authorization: Bearer <token>' returns {\"messaging_product\":\"whatsapp\",\"url\":\"<MEDIA_URL>\",\"mime_type\":\"...\",\"sha256\":\"...\",\"file_size\":\"...\",\"id\":\"...\"}; (2) GET <MEDIA_URL> with the same 'Authorization: Bearer <token>' header returns the binary (Content-Type header gives MIME). Without the token the download fails. The URL expires after 5 minutes (re-query the id; 404 means fetch a new URL). Media IDs from webhooks are downloadable for 7 days only. Inbound files over 100 MB produce error 131052 instead.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/media.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Pricing model: since 2025-07-01 Meta charges per DELIVERED message (not per conversation), by message category x recipient country calling code. User-to-business messages are never charged. Categories: marketing, utility, authentication (templates), service (non-template within the window), and Meta Business Agent (added 2026-07-01, token-priced). Pricing may only change on Jan 1 / Apr 1 / Jul 1 / Oct 1.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "IMPORTANT CHANGE effective 2026-10-01 (already in force today): (a) utility templates sent inside an open customer service window are NO LONGER FREE (they were free 2025-07-01 to 2026-09-30) — pricing.type is now 'regular'; (b) service (free-form) messages are charged again, with a free tier of 1,000 delivered service messages per business phone number per month (no rollover; resets monthly at 00:00 account timezone); from the 1,001st they are charged at the service rate. Without a payment method on the account, service messages beyond the free tier are NOT delivered. The only remaining fully free cases are the 7-day free-entry-point window (Click-to-WhatsApp ads) and the service free tier.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Malaysia (+60) is a standalone market on the rate card. List rates effective 2026-10-01, per delivered message: Marketing USD 0.0860 / MYR 0.3467; Utility USD 0.0140 / MYR 0.0564; Authentication USD 0.0140 / MYR 0.0564; Authentication-International USD 0.0418 / MYR 0.1685; Service USD 0.0140 / MYR 0.0564 (after the 1,000/month free tier). Utility volume tier: list rate applies up to 150,000 utility messages/month to Malaysia (irrelevant at this scale). MYR became an available billing currency on 2026-04-01; the currency is chosen at account creation and cannot simply be changed afterwards. Rate is determined by the RECIPIENT's country code (a +65 Singapore wholesaler would be USD 0.016 utility).",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/pricing (rate-card files 'USD list rates', 'MYR list rates', 'MYR volume tiers' linked from that page, downloaded and parsed 2026-11-25)",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "24-hour customer service window: starts when the user messages (or calls) the business and resets to 24 h on each further user message. A tap on a template quick-reply button is an inbound message, so it opens/resets the window. Only inside the window may non-template (free-form: text, interactive reply buttons, media, etc.) messages be sent; outside it only approved templates. Sending free-form outside the window fails with 131047. Opt-in is required before messaging anyone, in any case.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Opt-in policy: the business must have the person's mobile number AND opt-in permission stating that they agree to receive messages from the named business (may be general, not WhatsApp-specific; website, SMS, phone, in person/on paper are acceptable). For this app that means recording a wholesaler's consent (e.g. when the wholesaler is onboarded/invited) before sending order templates.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/getting-opt-in.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Error response shape for a failed API call: {\"error\":{\"message\":\"(#131047) ...\",\"type\":\"OAuthException\",\"code\":131047,\"error_data\":{\"messaging_product\":\"whatsapp\",\"details\":\"...\"},\"fbtrace_id\":\"...\"}}. Build handling on 'code' (and error_data.details); error_subcode is deprecated. Many delivery failures are NOT returned synchronously — they arrive later as a status webhook with status 'failed' and errors[].code.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/support/error-codes.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Key error codes: 131047 = more than 24 h since recipient last replied (send a template instead); 131026 = undeliverable (not a WhatsApp number / has not accepted ToS / old client) — permanent, do not retry; 132001 = template does not exist in that language or not approved; 132000 = parameter count mismatch; 132012 = parameter format mismatch; 132015 = template paused for low quality; 132016 = template permanently disabled; 132007 = template content policy violation; 131008 = missing required parameter; 131009 = invalid parameter value; 100 = invalid/unsupported parameter; 190 = access token expired; 0/3/10/200-299 = auth/permission; 131042 = payment method problem; 131031/368 = account restricted/disabled; 131045/133010 = phone number not registered; 131049 = marketing message not delivered (ecosystem health; marketing only); 131050 = user opted out of marketing; 131051 = unsupported message type; 131052 = inbound media could not be downloaded; 131053 = media upload failed; 131021 = sender equals recipient; 131057 = account in maintenance; 131064 = messaging limit hit due to template classification violations.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/support/error-codes.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Retryable/throttling codes: 130429 (throughput exceeded), 131056 (pair rate limit: too many messages to the same recipient), 80007 (account rate limit), 4 (app API call rate limit), 131048 (spam rate limit / quality), 131016 and 133004 (service temporarily unavailable), 131000 (unknown error). Meta's suggested backoff for pair-rate throttling: retry after 4^X seconds, X starting at 0 and incrementing per failure.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/support/error-codes.md",
+   "confidence": "high",
+   "loadBearing": true
+  },
+  {
+   "claim": "Rate limits: throughput 80 messages/second per business phone number by default (20 mps if the number is also used in the WhatsApp Business app; up to 1,000 mps by automatic upgrade), inbound+outbound combined. Pair rate limit: 1 message per 6 seconds to the same user (~10/min, 600/h) with bursts up to 45 in 6 s that borrow from future quota. Management endpoints (e.g. message_templates): 200 requests/hour per app per account by default, 5,000/hour once the account has a registered phone number.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/about-the-platform.md",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Messaging limit (portfolio level, shared across numbers): max unique users you can deliver business-initiated (outside-window) messages to in a moving 24 h. New portfolios start at 250; rises to 2,000 after business verification (or 2,000 delivered high-quality template messages to unique users in 30 days), then auto-scales to 10,000 / 100,000 / unlimited. Field 'whatsapp_business_manager_messaging_limit' on the phone number returns e.g. 'TIER_250' (messaging_limit_tier is deprecated). 250 unique wholesalers/day is ample for a Johor Bahru launch, but business verification is still advisable.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/messaging-limits.md",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "Message TTL: undeliverable non-authentication messages are retried for 30 days by default, then dropped; utility template TTL can be customized (templates/time-to-live). A morning order message to a phone that is off could therefore be delivered much later — consider a shorter TTL on the order template and treat 'no delivered status within N minutes' as needing fallback.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/messages/send-messages.md",
+   "confidence": "high",
+   "loadBearing": false
+  },
+  {
+   "claim": "New 'Direct Send' feature (eligibility-gated, check WhatsApp Manager): adding \"category\":\"utility\" to a normal POST /messages body sends a utility message (text / interactive reply buttons) without a pre-created template; reply-button taps on Direct Send messages arrive as type 'button' with button.payload = the button id. Ineligible accounts get error 100 'The category value requires Direct Send, which isn't enabled for this account. Use an approved message template instead.' Do not rely on it; use approved templates.",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/direct-send/send-utility-and-authentication-messages.md",
+   "confidence": "medium",
+   "loadBearing": false
+  },
+  {
+   "claim": "Doc location changed: developers.facebook.com/docs/whatsapp/... pages now redirect to developers.facebook.com/documentation/business-messaging/whatsapp/...; appending '.md' to a doc URL returns a plain-markdown version, and an index is at .../whatsapp/llms.txt. Terminology changed too: 'WhatsApp Business Account (WABA)' is now called 'Messaging account' in the docs (API paths and the webhook object value 'whatsapp_business_account' are unchanged).",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/llms.txt",
+   "confidence": "high",
+   "loadBearing": false
+  }
+ ],
+ "snippets": [
+  {
+   "title": "Send an approved utility template with named body variables and two quick-reply buttons carrying per-message payloads (assembled from official pieces: body/named params from the template overview page, button component from the carousel page; top-level placement of the button components is not shown verbatim on a current page)",
+   "language": "bash",
+   "code": "curl 'https://graph.facebook.com/v27.0/<PHONE_NUMBER_ID>/messages' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer <SYSTEM_USER_ACCESS_TOKEN>' \\\n  -d '{\n  \"messaging_product\": \"whatsapp\",\n  \"recipient_type\": \"individual\",\n  \"to\": \"+60123456789\",\n  \"type\": \"template\",\n  \"template\": {\n    \"name\": \"new_order_v1\",\n    \"language\": { \"code\": \"zh_CN\" },\n    \"components\": [\n      {\n        \"type\": \"body\",\n        \"parameters\": [\n          { \"type\": \"text\", \"parameter_name\": \"buyer_name\",   \"text\": \"Kedai Ah Seng\" },\n          { \"type\": \"text\", \"parameter_name\": \"order_number\", \"text\": \"A-10234\" },\n          { \"type\": \"text\", \"parameter_name\": \"items\",        \"text\": \"Lunch box 750ml x 20 ctn; Plastic cup 16oz x 10 ctn\" },\n          { \"type\": \"text\", \"parameter_name\": \"total\",        \"text\": \"RM 1,280.00\" }\n        ]\n      },\n      {\n        \"type\": \"button\", \"sub_type\": \"quick_reply\", \"index\": \"0\",\n        \"parameters\": [ { \"type\": \"payload\", \"payload\": \"CONFIRM:5b1c2d3e-0000-4000-8000-123456789abc\" } ]\n      },\n      {\n        \"type\": \"button\", \"sub_type\": \"quick_reply\", \"index\": \"1\",\n        \"parameters\": [ { \"type\": \"payload\", \"payload\": \"OOS:5b1c2d3e-0000-4000-8000-123456789abc\" } ]\n      }\n    ]\n  }\n}'\n\n# 200 response (accepted, not yet delivered) -> store messages[0].id on the outbox row\n# {\"messaging_product\":\"whatsapp\",\n#  \"contacts\":[{\"input\":\"+60123456789\",\"wa_id\":\"60123456789\"}],\n#  \"messages\":[{\"id\":\"wamid.HBgL...\",\"message_status\":\"accepted\"}]}\n\n# Positional-format templates use the same body component without parameter_name:\n#   { \"type\": \"text\", \"text\": \"Kedai Ah Seng\" }  in the order of {{1}}, {{2}}, ...",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/overview.md and https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/marketing-templates/media-card-carousel-templates.md"
+  },
+  {
+   "title": "Create the template via API (one call per language: en, ms, zh_CN). Body must not start or end with a variable; every variable needs an example",
+   "language": "bash",
+   "code": "curl 'https://graph.facebook.com/v27.0/<WHATSAPP_BUSINESS_ACCOUNT_ID>/message_templates' \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer <SYSTEM_USER_ACCESS_TOKEN>' \\\n  -d '{\n  \"name\": \"new_order_v1\",\n  \"language\": \"en\",\n  \"category\": \"utility\",\n  \"parameter_format\": \"named\",\n  \"components\": [\n    {\n      \"type\": \"body\",\n      \"text\": \"New order from {{buyer_name}}. Order no. {{order_number}}. Items: {{items}}. Total: {{total}}. Please confirm using the buttons below.\",\n      \"example\": {\n        \"body_text_named_params\": [\n          { \"param_name\": \"buyer_name\",   \"example\": \"Kedai Ah Seng\" },\n          { \"param_name\": \"order_number\", \"example\": \"A-10234\" },\n          { \"param_name\": \"items\",        \"example\": \"Lunch box 750ml x 20 ctn\" },\n          { \"param_name\": \"total\",        \"example\": \"RM 1,280.00\" }\n        ]\n      }\n    },\n    {\n      \"type\": \"buttons\",\n      \"buttons\": [\n        { \"type\": \"quick_reply\", \"text\": \"Confirm\" },\n        { \"type\": \"quick_reply\", \"text\": \"Out of stock\" }\n      ]\n    }\n  ]\n}'\n# Response: { \"id\": \"<TEMPLATE_ID>\", \"status\": \"PENDING\", \"category\": \"UTILITY\" }\n# Check: curl 'https://graph.facebook.com/v27.0/<TEMPLATE_ID>?fields=status' -H 'Authorization: Bearer ...'",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/templates/utility-templates/utility-templates.md"
+  },
+  {
+   "title": "Webhook POST payload: user taps a template quick-reply button (official example; payload shown equals label because the example was sent without a payload parameter)",
+   "language": "json",
+   "code": "{\n  \"object\": \"whatsapp_business_account\",\n  \"entry\": [\n    {\n      \"id\": \"102290129340398\",\n      \"changes\": [\n        {\n          \"value\": {\n            \"messaging_product\": \"whatsapp\",\n            \"metadata\": {\n              \"display_phone_number\": \"15550783881\",\n              \"phone_number_id\": \"106540352242922\"\n            },\n            \"contacts\": [\n              {\n                \"profile\": { \"name\": \"Sheena Nelson\" },\n                \"wa_id\": \"16505551234\",\n                \"user_id\": \"US.13491208655302741918\"\n              }\n            ],\n            \"messages\": [\n              {\n                \"context\": {\n                  \"from\": \"15550783881\",\n                  \"id\": \"wamid.HBgLMTQxMjU1NTA4MjkVAgASGBQzQUNCNjk5RDUwNUZGMUZEM0VBRAA=\"\n                },\n                \"from\": \"16505551234\",\n                \"from_user_id\": \"US.13491208655302741918\",\n                \"id\": \"wamid.HBgLMTY1MDM4Nzk0MzkVAgASGBQzQUFERjg0NDEzNDdFODU3MUMxMAA=\",\n                \"timestamp\": \"1750091045\",\n                \"type\": \"button\",\n                \"button\": {\n                  \"payload\": \"Unsubscribe\",\n                  \"text\": \"Unsubscribe\"\n                }\n              }\n            ]\n          },\n          \"field\": \"messages\"\n        }\n      ]\n    }\n  ]\n}",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/button.md"
+  },
+  {
+   "title": "Webhook messages[] items for text and audio (same envelope as above)",
+   "language": "json",
+   "code": "[\n  {\n    \"from\": \"16505551234\",\n    \"from_user_id\": \"US.13491208655302741918\",\n    \"id\": \"wamid.HBgLMTY1MDM4Nzk0MzkVAgASGBQzQTRBNjU5OUFFRTAzODEwMTQ0RgA=\",\n    \"timestamp\": \"1749416383\",\n    \"type\": \"text\",\n    \"text\": { \"body\": \"Does it come in another color?\" }\n  },\n  {\n    \"from\": \"16505551234\",\n    \"from_user_id\": \"US.13491208655302741918\",\n    \"id\": \"wamid.HBgLMTY1MDM4Nzk0MzkVAgASGBQzQTRBNjU5OUFFRTAzODEwMTQ0RgA=\",\n    \"timestamp\": \"1744344496\",\n    \"type\": \"audio\",\n    \"audio\": {\n      \"mime_type\": \"audio/ogg; codecs=opus\",\n      \"sha256\": \"wvqXMe6n7n1W0zphvLPoLj+s/NtKqmr3zZ7YzTP7xFI=\",\n      \"id\": \"1908647269898587\",\n      \"url\": \"https://lookaside.fbsbx.com/whatsapp_business/attachments/?mid=133...\",\n      \"voice\": true\n    }\n  }\n]",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/audio.md"
+  },
+  {
+   "title": "Webhook status update: value contains statuses[] instead of messages[] (syntax from the status reference; failed example values from the same page)",
+   "language": "json",
+   "code": "{\n  \"object\": \"whatsapp_business_account\",\n  \"entry\": [{\n    \"id\": \"<WHATSAPP_BUSINESS_ACCOUNT_ID>\",\n    \"changes\": [{\n      \"field\": \"messages\",\n      \"value\": {\n        \"messaging_product\": \"whatsapp\",\n        \"metadata\": { \"display_phone_number\": \"15550783881\", \"phone_number_id\": \"106540352242922\" },\n        \"contacts\": [{ \"profile\": { \"name\": \"...\" }, \"wa_id\": \"16505551234\", \"user_id\": \"US.13491208655302741918\" }],\n        \"statuses\": [{\n          \"id\": \"wamid.<ID RETURNED BY THE SEND CALL>\",\n          \"status\": \"delivered\",\n          \"timestamp\": \"1751142888\",\n          \"recipient_id\": \"16505551234\",\n          \"recipient_user_id\": \"US.13491208655302741918\",\n          \"pricing\": { \"billable\": true, \"pricing_model\": \"PMP\", \"type\": \"regular\", \"category\": \"utility\" }\n        }]\n      }\n    }]\n  }]\n}\n\n// failed variant: no \"contacts\", no \"pricing\"; statuses[0] is e.g.\n// { \"id\": \"wamid...\", \"status\": \"failed\", \"timestamp\": \"1751142888\", \"recipient_id\": \"16505551234\",\n//   \"errors\": [{ \"code\": 131026, \"title\": \"...\", \"message\": \"...\",\n//                \"error_data\": { \"details\": \"...\" }, \"href\": \"/documentation/business-messaging/whatsapp/support/error-codes\" }] }",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/reference/messages/status.md"
+  },
+  {
+   "title": "Deno / Supabase Edge Function: GET verification handshake + X-Hub-Signature-256 check over the raw body (my own code written to the documented contract; not copied from Meta)",
+   "language": "typescript",
+   "code": "const enc = new TextEncoder();\n\nfunction hex(buf: ArrayBuffer): string {\n  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, \"0\")).join(\"\");\n}\n\nfunction timingSafeEqual(a: string, b: string): boolean {\n  if (a.length !== b.length) return false;\n  let diff = 0;\n  for (let i = 0; i < a.length; i++) diff |= a.charCodeAt(i) ^ b.charCodeAt(i);\n  return diff === 0;\n}\n\nasync function validSignature(rawBody: Uint8Array, header: string | null, appSecret: string) {\n  if (!header || !header.startsWith(\"sha256=\")) return false;\n  const key = await crypto.subtle.importKey(\n    \"raw\", enc.encode(appSecret), { name: \"HMAC\", hash: \"SHA-256\" }, false, [\"sign\"],\n  );\n  const mac = hex(await crypto.subtle.sign(\"HMAC\", key, rawBody));\n  return timingSafeEqual(mac, header.slice(\"sha256=\".length).toLowerCase());\n}\n\nDeno.serve(async (req) => {\n  const url = new URL(req.url);\n  if (req.method === \"GET\") {\n    const ok = url.searchParams.get(\"hub.mode\") === \"subscribe\" &&\n      url.searchParams.get(\"hub.verify_token\") === Deno.env.get(\"WHATSAPP_VERIFY_TOKEN\");\n    return ok\n      ? new Response(url.searchParams.get(\"hub.challenge\") ?? \"\", { status: 200 })\n      : new Response(\"forbidden\", { status: 403 });\n  }\n  if (req.method !== \"POST\") return new Response(\"method not allowed\", { status: 405 });\n\n  const raw = new Uint8Array(await req.arrayBuffer()); // hash the bytes BEFORE JSON.parse\n  if (!(await validSignature(raw, req.headers.get(\"x-hub-signature-256\"), Deno.env.get(\"WHATSAPP_APP_SECRET\")!))) {\n    return new Response(\"bad signature\", { status: 401 });\n  }\n  const body = JSON.parse(new TextDecoder().decode(raw));\n  if (body.object !== \"whatsapp_business_account\") return new Response(\"ok\", { status: 200 });\n  for (const entry of body.entry ?? []) {\n    for (const change of entry.changes ?? []) {\n      if (change.field !== \"messages\") continue;\n      const v = change.value ?? {};\n      for (const m of v.messages ?? []) {\n        // m.type: \"button\" -> m.button.payload, m.button.text, m.context?.id\n        //         \"text\"   -> m.text.body ; \"audio\" -> m.audio.id\n        // m.from may be absent (username users); m.from_user_id is always present\n        // dedupe on m.id (unique insert) before applying the order transition\n      }\n      for (const s of v.statuses ?? []) {\n        // s.id = wamid returned by the send call; s.status; s.errors?.[0]?.code\n      }\n    }\n  }\n  return new Response(\"ok\", { status: 200 });\n});",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/webhooks/create-webhook-endpoint.md"
+  },
+  {
+   "title": "Download inbound media (audio) by media id — two requests, both with the bearer token",
+   "language": "bash",
+   "code": "# 1) resolve the media id to a short-lived URL (valid 5 minutes)\ncurl 'https://graph.facebook.com/v27.0/<MEDIA_ID>?phone_number_id=<BUSINESS_PHONE_NUMBER_ID>' \\\n  -H 'Authorization: Bearer <ACCESS_TOKEN>'\n# -> {\"messaging_product\":\"whatsapp\",\"url\":\"<MEDIA_URL>\",\"mime_type\":\"audio/ogg; codecs=opus\",\n#     \"sha256\":\"<SHA_256_HASH>\",\"file_size\":\"<MEDIA_FILE_SIZE>\",\"id\":\"<MEDIA_ID>\"}\n\n# 2) download the binary; the token is required here too\ncurl '<MEDIA_URL>' -H 'Authorization: Bearer <ACCESS_TOKEN>' -o voice.ogg\n# 404 -> request a fresh URL from step 1 and retry",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/business-phone-numbers/media.md"
+  },
+  {
+   "title": "API error response shape (synchronous failures)",
+   "language": "json",
+   "code": "{\n  \"error\": {\n    \"message\": \"(#132001) Template name does not exist in the translation\",\n    \"type\": \"OAuthException\",\n    \"code\": 132001,\n    \"error_data\": {\n      \"messaging_product\": \"whatsapp\",\n      \"details\": \"<DETAILS>\"\n    },\n    \"fbtrace_id\": \"<FBTRACE_ID>\"\n  }\n}",
+   "source": "https://developers.facebook.com/documentation/business-messaging/whatsapp/support/error-codes.md"
+  }
+ ],
+ "pitfalls": [
+  "Cost assumption that is now wrong: since 2026-10-01 nothing about utility templates is free — a utility template to a Malaysian number costs MYR 0.0564 (USD 0.014) per delivered message even inside the 24h window, and free-form service replies are free only for the first 1,000 per business phone number per month. A payment method must be on the account or messages stop being delivered (error 131042 / service messages not delivered past the free tier).",
+  "Cost-saving option worth designing for: after a wholesaler taps a button the 24h window is open, so follow-ups (e.g. 'Order confirmed, thanks') can be sent as free-form text or interactive reply-button messages, which count against the 1,000/month free service tier instead of being charged as utility templates. Track last inbound time per wholesaler in the DB to decide template vs free-form, and still handle 131047 by falling back to a template.",
+  "A 200 from POST /messages only means accepted. Real outcome arrives via statuses[] webhooks (sent / delivered / read / failed with errors[].code). The outbox needs the returned wamid stored and a state machine driven by the webhook; 'delivered' may be skipped when the user reads immediately.",
+  "Webhooks are retried for up to 7 days and can be batched and delivered out of order. The button-tap handler must be idempotent (unique constraint on the inbound wamid) and the order transition must be a guarded state change (e.g. only pending -> confirmed/out_of_stock), since a wholesaler can tap both buttons, tap the same button twice, or tap a button on an old message days later.",
+  "Never trust the payload alone: verify the X-Hub-Signature-256 first, then check that context.id matches a wamid we actually sent for that order and that the sender (from / from_user_id) matches the wholesaler the message was addressed to, before updating the order.",
+  "Compute the HMAC over the raw request bytes. Calling req.json() and re-serializing changes the bytes and breaks the signature. The key is the Meta APP SECRET (App Dashboard > Basic settings), not the access token and not the verify token.",
+  "Supabase Edge Functions verify a Supabase JWT by default; Meta sends no Authorization header, so 'whatsapp-webhook' must be deployed with JWT verification disabled (verify_jwt = false in supabase/config.toml or --no-verify-jwt) and rely on the verify token + signature instead. This is from general Supabase knowledge, not verified in this research task.",
+  "The GET verification response must be the bare hub.challenge string with status 200 (no JSON wrapping), or the dashboard refuses to save the callback URL.",
+  "Phone formats differ by direction: send with '+60...' (omitting '+' makes Meta prepend the business number's country code), but webhooks deliver 'from' / wa_id / recipient_id as digits without '+'. Store numbers normalized (digits only, with country code, no leading 0 after 60) and compare normalized values. Meta also says wa_id may not equal the input number.",
+  "2026 identity change: 'from' and wa_id can be missing for users who adopt usernames (unless there was contact within 30 days on that business number). Make those fields nullable in TypeScript types and DB columns, store from_user_id (BSUID), and correlate button taps by context.id + payload rather than by phone number.",
+  "Template language must match exactly: a template created as 'en' cannot be sent with code 'en_US' (error 132001). Pick one code per language (en, ms, zh_CN) and keep a mapping from the wholesaler's preferred locale in one place. Each language version is reviewed and approved separately — handle the case where only some translations are approved (fallback language).",
+  "Template review traps: body cannot start or end with a variable; too many variables relative to text length gets rejected; variable values with newlines/tabs or more than 4 consecutive spaces are widely reported to be rejected at send time (not confirmed on a current Meta page) — so join order line items with '; ' rather than newlines, and keep the item list short (body total max 1024 chars including variable values; truncate with '+N more').",
+  "If Meta decides the template is promotional it is silently APPROVED AS MARKETING (since 2025-04-09), which costs MYR 0.3467 instead of 0.0564 per message in Malaysia and subjects it to per-user marketing limits (131049/131050). Keep wording strictly transactional, read 'category' in the create response, and subscribe to template_category_update.",
+  "Quick-reply button labels are max 25 characters and fixed in the template (cannot be changed per message); only the payload is per-message. Utility docs say labels are 'alphanumeric characters only' — Chinese labels such as '确认' / '缺货' are commonly used but should be confirmed during template review.",
+  "Using a third URL/phone button alongside the two quick replies makes the message unviewable on WhatsApp desktop clients; keep the template to exactly two quick-reply buttons.",
+  "Per-recipient throttle: 1 message per 6 seconds sustained to the same number (burst of 45). A dispatcher that runs every minute and sends many separate order messages to the same wholesaler can hit 131056 — batch or space sends per recipient and retry with 4^X second backoff.",
+  "Do not retry permanent failures: 131026 (not on WhatsApp/undeliverable), 132001/132000/132012/132015/132016 (template problems), 131008/131009/100 (bad request), 131021. Retry with backoff: 130429, 131056, 80007, 4, 131016, 133004, 131000. Alert an operator on 190 (token expired), 131042 (billing), 131031/368 (account restricted), 131045/133010 (number not registered).",
+  "Undeliverable messages are retried by Meta for up to 30 days by default, so an order notification can pop up on the wholesaler's phone days late. Consider setting a shorter time-to-live on the utility template and escalating in-app when no 'delivered' status arrives in time.",
+  "Media: webhook media ids are downloadable for only 7 days and the resolved URL for 5 minutes; the download GET needs the same bearer token. Voice notes are 'audio/ogg; codecs=opus' — if they are to be processed by an AI model, check that the model/API accepts OGG/Opus or transcode first. audio.url in the webhook may be absent.",
+  "New business portfolios can message only 250 unique users per moving 24 hours outside service windows until the business is verified; hitting the cap blocks template sends. Opt-in from each wholesaler is a policy requirement — record it.",
+  "Use a permanent system-user access token stored as an Edge Function secret; the temporary token from the App Dashboard API Setup page expires within hours (error 190).",
+  "Graph API versions expire roughly 2 years after release; keep the version in one constant so it can be bumped. Webhook payload shape also depends on the app's webhook version (e.g. 'conversation' object removed from v24.0)."
+ ],
+ "openQuestions": [
+  "Exact maximum length of a template quick-reply 'payload' is not stated on any current Meta doc page I could fetch (old reference page is gone/redirected; web.archive.org was unreachable from this environment). 256 characters is the commonly cited figure and is the documented limit for interactive reply-button ids; 'CONFIRM:<uuid>' (44 chars) is safe either way. Verify with one real send before relying on longer payloads.",
+  "A current official example showing a NORMAL (non-carousel) template send with top-level {type:'button', sub_type:'quick_reply', index, parameters:[{type:'payload'}]} components was not found; the shape is confirmed for carousel cards and (for sub_type 'url') at top level. Confirm with a test send, including whether index should be a string (\"0\") or integer (0) — both appear in Meta examples.",
+  "Whether Meta will categorize 'new order received from a buyer' sent to a SELLER as UTILITY: it is transaction-specific and non-promotional, which matches the Order Management guideline, but the final decision is made by Meta's review per template. Needs an actual submission in en, ms and zh_CN.",
+  "Whether quick-reply labels in Chinese pass the 'alphanumeric characters only' wording in the utility template doc — needs an actual submission.",
+  "Restrictions on variable values at send time (no newline/tab, max 4 consecutive spaces) are recalled from older Meta docs and third-party reports; not found on the current pages fetched. Confidence low — test, or avoid newlines in variables.",
+  "Whether the account will bill in MYR or USD depends on the currency chosen when the WhatsApp/Messaging account is created (MYR available since 2026-04-01). Rates above are list rates effective 2026-10-01 and can change on the next quarterly date (2027-01-01) with 1 month notice.",
+  "Whether the business's account is eligible for 'Direct Send' (utility messages without templates) — only visible in WhatsApp Manager; treat as unavailable.",
+  "Supabase-side details (disabling JWT verification for the webhook function, raw body access in Deno) were not researched here and come from general knowledge; the Supabase research step should confirm them.",
+  "Which business phone number will be used: a number already active in the WhatsApp Business app has a fixed 20 msg/s throughput and coexistence rules; a number cannot be used in the consumer WhatsApp app and Cloud API at the same time. Onboarding steps (business verification, display name approval, number registration) were not researched in depth."
+ ]
+}

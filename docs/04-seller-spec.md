@@ -43,6 +43,8 @@
 
 全部检查：`is_wholesaler_member(p_wholesaler_id) or is_admin()`，否则 `NOT_ALLOWED`。
 
+> **实现说明**：`product_counts.out_of_stock / low_stock` 只算上架中（active）的商品。`list_seller_orders` 混在一起时 pending 排最前面；`p_limit` 限制在 1–200；`p_statuses` 是空数组等于不筛选。批发商不存在（客服调用时）→ `WHOLESALER_NOT_FOUND`。
+
 ### 2.3 当天送货总结 `get_delivery_summary`
 
 `p_date` 空就是 `today_myt()`。包括 `expected_delivery_date = p_date` 且状态是 confirmed / delivering 的订单；另外回传同一天还在 pending 的数量（提醒「还有 N 张没确认」）。
@@ -72,6 +74,8 @@
 - `picking` = 所有订单里**没缺货**的明细按 (name, unit, pack_qty) 加总，给仓库拣货。
 - `orders` 按送货区（zone sort_order）再按店名排，方便送货员排路线。
 
+> **实现说明**：`items` 另外多给 `unit_price_sen`、`line_total_sen`（送货单可以印价钱），缺货的那几样也列出来（`is_out_of_stock = true`，排在后面）。`shop.phone`、`wholesaler.phone` 没有就用 `whatsapp_phone`。
+
 ### 2.4 商品（批发商直接读写 `products` 表）
 
 RLS 已经允许批发商改自己的商品（`wholesaler_id` 受保护不能改）。App 直接 `select/insert/update`。不需要新函数。上架 = `status = 'active'`，下架 = `archived`。
@@ -86,6 +90,11 @@ RLS 已经允许批发商改自己的商品（`wholesaler_id` 受保护不能改
 | `apply_price_list_import(p_import_id uuid)` | 批发商 / 客服 | 只接受 status = `review`。`create` 行：需要 name、unit、pack_qty、price_sen，否则 `IMPORT_ROW_INCOMPLETE`（detail = row_no）；新增商品 `status = 'active'`，`catalog_item_id = suggested_catalog_item_id`，`category_id` 跟着标准商品，`min_order_qty` 默认 1。`update` 行：改 matched 商品的 `price_sen`（以及有填的 `min_order_qty`、`unit`、`pack_qty`），`status` 设 active。`skip` 不动。最后 import `status = 'applied'`、`applied_at = now()`。回传 `{created, updated, skipped}` |
 
 批发商在 App 里改行：直接 update `price_list_import_rows`（RLS 已允许）。
+
+> **实现说明**
+> - **相似度**：数据库 locale 是 C 时（本机测试、部分主机）pg_trgm 不把中文字当成字，「95 平盖」和「95 拱形盖」会被当成一模一样。所以全英文 / 数字的名字用 `extensions.similarity(lower(...))`；有中文等其他文字的用同样的三字组规则自己切（`_name_trgms` / `_trgm_sim` / `_name_similarity`，中文字也算字，全形字母数字当半形）。两种算法对英文名字结果完全一样（有测试）。
+> - **一对一**：一样商品只对给最像的那一行（其他行变 `create`），一样像时单位和包装数量也相同的优先；下架（archived）的商品也会对，但排在后面（`update` 时会重新上架）。没价钱的行也会算出对到哪样，方便批发商补上价钱后改成 `update`。
+> - **错误代码**：`IMPORT_NOT_FOUND`；`suggest_import_matches` 遇到已上架的 → `IMPORT_ALREADY_APPLIED`；`apply` 不是 review → `IMPORT_NOT_IN_REVIEW`（detail = 现在的状态）；`update` 行也要有 `matched_product_id` 和 `price_sen`，否则 `IMPORT_ROW_INCOMPLETE`；对到的商品不是这家批发商的（行是批发商自己可以改的）→ `IMPORT_ROW_INVALID_PRODUCT`；两行 `update` 同一样商品 → `IMPORT_DUPLICATE_PRODUCT`。detail 都是 row_no。
 
 ### 2.6 通知发送（只给 service）
 
@@ -110,6 +119,15 @@ RLS 已经允许批发商改自己的商品（`wholesaler_id` 受保护不能改
 
 `locale`：收件人是批发商 / 店铺就用它的 `locale`；用户就用 profile 的。
 
+> **实现说明**
+> - `claim_notifications` 每条多回传 `attempts`；`push_targets` 只在 `channel = push` 时有内容（否则 `[]`），`whatsapp_phone` 只在 `channel = whatsapp` 时有值。领走时就把选好的 `channel` 存进 `notifications.channel`（complete 会再覆盖）。
+> - 同号码只领一条：同一轮、同时在跑的另一个 dispatcher（advisory lock）、这个号码还有 WhatsApp 在「发送中」（10 分钟内）都算，留着下一轮。每一轮只锁要领的行数，不会把整个队列锁住。
+> - 卡住（`sending` 超过 10 分钟）重新领时算失败一次；到 5 次就直接标 `failed`、`last_error = 'STUCK_IN_SENDING'`。
+> - `notify_channel = 'whatsapp'` 但事件是 `daily_summary` / `order_unconfirmed` → `channel = null`（不改用推送）。
+> - `details`：payload 里有 `order_id` 的通知都附上（也包括 `order_unconfirmed`）。`items_text` 缺货的那样加「（缺货）/ (out of stock) / (habis stok)」，名字里的换行和连续空白变成一个空格（WhatsApp 模板参数不能有），超过 900 字就截到某一样为止，后面加「; …」。
+> - `complete_notification` 回传 boolean：只改「发送中」的那条（true）；不是发送中就不改（false），但 WhatsApp 发出去的那一行照样写进 `whatsapp_messages`（按钮 context 要对得到）。重试时间用加 1 之后的 attempts：2、4、8、16 分钟，第 5 次失败就不再试。错误代码：`INVALID_STATUS`、`NOTIFICATION_NOT_FOUND`。`remove_device_tokens` 回传删了几个。
+> - `register_device_token`：错误代码 `INVALID_TOKEN`、`INVALID_TOKEN_KIND`、`INVALID_PLATFORM`。
+
 ### 2.7 WhatsApp 回传（只给 service）
 
 | 函数 | 说明 |
@@ -117,6 +135,11 @@ RLS 已经允许批发商改自己的商品（`wholesaler_id` 受保护不能改
 | `handle_whatsapp_button(p_from text, p_from_user_id text, p_context_id text, p_payload text, p_wa_message_id text, p_raw jsonb default null)` | 先用 `wa_message_id` 写 `whatsapp_messages`（inbound，`button`）；重复的（同一个 id 已经有）直接回 `{"result":"duplicate"}`（Meta 会重送 webhook 长达 7 天）。`p_payload` 格式 `CONFIRM:<order_uuid>` 或 `OOS:<order_uuid>`，其他回 `invalid_payload`。找订单；**授权**：`p_from`（normalize 后）是这家批发商的 phone / whatsapp_phone 或其成员的 profile phone；或者 `p_from` 是空的（用户只有 BSUID），但 `p_context_id` 是我们发给**这家批发商、这张订单**的那条 outbound 消息。都不符合就回 `not_authorized`（不改任何东西）。订单是 pending：CONFIRM → `confirm_order(order, '{}', 'whatsapp')`；OOS → `set_order_status(order, 'out_of_stock', null, 'whatsapp')`。不是 pending → `already_<status>`。回传 `{result: confirmed|out_of_stock|already_confirmed|..., order_no, status, locale}`，Edge Function 用它回一句确认文字 |
 | `record_whatsapp_message(p_from text, p_type wa_message_type, p_body text, p_media_id text, p_wa_message_id text, p_raw jsonb)` | 其他进来的消息（文字、语音……）只记录，按号码对上 shop / wholesaler；重复 id 忽略。第六步再处理成订单草稿 |
 | `update_whatsapp_status(p_wa_message_id text, p_status text, p_error_code int default null, p_error text default null)` | 更新 outbound 消息的 `delivery_status`（sent / delivered / read / failed / played）。状态可能乱序到达：不要把 read 改回 delivered（顺序 sent < delivered < read；failed 永远覆盖） |
+
+> **实现说明**
+> - `handle_whatsapp_button` 多一个结果：找不到订单 → `order_not_found`；`invalid_payload` / `order_not_found` / `not_authorized` 只回 `{result, locale}`（locale 是按号码认出的发信人的，认不出是 null；不透露订单资料）。号码有给但对不上时不看 context（照规格）。
+> - `record_whatsapp_message` 回传 `{result: recorded|duplicate, id, shop_id, wholesaler_id}`；BSUID 和 context 从 `p_raw.from_user_id`、`p_raw.context.id` 取；媒体 id 记在 `raw.media_id`（第六步下载后再填 `media_path`）。
+> - `update_whatsapp_status` 回传 `{result: updated|stale|ignored, delivery_status}`；`played` 排在 `read` 后面；不认识的状态 → `ignored`。还没记录的 id（状态比 `complete_notification` 先到）先建一行 outbound，之后 complete 会补上订单和收件人。`failed` 时错误文字记在 `raw.status_error`，也写进对应通知的 `last_error`。
 
 ### 2.8 定时任务（`pg_cron`，有才建）
 
@@ -128,12 +151,16 @@ RLS 已经允许批发商改自己的商品（`wholesaler_id` 受保护不能改
 
 Edge Function 的网址和钥匙放在 Supabase Vault（照官方「Scheduling Edge Functions」的名字：`project_url`、`secret_key`），迁移里**不写死**，部署时在 SQL editor 用 `vault.create_secret(...)` 建。调用：`net.http_post(url := <project_url> || '/functions/v1/dispatch-notifications', headers := jsonb_build_object('Content-Type','application/json','apikey', <secret_key>), body := '{}'::jsonb, timeout_milliseconds := 10000)`（**一定用具名参数**；新的 secret key 不是 JWT，要放 `apikey` 头，不是 Authorization）。没有 Vault / pg_net / 秘密还没建 → 跳过不报错（本机测试环境也是这样）。`create extension if not exists pg_net with schema extensions` 要放在检查可用之后。
 
+> **实现说明**：`enqueue_daily_summaries()`、`enqueue_unconfirmed_alerts()` 只给 service，回传插了几条（几张单）；同一天 / 同一张单重复跑不会重复发；还没有客服账号时订单先不标记。叫 dispatcher 的是 `_request_notification_dispatch(p_only_if_due boolean default false)`（Vault / pg_net / 秘密缺任何一样就回 null，出错也只记 warning）；trigger 是每个 insert 语句叫一次；每分钟的定时任务用 `p_only_if_due = true`，没有要发的通知就不叫。定时任务由 `_schedule_seller_jobs()` 建（同名会更新）。
+
 ### 2.9 Storage（有 `storage` schema 才建）
 
 | bucket | 公开 | 规则 |
 |---|---|---|
 | `price-lists` | 否 | 第一层文件夹 = wholesaler_id；该批发商成员可上传 / 读取；客服全部；10 MB；image/jpeg, image/png, image/webp, application/pdf, xlsx, xls, csv |
 | `product-photos` | 是（读） | 第一层文件夹 = wholesaler_id；成员可上传 / 删除；5 MB；图片 |
+
+> **实现说明**：由 `_setup_seller_storage()` 建（可以重复跑；没有 storage schema 回 false）。两个 bucket 共用一组 `storage.objects` 规则：第一层文件夹（`(storage.foldername(name))[1]`）等于自己批发商 id 的文字才可以读 / 上传 / 改 / 删；客服全部。`product-photos` 允许 image/jpeg、image/png、image/webp；公开读靠 bucket 的 public。
 
 ### 2.10 测试（`supabase/tests/database/06_seller.test.sql`）
 
@@ -154,7 +181,7 @@ supabase/functions/
 - 每个函数有自己的 `deno.json`（imports），入口 `index.ts` 用 `export default { fetch: handler }`（测试可以直接 import，不会开端口）。
 - **dispatch-notifications**：只接受 `apikey` 头等于 secret key（`JSON.parse(SUPABASE_SECRET_KEYS).default`，没有就退回旧的 `SUPABASE_SERVICE_ROLE_KEY`）的请求，比较要用固定时间比较。`claim_notifications(50)` → 每条按 channel 发 → `complete_notification`。推送失效的 token 收集起来 `remove_device_tokens`。一次跑不完就循环到没得领或快超时。
 - **whatsapp-webhook**：GET 做验证握手（`WHATSAPP_VERIFY_TOKEN`）；POST 先验 `X-Hub-Signature-256`（`WHATSAPP_APP_SECRET`，用原始 body），不对就 401。按钮 → `handle_whatsapp_button` → 成功就回一句文字（客户刚发消息，24 小时内免费回复）；其他消息 → `record_whatsapp_message`；状态 → `update_whatsapp_status`。永远尽快回 200（Meta 会重送）。
-- **parse-price-list**：用户的 JWT 叫（`supabase.functions.invoke`）。用用户身份读 import（RLS 保证是自己的），用 service 身份下载文件、写行。图片 / PDF → Claude（`claude-opus-5-5`，结构化输出）；Excel / CSV → 先转成文字表格再给 Claude 整理。写完叫 `suggest_import_matches`，status → `review`；出错 → `failed`。
+- **parse-price-list**：App 用 `supabase.functions.invoke('parse-price-list', body: {import_id})` 叫（自动带用户 JWT）。函数先验用户（`auth.getUser(jwt)`），再**用用户身份**读 import（RLS 保证是自己的），读不到 → 404。status 不是 `processing` → 409。然后**立刻回 202**，用 `EdgeRuntime.waitUntil` 在背景做（Opus 读价目表可能超过 150 秒）：用 service 身份下载文件（大小上限 10 MB），用**魔术字节**判断真正格式（不信档名 / MIME）；图片（jpeg / png / webp / gif）、PDF → Claude；xlsx / xls / csv → SheetJS 0.20.3 转成带行号的文字（`Sheet!R12: ...`，表头标 `[context]`，太长就分段、每段重复表头）再给 Claude；HEIC 等不支持的格式 → `failed`，`error_message = 'UNSUPPORTED_FILE'`。Claude：`npm:@anthropic-ai/sdk@1.13.0`，`claude-opus-5-5`，`client.beta.messages.stream(...).finalMessage()`，`output_config: {format: {type:'json_schema', schema}, effort: 'medium'}`，`max_tokens: 32000`，伺服器端 fallback（`betas: ['server-side-fallback-2026-07-01']`、`fallbacks: 'default'`），不送 temperature；先看 `stop_reason`（refusal → failed `AI_REFUSED`；max_tokens → 分段重试一次，再不行 failed `AI_TRUNCATED`），取最后一个 fallback block 之后的文字 `JSON.parse` 再验证（unit 转小写、不在列表的当 piece 并降低 confidence、confidence 夹在 0..1、price_sen / pack_qty 必须是正整数否则 null）。提示词和 schema 用 `docs/research/step4/claude.json` 的版本（已核对），价目表内容包在 `<pasted_content>` 里。写入 `price_list_import_rows`（row_no 从 1 开始；`unreadable` 的也写成行：只有 raw_text，`action = 'skip'`），`ai_raw` 存整份回传，再叫 `suggest_import_matches`，status → `review`。任何错误 → `failed` + 简短 `error_message`（英文代码），不要把内部错误细节给用户。
 - 环境变量：平台自动给 `SUPABASE_URL`、`SUPABASE_SECRET_KEYS`、`SUPABASE_PUBLISHABLE_KEYS`（JSON，取 `default`；旧项目退回 `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_ANON_KEY`）。自己设：`FCM_SERVICE_ACCOUNT_JSON`、`WHATSAPP_TOKEN`（system user 永久 token）、`WHATSAPP_PHONE_NUMBER_ID`、`WHATSAPP_APP_SECRET`、`WHATSAPP_VERIFY_TOKEN`、`WHATSAPP_GRAPH_VERSION`（默认 `v27.0`）、`ANTHROPIC_API_KEY`。名字不能以 `SUPABASE_` 开头。没设定的服务就跳过并在日志说明（例如没 WhatsApp 设定 → 那些通知标 failed + 原因，`p_retry = false`）。
 
 ## 4. App（`apps/mobile`，批发商登录后）
@@ -171,11 +198,23 @@ supabase/functions/
 | `/seller/import/:id` | 一行一行：AI 读到的名字、单位、包装数量、价钱，可以改；每行「新增 / 更新（对到哪样商品）/ 跳过」；底部「确认上架（N 样）」 | 确认上架 |
 | `/seller/settings` | 语言、通知方式（App 推送 / WhatsApp）、登出 | 设定 |
 
-- **推送**：`firebase_messaging`。用 `--dart-define` 传 Firebase 设定（`FIREBASE_API_KEY`、`FIREBASE_APP_ID`、`FIREBASE_MESSAGING_SENDER_ID`、`FIREBASE_PROJECT_ID`、iOS 另有 `FIREBASE_IOS_BUNDLE_ID`），没传就不启用推送（App 照样能用）。登录后拿 token → `register_device_token`；token 更新也要登记。点通知 → 按 `data.type` / `data.order_id` 打开订单或送货总结。买家也一样登记（第三步的状态通知）。
+- **推送**：`firebase_core` 5.2.0 + `firebase_messaging` 17.1.0 + `flutter_local_notifications` 23.x。Firebase 设定用 `--dart-define`（`FIREBASE_API_KEY`、`FIREBASE_APP_ID_ANDROID`、`FIREBASE_APP_ID_IOS`、`FIREBASE_MESSAGING_SENDER_ID`、`FIREBASE_PROJECT_ID`、`FIREBASE_IOS_BUNDLE_ID`）组成 `FirebaseOptions`；没传就不启用推送（App 照样能用；web 永远不启用）。正式上线前建议跑 `flutterfire configure` 产生 `google-services.json`（Android 背景推送最稳），文件里写清楚。用 **FID**：先订阅 `onRegistered` 再 `register()`，拿到的值 → `register_device_token(p_token, p_platform, 'fid')`；Android manifest / iOS Info.plist 加 FID 开关。前台：自己用 `flutter_local_notifications` 显示（Android 频道 `orders`，高重要性）；iOS `setForegroundNotificationPresentationOptions`。点通知（`getInitialMessage`、`onMessageOpenedApp`、本地通知的 payload）→ 按 `data.type` / `data.order_id` 打开订单或送货总结。买家也一样登记。Android：`compileSdk` 37、core library desugaring；iOS 加 Push / Background Modes 要在 Xcode 做（写进文件）。
+- **价目表上传**：照片用 `image_picker`（`maxWidth: 2576, imageQuality: 85` → JPEG，解决 HEIC）；文件用 `file_picker` 13 的静态 API；用魔术字节判断格式；路径 `<wholesaler_id>/<uuid>.<ext>`（ASCII）；上传后插 `price_list_imports`，再叫 `parse-price-list`；收到 202 后每 3 秒查一次 import 的 status（最多 5 分钟），`review` → 进确认页，`failed` → 按 `error_message` 显示三语原因（看不懂的档案 / AI 读不到 / 网络）。
+- **打印**：`pdf` 3.13.1 + `printing` 5.15.1，字体打包 `assets/google_fonts/NotoSansSC-Regular.ttf`、`-Bold.ttf`（TTF，Google Fonts 下载）；`share_plus` 13 分享文字；`url_launcher` 打电话 / WhatsApp（try/catch）。iOS Info.plist 加相机 / 相簿说明。
 - **示范模式**：`main_demo.dart?seller=1` 进批发商端，数据来自 `packages/core/test/fixtures/seller_*.json`（从本机数据库导出的真实回传）。
 - **测试**：`flutter test` 加批发商流程（首页、确认含部分缺货、缺货、送货总结、改价、导入确认上架），手机宽度 400 不能 overflow。
 - **三语文字**：新 key 都以 `seller` 开头，三个 `.arb` 都要有，键名一致。
 
 ## 5. 外部服务细节
 
-见 `docs/04-research.md`（查证后填写）。
+见 [`docs/04-research.md`](04-research.md)（已查证，含出处）。实现时以它为准；跟它冲突的地方先回来改这份规格。
+
+### 5.1 WhatsApp 模板（要在 WhatsApp Manager 送审，三种语言 `zh_CN` / `en` / `ms`）
+
+| 模板名 | 分类 | 变量（named） | 按钮 |
+|---|---|---|---|
+| `order_new_v1` | UTILITY | `order_no`、`shop_name`、`items`、`total`、`delivery_date`、`address` | quick reply：0 = 确认，1 = 缺货（payload 由我们每条消息给） |
+| `order_status_v1` | UTILITY | `order_no`、`wholesaler_name`、`status_text`、`total` | 无 |
+| `order_cancelled_v1` | UTILITY | `order_no`、`shop_name`、`reason` | 无 |
+
+内文范例和送审注意事项写在 `docs/04-seller.md`（交付文件）。dispatch 函数里模板名、变量名放在 `_shared/messages.ts` 一个地方。按钮按下后的回复用**普通文字**（窗口内、前 1,000 条免费），三语，例如「✅ 已确认订单 JHB261126-00012」。
