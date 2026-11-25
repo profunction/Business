@@ -1,0 +1,123 @@
+import 'package:flutter/widgets.dart';
+import 'package:intl/intl.dart';
+import 'package:wholesale_core/wholesale_core.dart';
+
+import '../l10n/app_localizations.dart';
+
+/// 把服务器的代码（单位、状态、错误）翻成三语文字
+extension L10nX on BuildContext {
+  L10n get l10n => L10n.of(this);
+  String get lang => L10n.of(this).localeName.split('_').first;
+}
+
+extension L10nText on L10n {
+  String get lang => localeName.split('_').first;
+
+  String unit(SellUnit u) => switch (u) {
+    SellUnit.carton => unitCarton,
+    SellUnit.pack => unitPack,
+    SellUnit.bag => unitBag,
+    SellUnit.roll => unitRoll,
+    SellUnit.bundle => unitBundle,
+    SellUnit.box => unitBox,
+    SellUnit.piece || SellUnit.unknown => unitPiece,
+    SellUnit.dozen => unitDozen,
+    SellUnit.kg => unitKg,
+  };
+
+  String status(OrderStatus s) => switch (s) {
+    OrderStatus.pending => statusPending,
+    OrderStatus.confirmed => statusConfirmed,
+    OrderStatus.outOfStock => statusOutOfStock,
+    OrderStatus.delivering => statusDelivering,
+    OrderStatus.delivered => statusDelivered,
+    OrderStatus.cancelled => statusCancelled,
+  };
+
+  String shopType(ShopType t) => switch (t) {
+    ShopType.restaurant => shopTypeRestaurant,
+    ShopType.drinkStall => shopTypeDrinkStall,
+    ShopType.grocery => shopTypeGrocery,
+    ShopType.other => shopTypeOther,
+  };
+
+  String reviewTag(ReviewTag t) => switch (t) {
+    ReviewTag.onTime => tagOnTime,
+    ReviewTag.goodQuality => tagGoodQuality,
+    ReviewTag.wellPacked => tagWellPacked,
+    ReviewTag.goodPrice => tagGoodPrice,
+    ReviewTag.friendly => tagFriendly,
+    ReviewTag.late => tagLate,
+    ReviewTag.wrongItems => tagWrongItems,
+    ReviewTag.damaged => tagDamaged,
+    ReviewTag.missingItems => tagMissingItems,
+  };
+
+  String? cartProblem(CartProblem? p, {int minQty = 1}) => switch (p) {
+    null => null,
+    CartProblem.productUnavailable || CartProblem.unknown => problemProductUnavailable,
+    CartProblem.notDelivering => problemNotDelivering,
+    CartProblem.wholesalerLocked => problemWholesalerLocked,
+    CartProblem.outOfStock => problemOutOfStock,
+    CartProblem.belowMinQty => problemBelowMinQty(minQty),
+    CartProblem.belowMinOrder => null, // 组的问题另外显示「还差多少」
+  };
+
+  String paymentTerm(String code) => switch (code) {
+    'cod' => paymentCod,
+    'transfer' => paymentTransfer,
+    'credit' => paymentCredit,
+    _ => code,
+  };
+
+  String weekdays(List<int> days) {
+    if (days.length == 7) return days.map(weekdayShort).join(' ');
+    return days.map(weekdayShort).join(lang == 'zh' ? '、' : ', ');
+  }
+
+  String weekdayShort(int d) => switch (d) {
+    1 => weekdayShort1,
+    2 => weekdayShort2,
+    3 => weekdayShort3,
+    4 => weekdayShort4,
+    5 => weekdayShort5,
+    6 => weekdayShort6,
+    _ => weekdayShort7,
+  };
+
+  /// 错误代码 -> 给老板看的话
+  String error(Object e) {
+    final code = e is AppError ? e.code : 'UNKNOWN';
+    return switch (code) {
+      'NETWORK' => errNetwork,
+      'AUTH' => errAuth,
+      'NOT_ALLOWED' || 'NOT_LOGGED_IN' || 'COLUMN_PROTECTED' || 'ROLE_MISMATCH' => errNotAllowed,
+      'PRICE_CHANGED' => errPriceChanged,
+      'CART_HAS_PROBLEMS' => errCartHasProblems,
+      'CART_EMPTY' => errCartEmpty,
+      'UNLOCK_COOLDOWN' => errUnlockCooldown,
+      'TOO_MANY_WHOLESALERS' => errTooManyWholesalers,
+      'WHOLESALER_NOT_AVAILABLE' || 'INVALID_ZONE' => errWholesalerNotAvailable,
+      'INVALID_TRANSITION' || 'ORDER_NOT_FOUND' => errInvalidTransition,
+      'ORDER_NOT_DELIVERED' => errOrderNotDelivered,
+      'NO_PREVIOUS_ORDER' => errNoPreviousOrder,
+      _ => errUnknown,
+    };
+  }
+
+  // ---------- 日期（全部按马来西亚时间显示） ----------
+
+  /// 11月26日周四 / Thu, Nov 26 / Kha, 26 Nov
+  String date(DateTime d) => DateFormat.MMMEd(localeName).format(d);
+
+  /// 11月26日 14:30
+  String dateTime(DateTime d) => DateFormat.MMMd(localeName).add_Hm().format(toMyt(d));
+
+  String dateOnly(DateTime d) => DateFormat.MMMd(localeName).format(toMyt(d));
+}
+
+/// 服务器的时间是 UTC，马来西亚是 UTC+8（没有夏令时）
+DateTime toMyt(DateTime d) {
+  final utc = d.toUtc();
+  return DateTime(utc.year, utc.month, utc.day, utc.hour, utc.minute).add(const Duration(hours: 8));
+}
