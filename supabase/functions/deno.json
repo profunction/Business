@@ -1,6 +1,9 @@
 {
-  "// 说明": "只给本机开发 / 测试用（在 supabase/functions 里跑 deno task ...）。部署时每个函数用自己目录的 deno.json；版本要跟这里一样（tests/deno_json_test.ts 会检查）。版本都钉死，所以不另外存 deno.lock（免得部署工具读到新格式的 lock 档）。",
-  "lock": false,
+  "// 说明": "只给本机开发 / 测试用（在 supabase/functions 里跑 deno task ...）。部署时每个函数用自己目录的 deno.json；版本要跟这里一样（tests/deno_json_test.ts 会检查）。直接用到的套件版本钉死在 imports；间接用到的（例如 SDK 依赖的 @opentelemetry/api、standardwebhooks）和 SheetJS 档案的 hash 记在 deno.lock（frozen：对不上就不跑，要更新套件时用 deno install --frozen=false 重写）。deno.lock 只放在这一层：各函数的目录没有 lock 档，部署工具（edge-runtime 只读得懂 v4 以前的格式）不会读到它。",
+  "lock": {
+    "path": "./deno.lock",
+    "frozen": true
+  },
   "imports": {
     "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@1.13.0",
     "@std/assert": "jsr:@std/assert@1.0.19",

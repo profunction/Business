@@ -1,5 +1,6 @@
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
-import fn from "../dispatch-notifications/index.ts";
+import fn, { BUDGET_EXCEEDED, DISPATCH_TIMING, processItem } from "../dispatch-notifications/index.ts";
+import { requestTimeoutMs } from "../_shared/http.ts";
 import { clearFcmTokenCache } from "../_shared/fcm.ts";
 import {
   type Call,
@@ -113,8 +114,12 @@ function backend(b: Backend, publicKey: CryptoKey) {
   };
 }
 
+const TIMING_DEFAULT = structuredClone(DISPATCH_TIMING);
+
 async function setup(extra: Record<string, string | undefined> = {}) {
   clearFcmTokenCache();
+  // complete 重试的间隔缩短（测试不用真的等 0.5 / 2 / 5 秒）
+  Object.assign(DISPATCH_TIMING, { ...structuredClone(TIMING_DEFAULT), retryMs: [20, 50], sentRetryMs: [20, 50, 100] });
   const { json, publicKey } = await testServiceAccount();
   const restoreEnv = setEnv({
     ...SUPABASE_ENV,
@@ -132,6 +137,7 @@ async function setup(extra: Record<string, string | undefined> = {}) {
     restore: () => {
       net.restore();
       restoreEnv();
+      Object.assign(DISPATCH_TIMING, structuredClone(TIMING_DEFAULT));
     },
   };
 }
@@ -330,4 +336,176 @@ Deno.test("dispatch：claim 失败 → 502；complete 失败一次会再试", as
     globalThis.fetch = inner;
     t2.restore();
   }
+});
+
+Deno.test("dispatch：一批里面也看时间预算——剩下不到 15 秒就不再开始发，没发的标 failed + 重试；不再领下一批", async () => {
+  const t = await setup();
+  t.b.batches.push(
+    Array.from({ length: 50 }, (_, i) => claimed(400 + i, { channel: "whatsapp", whatsapp_phone: "60111" })),
+  );
+  t.b.batches.push([claimed(500, { channel: "whatsapp", whatsapp_phone: "60111" })]);
+  // 假的时钟：Meta 每个请求要 10 秒
+  const realNow = Date.now;
+  const t0 = realNow();
+  let now = t0;
+  Date.now = () => now;
+  const inner = globalThis.fetch;
+  const starts: number[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes("graph.facebook.com")) {
+      starts.push(now - t0);
+      now += 10_000;
+    }
+    return await inner(input, init);
+  }) as typeof fetch;
+  try {
+    const s = await (await fn.fetch(post())).json();
+    assertEquals(s.rounds, 1); // 预算用完：第二批留给下一次
+    assertEquals(t.b.batches.length, 1);
+    assert(s.deferred > 0 && s.sent > 0, JSON.stringify(s));
+    assertEquals(s.sent + s.deferred, 50);
+    assertEquals(t.b.templates.length, s.sent);
+    // 每个请求开始的时候都还剩至少 15 秒（100 秒预算）
+    assert(Math.max(...starts) <= 100_000 - DISPATCH_TIMING.itemMinMs, starts.join(","));
+    const deferred = Object.values(t.b.completes).filter((c) => c.p_error === BUDGET_EXCEEDED);
+    assertEquals(deferred.length, s.deferred);
+    for (const c of deferred) assertEquals([c.p_status, c.p_retry, c.p_channel], ["failed", true, "whatsapp"]);
+    assertEquals(Object.keys(t.b.completes).length, 50); // 每条都有记（不会卡在「发送中」）
+  } finally {
+    Date.now = realNow;
+    globalThis.fetch = inner;
+    t.restore();
+  }
+});
+
+Deno.test("请求的 timeout：平常 15 秒；快到期限时缩短（最少 1 秒）", () => {
+  const now = Date.now();
+  assertEquals(requestTimeoutMs(), 15_000);
+  assertEquals(requestTimeoutMs(null), 15_000);
+  assertEquals(requestTimeoutMs(now + 60_000), 15_000);
+  const near = requestTimeoutMs(now + 5_000);
+  assert(near <= 5_000 && near > 4_000, String(near));
+  assertEquals(requestTimeoutMs(now - 1_000), 1_000);
+});
+
+/** complete_notification 在 outageMs 毫秒内都回 503；回传每次被叫的时间 */
+function flakyComplete(outageMs: number): { times: number[]; restore: () => void } {
+  const inner = globalThis.fetch;
+  const times: number[] = [];
+  let first = 0;
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("/rpc/complete_notification")) {
+      const now = performance.now();
+      if (!first) first = now;
+      times.push(now - first);
+      if (now - first < outageMs) return new Response("service unavailable", { status: 503 });
+    }
+    return await inner(input, init);
+  }) as typeof fetch;
+  return { times, restore: () => (globalThis.fetch = inner) };
+}
+
+Deno.test("complete 失败：隔一下再试（不是马上），数据库短暂断线也记得到", async () => {
+  const t = await setup();
+  t.b.batches.push([claimed(1, { channel: null })]);
+  const flaky = flakyComplete(40); // 0 ms、20 ms 失败，70 ms 成功
+  try {
+    const s = await (await fn.fetch(post())).json();
+    assertEquals([s.skipped, s.errors], [1, 0]);
+    assertEquals(t.b.completes[id(1)].p_status, "skipped");
+    assertEquals(flaky.times.length, 3);
+    assert(flaky.times[1] >= 18 && flaky.times[2] - flaky.times[1] >= 45, flaky.times.join(","));
+  } finally {
+    flaky.restore();
+    t.restore();
+  }
+});
+
+Deno.test("complete 失败：已经发出去的 WhatsApp 多试一次；还是不行 → 日志记 wamid（对得回去）", async () => {
+  const errors: string[] = [];
+  const realError = console.error;
+  console.error = (line: string) => errors.push(line);
+  try {
+    // 断线 120 ms：sent 试 4 次（0、20、70、170 ms）记得到；skipped 只试 3 次（0、20、70）就放弃
+    const t = await setup();
+    t.b.batches.push([claimed(3, { channel: "whatsapp", whatsapp_phone: "60111" })]);
+    const flaky = flakyComplete(120);
+    try {
+      const s = await (await fn.fetch(post())).json();
+      assertEquals([s.sent, s.errors], [1, 0]);
+      assertEquals(t.b.completes[id(3)].p_wa_message_id, "wamid.SENT1");
+      assertEquals(flaky.times.length, 4);
+    } finally {
+      flaky.restore();
+      t.restore();
+    }
+
+    const t2 = await setup();
+    t2.b.batches.push([claimed(4, { channel: null })]);
+    const flaky2 = flakyComplete(120);
+    try {
+      const s = await (await fn.fetch(post())).json();
+      assertEquals([s.skipped, s.errors], [1, 1]);
+      assertEquals(flaky2.times.length, 3);
+    } finally {
+      flaky2.restore();
+      t2.restore();
+    }
+
+    // 一直断线：sent 那条放弃时，日志有 wamid
+    const t3 = await setup();
+    t3.b.batches.push([claimed(5, { channel: "whatsapp", whatsapp_phone: "60111" })]);
+    const flaky3 = flakyComplete(60_000);
+    try {
+      const s = await (await fn.fetch(post())).json();
+      assertEquals([s.sent, s.errors], [1, 1]);
+      const last = errors.map((l) => JSON.parse(l)).filter((l) => l.event === "complete_notification_failed").at(-1);
+      assertEquals([last.notification_id, last.wa_message_id, last.final], [id(5), "wamid.SENT1", true]);
+    } finally {
+      flaky3.restore();
+      t3.restore();
+    }
+  } finally {
+    console.error = realError;
+  }
+});
+
+Deno.test("dispatch：某一条发的时候丢错（程式错误）→ 那条 failed + 重试，别条照常发完", async () => {
+  const { json } = await testServiceAccount();
+  // project_id 有落单的 surrogate：encodeURIComponent 会丢 URIError（sendFcm 里没接住的那种错）
+  const broken = JSON.stringify({ ...JSON.parse(json), project_id: "bad\ud800" });
+  const t = await setup({ FCM_SERVICE_ACCOUNT_JSON: broken });
+  t.b.batches.push([
+    claimed(1, { push_targets: [{ target: "tok-ok", kind: "token" }] }),
+    claimed(2, { channel: "whatsapp", whatsapp_phone: "60111" }),
+    claimed(3, { channel: null }),
+  ]);
+  try {
+    const res = await fn.fetch(post());
+    assertEquals(res.status, 200);
+    const s = await res.json();
+    assertEquals([s.sent, s.retry_scheduled, s.skipped, s.errors], [1, 1, 1, 0]);
+    const c = t.b.completes;
+    assertEquals([c[id(1)].p_status, c[id(1)].p_retry, c[id(1)].p_channel], ["failed", true, "push"]);
+    assertStringIncludes(c[id(1)].p_error as string, "INTERNAL_ERROR");
+    assertEquals(c[id(2)].p_status, "sent");
+    assertEquals(c[id(3)].p_status, "skipped");
+  } finally {
+    t.restore();
+  }
+  // processItem 本身也不会丢错
+  const o = await processItem(
+    {
+      id: id(9),
+      event_type: "order_new",
+      payload: {},
+      locale: "zh",
+      channel: "push",
+      push_targets: [{ target: "x", kind: "token" }],
+      whatsapp_phone: null,
+      details: null,
+    },
+    { fcm: JSON.parse(broken), whatsapp: null },
+  );
+  assertEquals([o.status, o.retry], ["failed", true]);
 });

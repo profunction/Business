@@ -33,6 +33,16 @@ deno.json     只给本机测试用；版本要跟各函数的 deno.json 一样�
 | `PRICE_LIST_TIME_BUDGET_MS`（可选）          | 价目表背景工作的时间预算              | 默认 380000（付费方案 400 秒）；**免费方案设 140000**                  |
 | `DISPATCH_TIME_BUDGET_MS`（可选）            | dispatcher 一次最多跑多久             | 默认 100000                                                            |
 
+时间预算：Supabase 的总时间是按 **worker** 算的（一个 worker 会接很多个请求），所以 parse-price-list 的期限是 「worker
+开始的时间 + `PRICE_LIST_TIME_BUDGET_MS`」（晚进来的请求分到的时间比较少，剩下不够叫 Claude 就直接
+`AI_TIMEOUT`）。worker 要被关掉时（`beforeunload`）会中止正在跑的工作、马上把 import 标成 failed（总时间到 →
+`AI_TIMEOUT`，CPU / 记忆体超过 → `INTERNAL_ERROR`）。dispatcher 每条开始之前都看预算：剩下不到 15 秒就不再开始发，
+领到但没发的标 failed + 重试（`DISPATCH_TIME_BUDGET`，2 分钟后再发），每个对外请求也最多等到预算用完。
+
+大小限制：价目表档案 10 MB；xlsx 解压后合计 32 MB（工作表 / XML 16 MB，单一 entry 压缩比超过 100:1 也不收）→
+`FILE_TOO_LARGE`；每张表最多读到第 4800 行、商品最多 1200 样 → `TOO_MANY_ROWS`。whatsapp-webhook 的 body 最多 4 MB
+（Meta 最多 3 MB），超过 → 413；没有签名 / 格式不对 → 401，都不读 body。
+
 平台自动给 `SUPABASE_URL`、`SUPABASE_SECRET_KEYS`、`SUPABASE_PUBLISHABLE_KEYS`（旧项目退回 `SUPABASE_SERVICE_ROLE_KEY` /
 `SUPABASE_ANON_KEY`）。 pg_cron 用的 Vault 秘密 `secret_key` 要放 **default** 那把 secret key。
 
@@ -44,8 +54,12 @@ deno task check && deno task lint && deno task fmt && deno task test
 ```
 
 不用 Docker、不连外网（Deno 会下载 npm / jsr / cdn.sheetjs.com 的套件；npm 版本要发布满 24 小时才装得到）。
-`supabase functions serve` 要 Docker；`config.toml` 的 `[edge_runtime] policy = "per_worker"`
-是为了让背景工作在本机跑完。
+`deno.lock`（frozen）锁住全部套件，包括间接用到的和 SheetJS 档案的 hash：对不上就不跑。要更新套件时改 `deno.json`
+和各函数的 `deno.json`，再跑
+`deno install --frozen=false --allow-import=cdn.sheetjs.com,jsr.io,registry.npmjs.org --entrypoint _shared/*.ts */index.ts tests/*.ts`
+重写 lock 档。部署用各函数自己的 `deno.json`（那里没有 lock 档）：部署时间接用到的套件还是会重新解析成最新的
+符合版本（edge-runtime 读不懂 Deno 2.9 写的 v5 lock 档），部署前先在本机跑一次测试。 `supabase functions serve` 要
+Docker；`config.toml` 的 `[edge_runtime] policy = "per_worker"` 是为了让背景工作在本机跑完。
 
 ## 部署
 

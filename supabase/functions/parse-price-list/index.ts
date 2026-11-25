@@ -9,6 +9,9 @@
 //     下载（服务器身份，最多 10 MB）→ 魔术字节判断格式 → 图片 / PDF 直接给 Claude；
 //     Excel / CSV → 带行号文字 → 分段给 Claude → 写 price_list_import_rows（row_no 从 1）→
 //     suggest_import_matches → status = review。任何错误 → status = failed + error_message（英文代码）。
+//   时间：平台的总时间是按 worker 算的（一个 worker 会接很多个请求），所以期限 = 这个 worker 开始的时间 + 预算，
+//         不是请求进来的时间 + 预算。worker 要被关掉时（beforeunload：总时间到、CPU / 记忆体超过）
+//         先中止正在跑的工作、马上把 import 标成 failed，不会一直卡在 processing。
 //
 // error_message 代码（App 按这个显示三语原因）：
 //   档案问题：UNSUPPORTED_FILE、FILE_TOO_LARGE、EMPTY_FILE、FILE_NOT_FOUND、INVALID_FILE_PATH、
@@ -61,11 +64,22 @@ const MAX_IMAGE_BYTES = 7_000_000;
 const CHUNK_CONCURRENCY = 3;
 /** 「在跑」超过 10 分钟当成已经死掉（付费方案总时间 400 秒），可以重新跑 */
 const STALE_CLAIM_MS = 10 * 60_000;
-/** 留给最后写数据库的时间 */
-const RESERVE_MS = 15_000;
-/** 剩下不到这么多时间就不再叫 Claude */
-const MIN_CALL_MS = 20_000;
 const INSERT_BATCH = 500;
+
+export const TIMING = {
+  /** 留给最后写数据库的时间 */
+  reserveMs: 15_000,
+  /** 剩下不到这么多时间就不再叫 Claude */
+  minCallMs: 20_000,
+};
+
+/** 这个 worker（isolate）什么时候开始的：Supabase 的总时间（免费 150 秒、付费 400 秒）从这里算 */
+export const isolate = { startedAt: Date.now() };
+
+/** 工作期限：请求进来 + 预算，也不能超过 worker 开始 + 预算（晚进来的请求分到的时间比较少） */
+export function jobDeadline(now: number, budgetMs: number, isolateStartedAt = isolate.startedAt): number {
+  return Math.min(now + budgetMs, isolateStartedAt + budgetMs);
+}
 
 export class JobError extends Error {
   constructor(public readonly code: string, public readonly detail?: string) {
@@ -148,16 +162,22 @@ async function download(admin: SupabaseClient, path: string): Promise<Uint8Array
 // Claude
 // ---------------------------------------------------------------------------
 
+/** 被中止时丢的错：worker 要关掉（beforeunload）时带着原因；别段失败时是 ABORTED（不会变成 error_message） */
+function abortError(job: Job): JobError {
+  const reason = job.abort.signal.reason;
+  return reason instanceof JobError ? reason : new JobError("ABORTED");
+}
+
 async function callClaude(
   job: Job,
   input: ExtractInput,
   effort: "low" | "medium",
   part: string,
 ): Promise<ExtractOutcome> {
-  if (job.abort.signal.aborted) throw new JobError("ABORTED");
+  if (job.abort.signal.aborted) throw abortError(job);
   if (!job.apiKey) throw new JobError("AI_NOT_CONFIGURED");
-  const remaining = job.deadline - Date.now() - RESERVE_MS;
-  if (remaining < MIN_CALL_MS) throw new JobError("AI_TIMEOUT");
+  const remaining = job.deadline - Date.now() - TIMING.reserveMs;
+  if (remaining < TIMING.minCallMs) throw new JobError("AI_TIMEOUT");
   // SDK 的 timeout 只管到回应开始；streaming 整段也要在时间内，所以另外用 signal 中止
   const timeout = AbortSignal.timeout(remaining);
   let out: ExtractOutcome;
@@ -170,8 +190,8 @@ async function callClaude(
       signal: AbortSignal.any([job.abort.signal, timeout]),
     });
   } catch (e) {
+    if (job.abort.signal.aborted) throw abortError(job);
     if (timeout.aborted) throw new JobError("AI_TIMEOUT");
-    if (job.abort.signal.aborted) throw new JobError("ABORTED");
     throw e;
   }
   job.calls.push({ ...out.meta, part, outcome: out.ok ? "ok" : out.reason });
@@ -358,7 +378,7 @@ function documentInfo(pieces: Piece[]) {
 // 背景工作
 // ---------------------------------------------------------------------------
 
-function errorCode(e: unknown): string {
+export function errorCode(e: unknown): string {
   if (e instanceof JobError) return e.code;
   if (e instanceof SpreadsheetError) return e.code;
   if (e instanceof DbError) return "DB_ERROR";
@@ -366,7 +386,71 @@ function errorCode(e: unknown): string {
   return classifyClaudeError(e) ?? "INTERNAL_ERROR";
 }
 
+/** 这个 worker 里正在跑的工作（beforeunload 时要处理） */
+const RUNNING = new Set<Job>();
+
+/** worker 要被关掉的原因 → error_message：总时间到 → AI_TIMEOUT；CPU / 记忆体超过 → INTERNAL_ERROR */
+export function shutdownCode(reason: string): string {
+  return /cpu|mem/i.test(reason) ? "INTERNAL_ERROR" : "AI_TIMEOUT";
+}
+
+/**
+ * worker 要被关掉了（Supabase 的 beforeunload，ev.detail.reason）：中止正在跑的工作，马上把 import 标成 failed
+ * （只改还是 processing、而且是这一次 run_id 的）。之后 worker 就没了，processImport 的 catch 不一定跑得到。
+ */
+export async function handleShutdown(reason: string): Promise<void> {
+  const jobs = [...RUNNING];
+  if (jobs.length === 0) return;
+  const code = shutdownCode(reason);
+  log("error", "price_list_worker_shutdown", { reason, code, jobs: jobs.length });
+  await Promise.all(jobs.map(async (job) => {
+    job.abort.abort(new JobError(code, `worker shutdown: ${reason}`));
+    try {
+      const updated = unwrap(
+        "mark interrupted",
+        await job.admin.from("price_list_imports")
+          .update({
+            status: "failed",
+            error_message: code,
+            ai_raw: {
+              version: 1,
+              state: "failed",
+              error: code,
+              interrupted: reason,
+              run_id: job.runId,
+              claimed_at: job.claimedAt,
+              finished_at: new Date().toISOString(),
+              file: job.file,
+              calls: job.calls,
+            },
+          })
+          .eq("id", job.imp.id).eq("status", "processing").eq("ai_raw->>run_id", job.runId)
+          .select("id"),
+      ) as unknown[] | null;
+      if (updated && updated.length > 0) {
+        unwrap("delete rows", await job.admin.from("price_list_import_rows").delete().eq("import_id", job.imp.id));
+      }
+    } catch (e) {
+      log("error", "price_list_mark_failed_failed", { import_id: job.imp.id, error: errorMessage(e) });
+    }
+  }));
+}
+
+(globalThis as { addEventListener?: typeof addEventListener }).addEventListener?.("beforeunload", (ev: Event) => {
+  const detail = (ev as CustomEvent<{ reason?: unknown } | undefined>).detail;
+  handleShutdown(String(detail?.reason ?? "unknown")).catch(() => {});
+});
+
 export async function processImport(job: Job): Promise<"review" | "failed"> {
+  RUNNING.add(job);
+  try {
+    return await runImport(job);
+  } finally {
+    RUNNING.delete(job);
+  }
+}
+
+async function runImport(job: Job): Promise<"review" | "failed"> {
   const { admin, imp } = job;
   try {
     const bytes = await download(admin, storagePath(imp.file_path, imp.wholesaler_id));
@@ -395,6 +479,7 @@ export async function processImport(job: Job): Promise<"review" | "failed"> {
 
     const { rows, meta } = buildRows(imp.id, pieces, lines);
     if (rows.length === 0) throw new JobError("NO_PRODUCTS_FOUND");
+    if (job.abort.signal.aborted) throw abortError(job); // worker 要关掉了：不要再写
 
     // 之前跑到一半死掉的话可能留下旧的行
     unwrap("delete rows", await admin.from("price_list_import_rows").delete().eq("import_id", imp.id));
@@ -547,7 +632,7 @@ export async function handler(req: Request): Promise<Response> {
       imp,
       runId,
       claimedAt,
-      deadline: Date.now() + intEnv("PRICE_LIST_TIME_BUDGET_MS", 380_000, 30_000, 900_000),
+      deadline: jobDeadline(Date.now(), intEnv("PRICE_LIST_TIME_BUDGET_MS", 380_000, 30_000, 900_000)),
       apiKey: anthropicApiKey(),
       abort: new AbortController(),
       calls: [],

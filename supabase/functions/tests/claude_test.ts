@@ -106,7 +106,10 @@ Deno.test("fallback：text block 全部照顺序接起来（中途被拒绝时 f
   assertEquals(finalText(split), '{"rows":[{"name":"Cup"}],"unreadable":[]}');
   assertEquals(JSON.parse(textCandidates(split)[0]).rows[0].name, "Cup");
   // 重写一份的情况：全部接起来 parse 不了，第二个候选（fallback block 之后的）可以
-  const restart = [{ type: "text", text: '{"rows":[{"na' }, { type: "fallback" }, { type: "text", text: '{"rows":[]}' }];
+  const restart = [{ type: "text", text: '{"rows":[{"na' }, { type: "fallback" }, {
+    type: "text",
+    text: '{"rows":[]}',
+  }];
   assertEquals(textCandidates(restart), ['{"rows":[{"na{"rows":[]}', '{"rows":[]}']);
   assertEquals(textCandidates([{ type: "text", text: "{}" }]), ["{}"]);
 });

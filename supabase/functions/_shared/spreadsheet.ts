@@ -77,7 +77,9 @@ export function readWorkbook(bytes: Uint8Array, kind: SheetKind): XLSX.WorkBook 
   if (kind === "csv") {
     // type:'array' 会把没有 BOM 的 UTF-8 中文读成乱码，所以先自己转成文字
     text = decodeText(bytes);
-    if (lastFilledLine(text) >= MAX_SCAN_ROWS) throw new SpreadsheetError("TOO_MANY_ROWS", "csv longer than scan limit");
+    if (lastFilledLine(text) >= MAX_SCAN_ROWS) {
+      throw new SpreadsheetError("TOO_MANY_ROWS", "csv longer than scan limit");
+    }
   }
   try {
     // raw:true 不把 CSV 的文字乱转成日期 / 数字
@@ -101,7 +103,8 @@ export interface SheetLine {
 /** 栏名常见的字（英文 / 马来文要是完整的字：「PACKAGING」不算 pack、「Postcode」不算 code） */
 const HEADER_WORDS_LATIN =
   /\b(items?|names?|products?|descriptions?|desc|prices?|harga|units?|uom|qty|quantity|kuantiti|size|saiz|barang|nama|produk|kod|code|packing|pack|pcs|moq|spec|specs|remarks?|catatan|brand|jenama|rm)\b/i;
-const HEADER_WORDS_CJK = /(货品|貨品|品名|名称|名稱|产品|產品|商品|价钱|價錢|价格|價格|售价|售價|单价|單價|单位|單位|规格|規格|包装|包裝|数量|數量|編號|编号|序号|序號|备注|備註)/;
+const HEADER_WORDS_CJK =
+  /(货品|貨品|品名|名称|名稱|产品|產品|商品|价钱|價錢|价格|價格|售价|售價|单价|單價|单位|單位|规格|規格|包装|包裝|数量|數量|編號|编号|序号|序號|备注|備註)/;
 /** 「No」「No.」「#」「Bil」（马来文的序号）整格才算 */
 const HEADER_NUMBER_CELL = /^(no\.?|#|bil\.?|s\/?n)$/i;
 const NUMERIC_CELL = /^[\s(RM$S¥]*[-+]?\d[\d,]*(\.\d+)?\s*\)?$/i;

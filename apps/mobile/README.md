@@ -103,6 +103,10 @@ flutter analyze
 flutter test        # 用示范模式把整个 App 点一遍；另外有推送、示范批发商资料、中文字体的测试
 ```
 
+批发商端的拍照 / 选文件 / 分享 / 打印都经过 `lib/features/seller/seller_device.dart` 的 `SellerDevice`，
+测试换成假的（`test/seller_harness.dart` 的 `FakeDevice`），不会碰到手机功能。送货单的 PDF 和分享文字是纯函数
+（`lib/features/seller/delivery_sheet.dart`），`test/delivery_sheet_test.dart` 直接做一份 PDF 检查页数。
+
 ## 更新示范数据
 
 示范模式和测试用的数据在 `packages/core/test/fixtures/`（本机数据库真实返回的 JSON）。改了数据库函数之后，重新导出那些 JSON，然后：

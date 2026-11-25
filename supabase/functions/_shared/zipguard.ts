@@ -90,7 +90,6 @@ export function inspectXlsxZip(b: Uint8Array): ZipEntryInfo[] {
   let copied = 0;
   for (let n = 0; n < count; n++) {
     if (p + 46 > b.length) throw unreadable("central directory out of range");
-    let csz = u32(b, p + 20);
     let usz = u32(b, p + 24);
     const nameLen = u16(b, p + 28);
     const extraLen = u16(b, p + 30);
@@ -99,7 +98,6 @@ export function inspectXlsxZip(b: Uint8Array): ZipEntryInfo[] {
     const cdExtra = p + 46 + nameLen;
     const cd64 = zip64Sizes(b, cdExtra, extraLen);
     if (cd64.usz) usz = cd64.usz;
-    if (cd64.csz) csz = cd64.csz;
     p = cdExtra + extraLen + commentLen;
 
     // local header（SheetJS 不看签名，直接跳过 4 个字）
@@ -132,7 +130,11 @@ export function inspectXlsxZip(b: Uint8Array): ZipEntryInfo[] {
     } else if (method === 8) {
       copied += b.length - data;
       if (copied > MAX_COPY_BYTES) throw tooLarge("too many deflated entries");
-      const scan = scanDeflate(b, data, Math.min(MAX_XLSX_UNCOMPRESSED - total, isBinaryPart(name) ? Infinity : MAX_XLSX_PARSED - parsed));
+      const scan = scanDeflate(
+        b,
+        data,
+        Math.min(MAX_XLSX_UNCOMPRESSED - total, isBinaryPart(name) ? Infinity : MAX_XLSX_PARSED - parsed),
+      );
       // SheetJS：有写大小就先开那么大的 buffer（写不下的丢掉），没写就边解边加大
       bytes = Math.max(scan.size, lusz);
       compressed = scan.consumed;
@@ -166,40 +168,13 @@ interface Huffman {
   symbols: Uint16Array;
 }
 
+// deno-fmt-ignore
 const LEN_BASE = [3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 19, 23, 27, 31, 35, 43, 51, 59, 67, 83, 99, 115, 131, 163, 195, 227, 258];
+// deno-fmt-ignore
 const LEN_EXTRA = [0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 5, 0];
-const DIST_BASE = [
-  1,
-  2,
-  3,
-  4,
-  5,
-  7,
-  9,
-  13,
-  17,
-  25,
-  33,
-  49,
-  65,
-  97,
-  129,
-  193,
-  257,
-  385,
-  513,
-  769,
-  1025,
-  1537,
-  2049,
-  3073,
-  4097,
-  6145,
-  8193,
-  12289,
-  16385,
-  24577,
-];
+// deno-fmt-ignore
+const DIST_BASE = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 257, 385, 513, 769, 1025, 1537, 2049, 3073, 4097, 6145, 8193, 12289, 16385, 24577];
+// deno-fmt-ignore
 const DIST_EXTRA = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13];
 const CLEN_ORDER = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
 

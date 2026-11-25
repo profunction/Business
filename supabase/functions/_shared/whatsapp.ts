@@ -3,7 +3,7 @@
 
 import type { WhatsAppConfig } from "./env.ts";
 import type { TemplateMessage } from "./messages.ts";
-import { timingSafeEqual } from "./http.ts";
+import { requestTimeoutMs, timingSafeEqual } from "./http.ts";
 
 const GRAPH = "https://graph.facebook.com";
 
@@ -112,10 +112,16 @@ export function classifyWhatsAppError(code: number | null, httpStatus: number): 
   return { retryable: false, alert };
 }
 
+export interface SendOptions {
+  /** 整批工作的期限（epoch 毫秒）：请求最多等到这时候（平常 15 秒） */
+  deadline?: number | null;
+}
+
 async function postMessage(
   cfg: WhatsAppConfig,
   body: Record<string, unknown>,
   phoneNumberId?: string,
+  deadline?: number | null,
 ): Promise<SendResult> {
   const url = `${GRAPH}/${cfg.graphVersion}/${phoneNumberId ?? cfg.phoneNumberId}/messages`;
   let res: Response;
@@ -124,7 +130,7 @@ async function postMessage(
       method: "POST",
       headers: { "Authorization": `Bearer ${cfg.token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", ...body }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(requestTimeoutMs(deadline)),
     });
   } catch (e) {
     return {
@@ -172,7 +178,12 @@ function recipientFields(to: Recipient): Record<string, string> | null {
 }
 
 /** 发审核过的模板（具名参数 + quick reply 按钮 payload） */
-export function sendTemplate(cfg: WhatsAppConfig, phone: string, t: TemplateMessage): Promise<SendResult> {
+export function sendTemplate(
+  cfg: WhatsAppConfig,
+  phone: string,
+  t: TemplateMessage,
+  opts: SendOptions = {},
+): Promise<SendResult> {
   const to = recipientFields({ phone });
   if (!to) return Promise.resolve(invalidRecipient());
   const components: Record<string, unknown>[] = [{
@@ -187,11 +198,16 @@ export function sendTemplate(cfg: WhatsAppConfig, phone: string, t: TemplateMess
       parameters: [{ type: "payload", payload: b.payload }],
     });
   }
-  return postMessage(cfg, {
-    ...to,
-    type: "template",
-    template: { name: t.name, language: { code: t.languageCode }, components },
-  });
+  return postMessage(
+    cfg,
+    {
+      ...to,
+      type: "template",
+      template: { name: t.name, language: { code: t.languageCode }, components },
+    },
+    undefined,
+    opts.deadline,
+  );
 }
 
 /** 普通文字（只能在对方 24 小时内发过消息的窗口里发） */

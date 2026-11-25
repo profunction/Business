@@ -386,7 +386,10 @@ Deno.test("POST 大 body：没写 Content-Length（chunked）→ 读到上限就
     const chunk = 256 * 1024;
     const { stream, seen } = countingBody(chunk, 400); // 100 MB
     const res = await fn.fetch(
-      new Request(URL_, { method: "POST", headers: { "x-hub-signature-256": JUNK_SIG }, body: stream, duplex: "half" } as RequestInit),
+      new Request(
+        URL_,
+        { method: "POST", headers: { "x-hub-signature-256": JUNK_SIG }, body: stream, duplex: "half" } as RequestInit,
+      ),
     );
     assertEquals(res.status, 413);
     assert(seen.bytes <= MAX_WEBHOOK_BODY_BYTES + 2 * chunk, `read ${seen.bytes} bytes`);
@@ -402,7 +405,9 @@ Deno.test("POST：没有签名 / 签名格式不对 → 401，不读 body", asyn
   try {
     for (const headers of [{}, { "x-hub-signature-256": "sha1=abc" }, { "x-hub-signature-256": "sha256=xyz" }]) {
       const { stream, seen } = countingBody(1024 * 1024, 100);
-      const res = await fn.fetch(new Request(URL_, { method: "POST", headers, body: stream, duplex: "half" } as RequestInit));
+      const res = await fn.fetch(
+        new Request(URL_, { method: "POST", headers, body: stream, duplex: "half" } as RequestInit),
+      );
       assertEquals(res.status, 401);
       assertEquals(seen.bytes, 0);
     }

@@ -90,7 +90,7 @@ class _DeliverySummaryPageState extends ConsumerState<DeliverySummaryPage> {
           ),
         ],
       ),
-      bottomNavigationBar: s == null || s.isEmpty || summary.isLoading ? null : _bottom(s),
+      bottomNavigationBar: s == null || s.isEmpty ? null : _bottom(s),
     );
   }
 

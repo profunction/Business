@@ -11,6 +11,8 @@ export interface Call {
   url: URL;
   headers: Headers;
   text: string;
+  /** 请求的 AbortSignal（假的伺服器「卡住」时用来知道被中止了） */
+  signal: AbortSignal;
   // deno-lint-ignore no-explicit-any
   json: () => any;
 }
@@ -30,6 +32,7 @@ export function fakeFetch(route: Route): { calls: Call[]; unexpected: string[]; 
       url: new URL(req.url),
       headers: req.headers,
       text,
+      signal: init?.signal ?? req.signal,
       json: () => JSON.parse(text),
     };
     calls.push(c);
@@ -195,6 +198,40 @@ export function extractionJson(rows: Record<string, unknown>[], unreadable: Reco
     })),
     unreadable,
   });
+}
+
+/** 等 ms 毫秒才回 make()；请求被中止就马上丢 AbortError（不留下计时器） */
+export function delayed(c: Call, ms: number, make: () => Response): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const abort = () => {
+      clearTimeout(timer);
+      reject(new DOMException("aborted", "AbortError"));
+    };
+    const timer = setTimeout(() => {
+      c.signal.removeEventListener("abort", abort);
+      resolve(make());
+    }, ms);
+    if (c.signal.aborted) abort();
+    else c.signal.addEventListener("abort", abort, { once: true });
+  });
+}
+
+/** 一直不回，直到请求被中止 */
+export function hang(c: Call): Promise<Response> {
+  return new Promise((_, reject) => {
+    const abort = () => reject(new DOMException("aborted", "AbortError"));
+    if (c.signal.aborted) abort();
+    else c.signal.addEventListener("abort", abort, { once: true });
+  });
+}
+
+/** 等到 cond() 成立（最多 ms 毫秒） */
+export async function waitFor(cond: () => boolean, ms = 2000): Promise<void> {
+  const end = Date.now() + ms;
+  while (!cond()) {
+    if (Date.now() > end) throw new Error("waitFor timed out");
+    await new Promise((r) => setTimeout(r, 5));
+  }
 }
 
 /** 让 EdgeRuntime.waitUntil 存在（收集背景工作，测试再 await） */

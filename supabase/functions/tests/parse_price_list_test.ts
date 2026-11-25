@@ -1,11 +1,26 @@
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
-import fn, { storagePath } from "../parse-price-list/index.ts";
+import Anthropic from "@anthropic-ai/sdk";
+import fn, {
+  errorCode,
+  handleShutdown,
+  isolate,
+  jobDeadline,
+  JobError,
+  shutdownCode,
+  storagePath,
+  TIMING,
+} from "../parse-price-list/index.ts";
+import { SpreadsheetError } from "../_shared/spreadsheet.ts";
+import { DbError } from "../_shared/supabase.ts";
+import { ConfigError } from "../_shared/env.ts";
 import {
   type Call,
   claudeStream,
+  delayed,
   extractionJson,
   fakeEdgeRuntime,
   fakeFetch,
+  hang,
   isAnthropic,
   isService,
   PUBLISHABLE,
@@ -13,8 +28,9 @@ import {
   SB_URL,
   setEnv,
   SUPABASE_ENV,
+  waitFor,
 } from "./_helpers.ts";
-import { makeWorkbook } from "./_sheets.ts";
+import { bombEntries, makeWorkbook, zipFiles } from "./_sheets.ts";
 
 const W = "aaaaaaaa-0000-4000-8000-000000000001";
 const OTHER_W = "bbbbbbbb-0000-4000-8000-000000000002";
@@ -39,14 +55,18 @@ interface State {
   files: Record<string, Uint8Array>;
   rows: Record<string, unknown>[];
   suggestCalls: unknown[];
-  claude: (c: Call, n: number) => Response;
+  claude: (c: Call, n: number) => Response | Promise<Response>;
   claudeCalls: Record<string, unknown>[];
   deletes: number;
+  /** 写进去过几行（就算之后被删掉） */
+  inserted: number;
+  /** suggest_import_matches 回 500 */
+  suggestError?: boolean;
 }
 
 /** 假的 Supabase（Auth、PostgREST、Storage）+ Anthropic */
 function backend(s: State) {
-  return (c: Call): Response | undefined => {
+  return (c: Call): Response | Promise<Response> | undefined => {
     const p = c.url.pathname;
     if (isAnthropic(c)) {
       s.claudeCalls.push(c.json());
@@ -91,11 +111,13 @@ function backend(s: State) {
     if (p === "/rest/v1/price_list_import_rows" && c.method === "POST") {
       assert(isService(c));
       s.rows.push(...c.json());
+      s.inserted += c.json().length;
       return new Response(null, { status: 201 });
     }
     if (rpcName(c) === "suggest_import_matches") {
       assert(isService(c));
       s.suggestCalls.push(c.json());
+      if (s.suggestError) return Response.json({ message: "boom", code: "XX000" }, { status: 500 });
       return Response.json({ rows: s.rows.length, matched: 1, suggested: 2 });
     }
     if (p.startsWith("/storage/v1/object/price-lists/")) {
@@ -128,6 +150,7 @@ function setup(over: Partial<State> = {}, env: Record<string, string | undefined
     suggestCalls: [],
     claudeCalls: [],
     deletes: 0,
+    inserted: 0,
     claude: () =>
       claudeStream({
         blocks: [{ type: "thinking" }, {
@@ -402,4 +425,166 @@ Deno.test("storagePath：只接受这家批发商的资料夹", () => {
     }
     assertEquals(code, "INVALID_FILE_PATH", bad);
   }
+});
+
+/** 改 isolate.startedAt / TIMING，跑完还原 */
+async function withTiming(
+  over: { startedAt?: number; reserveMs?: number; minCallMs?: number },
+  f: () => Promise<void>,
+) {
+  const before = { startedAt: isolate.startedAt, ...TIMING };
+  if (over.startedAt !== undefined) isolate.startedAt = over.startedAt;
+  if (over.reserveMs !== undefined) TIMING.reserveMs = over.reserveMs;
+  if (over.minCallMs !== undefined) TIMING.minCallMs = over.minCallMs;
+  try {
+    await f();
+  } finally {
+    isolate.startedAt = before.startedAt;
+    TIMING.reserveMs = before.reserveMs;
+    TIMING.minCallMs = before.minCallMs;
+  }
+}
+
+Deno.test("期限：从 worker 开始算（一个 worker 接很多个请求），不是从请求进来算", () => {
+  assertEquals(jobDeadline(1_000_000, 380_000, 1_000_000), 1_380_000);
+  assertEquals(jobDeadline(1_300_000, 380_000, 1_000_000), 1_380_000); // 300 秒后才进来：只剩 80 秒
+  assertEquals(jobDeadline(1_300_000, 140_000, 1_250_000), 1_390_000);
+});
+
+Deno.test("parse-price-list 失败：worker 已经跑了很久，剩下的时间不够叫 Claude → AI_TIMEOUT（不会叫到一半被平台杀掉）", async () => {
+  await withTiming({ startedAt: Date.now() - 370_000 }, async () => {
+    const t = await expectFailure("AI_TIMEOUT", () => {});
+    assertEquals(t.s.claudeCalls.length, 0);
+  });
+});
+
+Deno.test("parse-price-list 失败：Claude 读到一半超过期限 → 中止那个请求、AI_TIMEOUT", async () => {
+  await withTiming({ startedAt: Date.now() - 380_000 + 300, reserveMs: 0, minCallMs: 10 }, async () => {
+    const t = await expectFailure("AI_TIMEOUT", (t) => {
+      // 期限（300 ms）有用的话会先中止；没用的话 3 秒后回 529（测试会失败，不会卡住）
+      t.s.claude = (c) =>
+        delayed(c, 3000, () => Response.json({ type: "error", error: { type: "overloaded_error" } }, { status: 529 }));
+    });
+    assertEquals(t.s.claudeCalls.length, 1);
+    assertEquals(((t.s.imp.ai_raw?.calls as unknown[]) ?? []).length, 0);
+  });
+});
+
+Deno.test("worker 要被关掉（beforeunload）：马上把 import 标成 failed，不会一直卡在 processing", async () => {
+  const t = setup();
+  let release: (r: Response) => void = () => {};
+  // Claude 一直不回、也不理中止（像 worker 已经死掉一样）：只有 beforeunload 的处理会改状态
+  t.s.claude = () => new Promise<Response>((r) => (release = r));
+  const rt = fakeEdgeRuntime();
+  try {
+    assertEquals((await call()).status, 202);
+    await waitFor(() => t.s.claudeCalls.length === 1);
+    assertEquals(t.s.imp.status, "processing");
+    globalThis.dispatchEvent(new CustomEvent("beforeunload", { detail: { reason: "WallClockTime" } }));
+    await waitFor(() => t.s.imp.status === "failed");
+    assertEquals(t.s.imp.error_message, "AI_TIMEOUT");
+    assertEquals(t.s.imp.ai_raw?.state, "failed");
+    assertEquals(t.s.imp.ai_raw?.interrupted, "WallClockTime");
+    assertEquals(t.s.rows, []);
+    // 之后就算那个请求回来了，也不会再改成 review
+    release(claudeStream({ blocks: [{ type: "text", text: extractionJson([{ name: "late" }]) }] }));
+    await Promise.all(rt.pending);
+    assertEquals([t.s.imp.status, t.s.imp.error_message], ["failed", "AI_TIMEOUT"]);
+    assertEquals(t.s.rows, []);
+  } finally {
+    rt.restore();
+    t.restore();
+  }
+  // 没有在跑的工作：什么都不做
+  await handleShutdown("WallClockTime");
+  assertEquals(shutdownCode("CPUTime"), "INTERNAL_ERROR");
+  assertEquals(shutdownCode("Memory"), "INTERNAL_ERROR");
+  assertEquals(shutdownCode("EarlyDrop"), "AI_TIMEOUT");
+});
+
+Deno.test("worker 要被关掉时 Claude 请求会被中止（catch 跑得到的话写同一个代码）", async () => {
+  const t = setup();
+  t.s.claude = (c) => hang(c);
+  const rt = fakeEdgeRuntime();
+  try {
+    assertEquals((await call()).status, 202);
+    await waitFor(() => t.s.claudeCalls.length === 1);
+    await handleShutdown("Memory");
+    await Promise.all(rt.pending);
+    assertEquals([t.s.imp.status, t.s.imp.error_message], ["failed", "INTERNAL_ERROR"]);
+    assertEquals(t.s.imp.ai_raw?.error, "INTERNAL_ERROR");
+  } finally {
+    rt.restore();
+    t.restore();
+  }
+});
+
+Deno.test("parse-price-list 失败：一段失败 → 别段马上中止，还没开始的段不叫 Claude", async () => {
+  const csv = "No,Item,Unit,Price\n" +
+    Array.from({ length: 600 }, (_, i) => `${i + 1},item ${i + 1},pkt,${i + 1}.00`).join("\n");
+  const t = setup();
+  t.s.imp.file_path = `${W}/list.csv`;
+  t.s.files = { [`${W}/list.csv`]: new TextEncoder().encode(csv) };
+  const ok = sheetClaude(1000);
+  t.s.claude = (c) => {
+    const text = (c.json().messages[0].content[1] as { text: string }).text;
+    if (text.includes("part 1 of 6")) {
+      return claudeStream({ blocks: [], stopReason: "refusal", stopDetails: { type: "refusal", category: "cyber" } });
+    }
+    return delayed(c, 50, () => ok(c));
+  };
+  try {
+    await call();
+    assertEquals([t.s.imp.status, t.s.imp.error_message], ["failed", "AI_REFUSED"]);
+    await new Promise((r) => setTimeout(r, 300)); // 没中止的话，另外两段 50 ms 后做完就会接着叫第 4、5、6 段
+    assertEquals(t.s.claudeCalls.length, 3); // 同时最多 3 段
+    assertEquals(t.s.rows, []);
+  } finally {
+    t.restore();
+  }
+});
+
+Deno.test("parse-price-list 失败：行写进去之后 suggest_import_matches 失败 → 行删掉、DB_ERROR", async () => {
+  const t = await expectFailure("DB_ERROR", (t) => {
+    t.s.suggestError = true;
+  });
+  assertEquals(t.s.inserted, 3); // 真的写进去过
+  assertEquals(t.s.rows, []); // 又删掉了
+  assertEquals(t.s.deletes, 2); // 写之前清一次、失败后清一次
+});
+
+Deno.test("parse-price-list：之前跑到一半死掉（占位超过 10 分钟）→ 可以重跑", async () => {
+  const t = setup();
+  t.s.imp.ai_raw = {
+    state: "running",
+    run_id: "dead-run",
+    claimed_at: new Date(Date.now() - 11 * 60_000).toISOString(),
+  };
+  try {
+    assertEquals((await call()).status, 202);
+    assertEquals(t.s.imp.status, "review");
+    assert(t.s.imp.ai_raw?.run_id !== "dead-run");
+    assertEquals(t.s.rows.length, 3);
+  } finally {
+    t.restore();
+  }
+});
+
+Deno.test("parse-price-list 失败：zip 炸弹的 xlsx → FILE_TOO_LARGE，不叫 Claude、worker 不会被撑爆", async () => {
+  const bomb = zipFiles(await bombEntries(150));
+  const t = await expectFailure("FILE_TOO_LARGE", (t) => {
+    t.s.imp.file_path = `${W}/list.xlsx`;
+    t.s.files = { [`${W}/list.xlsx`]: bomb };
+  });
+  assertEquals(t.s.claudeCalls.length, 0);
+  assertEquals((t.s.imp.ai_raw?.file as Record<string, unknown>).kind, "xlsx");
+});
+
+Deno.test("errorCode：各种错误 → error_message 代码", () => {
+  assertEquals(errorCode(new JobError("AI_TIMEOUT")), "AI_TIMEOUT");
+  assertEquals(errorCode(new SpreadsheetError("TOO_MANY_ROWS", "x")), "TOO_MANY_ROWS");
+  assertEquals(errorCode(new DbError("x", "y", "XX000", 500)), "DB_ERROR");
+  assertEquals(errorCode(new ConfigError("SUPABASE_ENV_MISSING")), "INTERNAL_ERROR");
+  assertEquals(errorCode(new TypeError("our bug")), "INTERNAL_ERROR");
+  assertEquals(errorCode(new Anthropic.RateLimitError(429, undefined, "slow down", new Headers())), "AI_BUSY");
 });

@@ -120,3 +120,39 @@ export function workbookParts(bytes: Uint8Array): { name: string; data: Uint8Arr
       : []
   );
 }
+
+/** makeWorkbook 的 entry，全部 deflate */
+export async function workbookEntries(): Promise<ZipEntry[]> {
+  return await Promise.all(
+    workbookParts(makeWorkbook("xlsx")).map(async (p) => ({
+      name: p.name,
+      data: p.data,
+      deflated: await deflateRaw([p.data]),
+    })),
+  );
+}
+
+/**
+ * zip 炸弹：正常的 xlsx，sheet1.xml 中间塞 mb MB 空白（XML 还是合法的；SheetJS 会全部解开才看 sheetRows）。
+ * usz：header 写的解压后大小（默认照实写；可以谎报很小或 0）
+ */
+export async function bombEntries(mb: number, usz?: number): Promise<ZipEntry[]> {
+  const entries = await workbookEntries();
+  const i = entries.findIndex((e) => e.name === "xl/worksheets/sheet1.xml");
+  const xml = new TextDecoder().decode(entries[i].data);
+  const cut = xml.indexOf("<sheetData>") + "<sheetData>".length;
+  const head = new TextEncoder().encode(xml.slice(0, cut));
+  const tail = new TextEncoder().encode(xml.slice(cut));
+  const blank = new Uint8Array(1024 * 1024).fill(0x20);
+  function* chunks() {
+    yield head;
+    for (let k = 0; k < mb; k++) yield blank;
+    yield tail;
+  }
+  entries[i] = {
+    name: entries[i].name,
+    deflated: await deflateRaw(chunks()),
+    usz: usz ?? head.length + tail.length + mb * 1024 * 1024,
+  };
+  return entries;
+}

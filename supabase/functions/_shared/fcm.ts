@@ -9,6 +9,7 @@
 
 import type { FcmServiceAccount } from "./env.ts";
 import type { PushContent, PushTarget } from "./messages.ts";
+import { requestTimeoutMs } from "./http.ts";
 
 const SCOPE = "https://www.googleapis.com/auth/firebase.messaging";
 
@@ -63,7 +64,12 @@ export function clearFcmTokenCache(): void {
  * 拿 OAuth access token（缓存到离到期 5 分钟）。force = 不管缓存重拿；
  * staleToken = 这个 token 被 FCM 拒绝了（401）：缓存的还是它才重拿，别人已经换新的就直接用新的。
  */
-export function getAccessToken(sa: FcmServiceAccount, force = false, staleToken?: string): Promise<string> {
+export function getAccessToken(
+  sa: FcmServiceAccount,
+  force = false,
+  staleToken?: string,
+  deadline?: number | null,
+): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const cached = tokenCache.get(sa.client_email);
   const usable = cached && cached.exp - 300 > now &&
@@ -71,12 +77,12 @@ export function getAccessToken(sa: FcmServiceAccount, force = false, staleToken?
   if (usable) return Promise.resolve(cached.token);
   const pending = inflight.get(sa.client_email);
   if (pending) return pending;
-  const p = fetchAccessToken(sa, now).finally(() => inflight.delete(sa.client_email));
+  const p = fetchAccessToken(sa, now, deadline).finally(() => inflight.delete(sa.client_email));
   inflight.set(sa.client_email, p);
   return p;
 }
 
-async function fetchAccessToken(sa: FcmServiceAccount, now: number): Promise<string> {
+async function fetchAccessToken(sa: FcmServiceAccount, now: number, deadline?: number | null): Promise<string> {
   const assertion = await signServiceAccountJwt(sa, now);
   let res: Response;
   try {
@@ -84,7 +90,7 @@ async function fetchAccessToken(sa: FcmServiceAccount, now: number): Promise<str
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({ grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer", assertion }),
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(requestTimeoutMs(deadline)),
     });
   } catch (e) {
     throw new FcmAuthError(`GOOGLE_TOKEN_NETWORK: ${e instanceof Error ? e.message : e}`, true);
@@ -179,15 +185,23 @@ export function buildFcmMessage(target: PushTarget, p: PushContent, nowSec = Mat
   };
 }
 
-/** 发给一个 token / FID。401 UNAUTHENTICATED 会换新的 OAuth token 再试一次。 */
-export async function sendFcm(sa: FcmServiceAccount, target: PushTarget, p: PushContent): Promise<FcmSendResult> {
+/**
+ * 发给一个 token / FID。401 UNAUTHENTICATED 会换新的 OAuth token 再试一次。
+ * deadline（epoch 毫秒）：每个请求最多等到这时候（平常 15 秒）。
+ */
+export async function sendFcm(
+  sa: FcmServiceAccount,
+  target: PushTarget,
+  p: PushContent,
+  opts: { deadline?: number | null } = {},
+): Promise<FcmSendResult> {
   const url = `https://fcm.googleapis.com/v1/projects/${encodeURIComponent(sa.project_id)}/messages:send`;
   const body = JSON.stringify(buildFcmMessage(target, p));
   let rejected: string | undefined;
   for (let attempt = 0; attempt < 2; attempt++) {
     let accessToken: string;
     try {
-      accessToken = await getAccessToken(sa, attempt > 0, rejected);
+      accessToken = await getAccessToken(sa, attempt > 0, rejected, opts.deadline);
     } catch (e) {
       const retryable = e instanceof FcmAuthError ? e.retryable : true;
       return {
@@ -206,7 +220,7 @@ export async function sendFcm(sa: FcmServiceAccount, target: PushTarget, p: Push
         method: "POST",
         headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
         body,
-        signal: AbortSignal.timeout(15_000),
+        signal: AbortSignal.timeout(requestTimeoutMs(opts.deadline)),
       });
     } catch (e) {
       return {

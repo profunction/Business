@@ -132,11 +132,13 @@ Deno.test("中间有空行、超过第 1250 行的表：全部商品都读到（
   const products = rows.filter((r) => r.length && r[0] !== "Item").length;
   assertEquals(products, 1066);
   const csv = ascii(rows.map((r) => r.join(",")).join("\n"));
-  for (const [kind, bytes] of [
-    ["csv", csv],
-    ["xlsx", xlsxOf(XLSX.utils.aoa_to_sheet(rows))],
-    ["xls", xlsxOf(XLSX.utils.aoa_to_sheet(rows), "biff8")],
-  ] as const) {
+  for (
+    const [kind, bytes] of [
+      ["csv", csv],
+      ["xlsx", xlsxOf(XLSX.utils.aoa_to_sheet(rows))],
+      ["xls", xlsxOf(XLSX.utils.aoa_to_sheet(rows), "biff8")],
+    ] as const
+  ) {
     const lines = workbookLines(readWorkbook(bytes, kind));
     assertEquals(lines.filter((l) => !l.header).length, products, kind);
     assertEquals(lines.at(-1)!.ref.replace(/^.*!/, ""), "R1600", kind);
@@ -204,7 +206,21 @@ Deno.test("表头：公司名 / PRICE LIST 那种标题行不会被当成表头�
   assertFalse(isHeaderCell("Tel: 07-3345678"));
   assertFalse(isHeaderCell("No. 12, Jalan Perindustrian, 81100 Johor Bahru (Postcode)"));
   assert(isHeaderCell("PRICE LIST")); // 只有一格：分数不够当表头
-  for (const c of ["No", "No.", "#", "Bil", "Item", "货品 Item", "Pack (pcs/ctn)", "Harga (RM)", "Unit Price", "MOQ", "单价"]) {
+  for (
+    const c of [
+      "No",
+      "No.",
+      "#",
+      "Bil",
+      "Item",
+      "货品 Item",
+      "Pack (pcs/ctn)",
+      "Harga (RM)",
+      "Unit Price",
+      "MOQ",
+      "单价",
+    ]
+  ) {
     assert(isHeaderCell(c), c);
   }
   // 只有一格像栏名：退回「全是文字而下一行有数字」的那行

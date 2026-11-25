@@ -94,6 +94,15 @@ export async function mapLimit<T, R>(
   return out;
 }
 
+/** 对外请求（Graph / FCM / Google）一个最多等多久 */
+export const REQUEST_TIMEOUT_MS = 15_000;
+
+/** 这个请求可以等多久：平常 15 秒；有期限的话不超过期限（最少 1 秒） */
+export function requestTimeoutMs(deadline?: number | null): number {
+  if (deadline == null) return REQUEST_TIMEOUT_MS;
+  return Math.max(1_000, Math.min(REQUEST_TIMEOUT_MS, deadline - Date.now()));
+}
+
 export class BodyTooLargeError extends Error {
   constructor(public readonly limit: number) {
     super(`BODY_TOO_LARGE (> ${limit} bytes)`);

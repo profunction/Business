@@ -26,7 +26,7 @@ Future<({Uint8List bytes, FileKind kind})> readPriceListFile(PickedFile file) as
   return (bytes: bytes, kind: kind);
 }
 
-enum _Stage { choose, uploading, waiting, failed }
+enum _Stage { choose, uploading, waiting, failed, timedOut }
 
 /// 上传价目表：三个大按钮「拍照」「选照片」「选文件（Excel、PDF）」→ 上传 → 等 AI（每 3 秒查一次，最多 5 分钟）
 /// → 读好了去确认页；读不到就说原因，可以再上传一次。[importId] 有给的话直接等那一份（从首页回来看）
@@ -113,7 +113,13 @@ class _ImportPageState extends ConsumerState<ImportPage> {
             }
           },
           onError: (Object e) {
-            if (mounted) _fail(context.l10n.error(e));
+            if (!mounted) return;
+            // 等了 5 分钟还没读完：不算失败（AI 还在读），请老板晚一点从首页回来看
+            if (e is AppError && e.code == 'IMPORT_TIMEOUT') {
+              setState(() => _stage = _Stage.timedOut);
+            } else {
+              _fail(context.l10n.error(e));
+            }
           },
         );
   }
@@ -136,6 +142,11 @@ class _ImportPageState extends ConsumerState<ImportPage> {
           _slow ? l.sellerImportStillReading : l.sellerImportProcessing,
           l.sellerImportWaitHint,
         ),
+        _Stage.timedOut => CenterMessage(
+          key: const Key('import-timeout'),
+          icon: Icons.hourglass_bottom,
+          text: l.sellerErrImportTimeout,
+        ),
         _Stage.failed => CenterMessage(
           key: const Key('import-failed'),
           icon: Icons.error_outline,
@@ -154,7 +165,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
           ),
         ),
         // 等的时候可以先回首页做别的事（读好了首页会显示）
-        _Stage.waiting => BottomAction(
+        _Stage.waiting || _Stage.timedOut => BottomAction(
           child: OutlinedButton(
             key: const Key('import-leave'),
             onPressed: () => context.go('/seller'),
