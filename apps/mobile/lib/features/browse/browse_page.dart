@@ -46,7 +46,7 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
             child: Row(
               children: [
                 Expanded(
-                  child: _ModeButton(
+                  child: ModeButton(
                     label: l.browseByProduct,
                     icon: Icons.category,
                     selected: !_byWholesaler,
@@ -55,7 +55,7 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: _ModeButton(
+                  child: ModeButton(
                     label: l.browseByWholesaler,
                     icon: Icons.store,
                     selected: _byWholesaler,
@@ -118,43 +118,6 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
   }
 }
 
-/// 「看商品」/「看批发商」：两个一样大的按钮，选中的是实心
-class _ModeButton extends StatelessWidget {
-  const _ModeButton({required this.label, required this.icon, required this.selected, required this.onTap});
-
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final style = FilledButton.styleFrom(
-      minimumSize: const Size.fromHeight(56),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-    );
-    final child = Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 24),
-        const SizedBox(width: 6),
-        Flexible(child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis)),
-      ],
-    );
-    return selected
-        ? FilledButton(style: style, onPressed: onTap, child: child)
-        : OutlinedButton(
-            style: OutlinedButton.styleFrom(
-              minimumSize: const Size.fromHeight(56),
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-            ),
-            onPressed: onTap,
-            child: child,
-          );
-  }
-}
-
 IconData _categoryIcon(String code) => switch (code) {
   'cups' => Icons.local_drink,
   'lids' => Icons.circle_outlined,
@@ -184,7 +147,10 @@ class _WholesalerList extends ConsumerWidget {
         separatorBuilder: (_, _) => const SizedBox(height: 12),
         itemBuilder: (context, i) {
           if (list.isEmpty) {
-            return Padding(padding: const EdgeInsets.all(24), child: Text(l.noResults, textAlign: TextAlign.center));
+            return Padding(
+              padding: const EdgeInsets.all(24),
+              child: Text(l.noResults, textAlign: TextAlign.center),
+            );
           }
           return _WholesalerCard(w: list[i]);
         },

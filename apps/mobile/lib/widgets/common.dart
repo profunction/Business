@@ -148,6 +148,40 @@ class BottomAction extends StatelessWidget {
   }
 }
 
+/// 页面上面的提示条（试用、免费版、批发商等审核……）：图标 + 一句话，右边可以放一个按钮
+class NoticeBanner extends StatelessWidget {
+  const NoticeBanner({
+    super.key,
+    required this.color,
+    required this.icon,
+    required this.text,
+    this.textStyle,
+    this.action,
+  });
+
+  final Color color;
+  final IconData icon;
+  final String text;
+  final TextStyle? textStyle;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(16)),
+      child: Row(
+        children: [
+          Icon(icon, size: 30),
+          const SizedBox(width: 12),
+          Expanded(child: Text(text, style: textStyle ?? Theme.of(context).textTheme.titleMedium)),
+          ?action,
+        ],
+      ),
+    );
+  }
+}
+
 /// 按钮在忙的时候显示转圈，不让人连按两次
 class BusyButton extends StatelessWidget {
   const BusyButton({super.key, required this.label, required this.onPressed, this.busy = false, this.icon});
@@ -166,6 +200,62 @@ class BusyButton extends StatelessWidget {
       return FilledButton.icon(onPressed: onPressed, icon: Icon(icon, size: 28), label: child);
     }
     return FilledButton(onPressed: busy ? null : onPressed, child: child);
+  }
+}
+
+/// 几个一样大的切换按钮（「看商品」/「看批发商」、订单的「新订单 / 今天要送 / 全部」），选中的是实心。
+/// 放在 Row 里，每个用 Expanded 包起来
+class ModeButton extends StatelessWidget {
+  const ModeButton({
+    super.key,
+    required this.label,
+    this.icon,
+    required this.selected,
+    required this.onTap,
+    this.maxLines = 1,
+  });
+
+  final String label;
+  final IconData? icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  /// 窄的按钮（一排三个）可以让字换行，不要被切掉
+  final int maxLines;
+
+  @override
+  Widget build(BuildContext context) {
+    const padding = EdgeInsets.symmetric(horizontal: 8, vertical: 8);
+    final text = Text(
+      label,
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
+      textAlign: TextAlign.center,
+      style: maxLines > 1 ? const TextStyle(fontSize: 20, height: 1.15) : null,
+    );
+    final child = Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        if (icon != null) ...[Icon(icon, size: 24), const SizedBox(width: 6)],
+        Flexible(child: text),
+      ],
+    );
+    return Semantics(
+      selected: selected,
+      button: true,
+      child: selected
+          ? FilledButton(
+              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56), padding: padding),
+              onPressed: onTap,
+              child: child,
+            )
+          : OutlinedButton(
+              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(56), padding: padding),
+              onPressed: onTap,
+              child: child,
+            ),
+    );
   }
 }
 
@@ -352,13 +442,14 @@ void showMessage(BuildContext context, String text, {bool error = false}) {
     );
 }
 
-/// 「确定要…？」两个大按钮
+/// 「确定要…？」两个大按钮。destructive：确定的按钮用红色（例如整张单缺货）
 Future<bool> confirmDialog(
   BuildContext context, {
   required String title,
   required String confirmLabel,
   Widget? content,
   String? cancelLabel,
+  bool destructive = false,
 }) async {
   final l = context.l10n;
   final ok = await showDialog<bool>(
@@ -370,7 +461,10 @@ Future<bool> confirmDialog(
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: Text(cancelLabel ?? l.cancel)),
         FilledButton(
-          style: FilledButton.styleFrom(minimumSize: const Size(120, 56)),
+          style: FilledButton.styleFrom(
+            minimumSize: const Size(120, 56),
+            backgroundColor: destructive ? AppTheme.problem : null,
+          ),
           onPressed: () => Navigator.pop(context, true),
           child: Text(confirmLabel),
         ),

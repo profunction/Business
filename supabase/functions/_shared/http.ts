@@ -94,4 +94,45 @@ export async function mapLimit<T, R>(
   return out;
 }
 
+export class BodyTooLargeError extends Error {
+  constructor(public readonly limit: number) {
+    super(`BODY_TOO_LARGE (> ${limit} bytes)`);
+    this.name = "BodyTooLargeError";
+  }
+}
+
+/**
+ * 读整个 request body，但最多 max 个字：Content-Length 写超过 → 一个字都不读就丢 BodyTooLargeError；
+ * 没写（chunked）或写少了 → 边读边数，超过就停（cancel）再丢。验身份之前用这个，不会被大 body 塞爆记忆体。
+ */
+export async function readBodyLimited(req: Request, max: number): Promise<Uint8Array> {
+  const declared = req.headers.get("content-length");
+  if (declared != null && /^\s*\d+\s*$/.test(declared) && Number(declared) > max) {
+    await req.body?.cancel().catch(() => {});
+    throw new BodyTooLargeError(max);
+  }
+  if (!req.body) return new Uint8Array(0);
+  const reader = req.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > max) {
+      await reader.cancel().catch(() => {});
+      throw new BodyTooLargeError(max);
+    }
+    chunks.push(value);
+  }
+  if (chunks.length === 1) return chunks[0];
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const c of chunks) {
+    out.set(c, o);
+    o += c.length;
+  }
+  return out;
+}
+
 export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

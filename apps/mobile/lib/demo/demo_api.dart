@@ -234,7 +234,7 @@ class DemoApi extends WholesaleApi {
   RealtimeChannel watchShopOrders(String shopId, void Function() onChange) => client.channel('demo');
 
   @override
-  Future<void> stopWatching(RealtimeChannel channel) async {}
+  Future<void> stopWatching(RealtimeChannel channel) async => _orderWatchers.remove(channel);
 
   // ---------------- 推送 ----------------
 
@@ -286,8 +286,26 @@ class DemoApi extends WholesaleApi {
     sellerData.setStatus(orderId, OrderStatus.delivered);
   });
 
+  /// 现在开着的「批发商订单」Realtime（示范模式不会真的连线）
+  final _orderWatchers = <RealtimeChannel, void Function()>{};
+  var _channelNo = 0;
+
+  /// 有几个页面在听批发商的订单（应该最多一个 channel）
+  int get orderWatcherCount => _orderWatchers.length;
+
+  /// 测试用：假装 Realtime 说订单变了（例如批发商在 WhatsApp 按了确认、来了新订单）
+  void simulateOrderChange() {
+    for (final onChange in [..._orderWatchers.values]) {
+      onChange();
+    }
+  }
+
   @override
-  RealtimeChannel watchWholesalerOrders(String wholesalerId, void Function() onChange) => client.channel('demo');
+  RealtimeChannel watchWholesalerOrders(String wholesalerId, void Function() onChange) {
+    final channel = client.channel('demo-wholesaler-orders-${++_channelNo}');
+    _orderWatchers[channel] = onChange;
+    return channel;
+  }
 
   @override
   Future<List<SellerProduct>> listMyProducts(String wholesalerId) => _later(sellerData.products);
@@ -312,6 +330,22 @@ class DemoApi extends WholesaleApi {
     calls.add('productStatus $productId ${status.name}');
     return sellerData.updateProduct(productId, {'status': status.name});
   });
+
+  /// 示范模式上传的商品照片（不会真的上传）：路径 → 内容
+  final demoPhotos = <String, Uint8List>{};
+
+  @override
+  Future<String> uploadProductPhoto(String wholesalerId, Uint8List bytes) => _later(() {
+    final kind = checkProductPhoto(bytes);
+    final path = '$wholesalerId/${newUuidV4()}.${kind.ext}';
+    calls.add('uploadPhoto ${kind.ext}');
+    demoPhotos[path] = bytes;
+    return path;
+  });
+
+  /// 示范模式没有 Storage：照片网址指向不存在的地方，页面会显示占位图
+  @override
+  String productPhotoUrl(String path) => 'http://127.0.0.1:1/demo-photos/$path';
 
   /// 示范模式不用等 3 秒
   @override

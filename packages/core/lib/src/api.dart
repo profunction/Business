@@ -472,9 +472,7 @@ class WholesaleApi {
   /// 一次做完：判断格式 → 上传 → 建导入 → 叫 AI。回传的导入还是 processing。
   /// 不收的格式（HEIC、Word……）→ UNSUPPORTED_FILE；超过 10 MB → FILE_TOO_LARGE
   Future<PriceListImport> submitPriceList(String wholesalerId, Uint8List bytes, {String? fileName}) async {
-    if (bytes.length > priceListMaxBytes) throw const AppError('FILE_TOO_LARGE');
-    final kind = sniffFileType(bytes, fileName: fileName);
-    if (!kind.isPriceList) throw AppError('UNSUPPORTED_FILE', detail: kind.type.name);
+    final kind = checkPriceListFile(bytes, fileName: fileName);
     final path = await uploadPriceList(wholesalerId, bytes, kind.ext, kind.contentType);
     final import = await createImport(wholesalerId: wholesalerId, filePath: path, fileType: kind.importType!);
     try {
@@ -564,6 +562,22 @@ class WholesaleApi {
   Future<ApplyImportResult> applyImport(String importId) async =>
       ApplyImportResult.fromJson(await _rpcJson('apply_price_list_import', {'p_import_id': importId}));
 
+  // ---------------- 批发商：商品照片 ----------------
+
+  /// 上传一张商品照片到 Storage `product-photos/<wholesalerId>/<uuid>.<ext>`（公开读），回传路径。
+  /// 存进商品的 photo_paths 才会显示。只收 JPEG / PNG / WebP、最多 5 MB（[checkProductPhoto]）
+  Future<String> uploadProductPhoto(String wholesalerId, Uint8List bytes) => _call(() async {
+    final kind = checkProductPhoto(bytes);
+    final path = '$wholesalerId/${newUuidV4()}.${kind.ext}';
+    await client.storage
+        .from('product-photos')
+        .uploadBinary(path, bytes, fileOptions: FileOptions(contentType: kind.contentType));
+    return path;
+  });
+
+  /// 商品照片的网址（bucket 是公开读的）
+  String productPhotoUrl(String path) => client.storage.from('product-photos').getPublicUrl(path);
+
   // ---------------- 批发商：设定 ----------------
 
   Future<WholesalerSettings> getWholesalerSettings(String wholesalerId) => _call(() async {
@@ -605,6 +619,28 @@ class WholesaleApi {
       if (rows.isEmpty) throw const AppError('NOT_ALLOWED');
     }
   });
+}
+
+/// 上传价目表之前检查（不用等上传完才知道）：超过 10 MB → FILE_TOO_LARGE；
+/// HEIC、Word、看不懂的 → UNSUPPORTED_FILE（detail 是认出来的格式，例如 'heic'）。回传真正的格式
+FileKind checkPriceListFile(Uint8List bytes, {String? fileName}) {
+  if (bytes.length > priceListMaxBytes) throw const AppError('FILE_TOO_LARGE');
+  final kind = sniffFileType(bytes, fileName: fileName);
+  if (!kind.isPriceList) throw AppError('UNSUPPORTED_FILE', detail: kind.type.name);
+  return kind;
+}
+
+/// 商品照片的大小上限（跟 Storage bucket product-photos 一样：5 MB）
+const productPhotoMaxBytes = 5 * 1024 * 1024;
+
+/// 商品照片只收 JPEG / PNG / WebP（bucket 的 allowed_mime_types），最多 5 MB
+FileKind checkProductPhoto(Uint8List bytes) {
+  if (bytes.length > productPhotoMaxBytes) throw const AppError('FILE_TOO_LARGE');
+  final kind = sniffFileType(bytes);
+  if (kind != FileKind.jpeg && kind != FileKind.png && kind != FileKind.webp) {
+    throw AppError('UNSUPPORTED_FILE', detail: kind.type.name);
+  }
+  return kind;
 }
 
 /// 'YYYY-MM-DD'（日期参数；DateTime 的年月日照原样，不换时区）

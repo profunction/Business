@@ -175,6 +175,12 @@ Deno.test("错误分类：可以重试 / 不重试 / 要通知技术", () => {
   // 我们的设定问题：通知技术、修好后会自动补发
   assertEquals(classifyWhatsAppError(190, 401), { retryable: true, alert: true });
   assertEquals(classifyWhatsAppError(131042, 400), { retryable: true, alert: true });
+  // verifications.json 的更正：131037（显示名称没批准）是我们的设定问题，跟 131045 / 133010 一样重试 + 通知
+  for (const code of [131037, 131045, 133010]) {
+    assertEquals(classifyWhatsAppError(code, 400), { retryable: true, alert: true }, String(code));
+  }
+  // 131048（spam rate limit）：要去看号码的品质评分，一直重试没用 → 不重试、通知技术
+  assertEquals(classifyWhatsAppError(131048, 400), { retryable: false, alert: true });
   assertEquals(classifyWhatsAppError(null, 503), { retryable: true, alert: false });
   assertEquals(classifyWhatsAppError(null, 0), { retryable: true, alert: false });
   assertEquals(classifyWhatsAppError(99999, 400), { retryable: false, alert: false });

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wholesale_core/wholesale_core.dart';
 
@@ -44,6 +46,33 @@ final sellerOrdersProvider = FutureProvider.autoDispose.family<List<SellerOrderS
   }
 });
 
+/// 送货单（get_delivery_summary）。参数是 'YYYY-MM-DD'；null = 服务器算的马来西亚今天
+final deliverySummaryProvider = FutureProvider.autoDispose.family<DeliverySummary, String?>(
+  (ref, date) => ref
+      .watch(apiProvider)
+      .getDeliverySummary(ref.watch(wholesalerIdProvider), date: date == null ? null : DateTime.parse(date)),
+);
+
+/// 自己的全部商品（包括草稿和下架的）
+final sellerProductsProvider = FutureProvider.autoDispose<List<SellerProduct>>(
+  (ref) => ref.watch(apiProvider).listMyProducts(ref.watch(wholesalerIdProvider)),
+);
+
+/// 一样商品（改商品页）
+final sellerProductProvider = FutureProvider.autoDispose.family<SellerProduct, String>(
+  (ref, id) => ref.watch(apiProvider).getProduct(id),
+);
+
+/// 一份价目表导入（status：processing / review / applied / failed）
+final priceListImportProvider = FutureProvider.autoDispose.family<PriceListImport, String>(
+  (ref, id) => ref.watch(apiProvider).getImport(id),
+);
+
+/// 价目表导入的每一行（AI 读到的商品）
+final importRowsProvider = FutureProvider.autoDispose.family<List<PriceListImportRow>, String>(
+  (ref, id) => ref.watch(apiProvider).listImportRows(id),
+);
+
 /// 设定页：通知方式、WhatsApp 号码和同意时间
 final wholesalerSettingsProvider = FutureProvider.autoDispose<WholesalerSettings>(
   (ref) => ref.watch(apiProvider).getWholesalerSettings(ref.watch(wholesalerIdProvider)),
@@ -67,6 +96,7 @@ final sellerRealtimeProvider = Provider.autoDispose<void>((ref) {
     ref.invalidate(sellerHomeProvider);
     ref.invalidate(sellerOrdersProvider);
     ref.invalidate(orderDetailProvider);
+    ref.invalidate(deliverySummaryProvider);
   });
   ref.onDispose(() {
     alive = false;
@@ -109,6 +139,47 @@ class SellerActions {
     _settingsChanged();
   }
 
+  /// 保存一样商品（新增或修改）。有新照片就先上传，换掉原本的照片
+  Future<SellerProduct> saveProduct(SellerProduct product, {Uint8List? photo}) async {
+    var p = product;
+    if (photo != null) p = p.copyWith(photoPaths: [await _api.uploadProductPhoto(_wholesalerId, photo)]);
+    final saved = await _api.saveProduct(p);
+    ref.invalidate(sellerProductsProvider);
+    ref.invalidate(sellerProductProvider(saved.id));
+    ref.invalidate(sellerHomeProvider);
+    return saved;
+  }
+
+  /// 上传价目表 → 建导入 → 叫 AI（回传的导入还是 processing，之后用 watchImport 等）
+  Future<PriceListImport> submitPriceList(Uint8List bytes, {String? fileName}) async {
+    try {
+      return await _api.submitPriceList(_wholesalerId, bytes, fileName: fileName);
+    } finally {
+      ref.invalidate(sellerHomeProvider);
+    }
+  }
+
+  /// 改价目表的一行（批发商改名字、价钱、新增 / 更新 / 跳过）
+  Future<PriceListImportRow> updateImportRow(PriceListImportRow row, Map<String, Object?> fields) async {
+    try {
+      return await _api.updateImportRow(row.id, fields);
+    } finally {
+      ref.invalidate(importRowsProvider(row.importId));
+    }
+  }
+
+  /// 确认上架。失败（例如某一行不完整）也刷新，画面显示服务器现在的样子
+  Future<ApplyImportResult> applyImport(String importId) async {
+    try {
+      return await _api.applyImport(importId);
+    } finally {
+      ref.invalidate(priceListImportProvider(importId));
+      ref.invalidate(importRowsProvider(importId));
+      ref.invalidate(sellerProductsProvider);
+      ref.invalidate(sellerHomeProvider);
+    }
+  }
+
   Future<void> _change(String orderId, Future<void> Function() action) async {
     try {
       await action();
@@ -121,6 +192,7 @@ class SellerActions {
     ref.invalidate(orderDetailProvider(orderId));
     ref.invalidate(sellerOrdersProvider);
     ref.invalidate(sellerHomeProvider);
+    ref.invalidate(deliverySummaryProvider);
   }
 
   void _settingsChanged() {

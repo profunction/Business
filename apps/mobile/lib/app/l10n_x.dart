@@ -103,8 +103,10 @@ extension L10nText on L10n {
       'NO_PREVIOUS_ORDER' => errNoPreviousOrder,
       // 批发商端
       'ITEM_NOT_IN_ORDER' => sellerErrItemNotInOrder,
-      'UNSUPPORTED_FILE' => sellerErrUnsupportedFile,
+      // iPhone 的 HEIC 照片：告诉老板怎么办（用「选照片」会自动转成 JPEG）
+      'UNSUPPORTED_FILE' => e is AppError && e.detail == 'heic' ? sellerErrHeic : sellerErrUnsupportedFile,
       'FILE_TOO_LARGE' => sellerErrFileTooLarge,
+      'NO_PERMISSION' => sellerErrNoPermission,
       'IMPORT_TIMEOUT' => sellerErrImportTimeout,
       'IMPORT_NOT_IN_REVIEW' || 'IMPORT_NOT_PROCESSING' || 'IMPORT_ALREADY_APPLIED' => sellerErrImportDone,
       'IMPORT_ROW_INCOMPLETE' => sellerErrRowIncomplete(_row(e)),
@@ -117,13 +119,46 @@ extension L10nText on L10n {
 
   int _row(Object e) => (e is AppError ? e.rowNo : null) ?? 0;
 
+  /// 等了多久（新订单）：12 分钟 / 3 小时 / 2 天。不到 1 分钟也说 1 分钟
+  String waited(DateTime since, {DateTime? now}) {
+    final d = (now ?? DateTime.now()).difference(since);
+    if (d.inMinutes < 60) return sellerMinutes(d.inMinutes < 1 ? 1 : d.inMinutes);
+    if (d.inHours < 24) return sellerHours(d.inHours);
+    return sellerDays(d.inDays);
+  }
+
+  String notifyChannel(NotifyChannel c) => switch (c) {
+    NotifyChannel.auto => sellerNotifyAuto,
+    NotifyChannel.push => sellerNotifyPush,
+    NotifyChannel.whatsapp => sellerNotifyWhatsapp,
+  };
+
   /// 价目表 AI 读失败的原因（price_list_imports.error_message，parse-price-list 写的英文代码）
   String importFailure(String? code) => switch (code) {
     'UNSUPPORTED_FILE' => sellerErrUnsupportedFile,
     'FILE_TOO_LARGE' => sellerErrFileTooLarge,
+    'AI_REFUSED' => sellerImportErrRefused,
+    'AI_TRUNCATED' => sellerImportErrTruncated,
     'START_FAILED' || 'NETWORK' => errNetwork,
-    _ => sellerErrAiFailed, // AI_REFUSED、AI_TRUNCATED、其他
+    _ => sellerErrAiFailed, // 其他（看不清楚、服务器出错……）
   };
+
+  /// 库存：有货 / 快卖完 / 缺货
+  String stock(StockStatus s) => switch (s) {
+    StockStatus.inStock => sellerStockIn,
+    StockStatus.lowStock => sellerStockLow,
+    StockStatus.outOfStock => sellerStockOut,
+  };
+
+  /// 价目表的一行要做什么：新增 / 更新 / 跳过
+  String importAction(ImportRowAction a) => switch (a) {
+    ImportRowAction.create => sellerActionCreate,
+    ImportRowAction.update => sellerActionUpdate,
+    ImportRowAction.skip => sellerActionSkip,
+  };
+
+  /// 3 箱
+  String qtyUnit(int qty, SellUnit u) => sellerSummaryQty(qty, unit(u));
 
   // ---------- 日期（全部按马来西亚时间显示） ----------
 

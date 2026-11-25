@@ -744,4 +744,641 @@ class L10nEn extends L10n {
 
   @override
   String get sellerErrNotFound => 'Not found. It may have been removed.';
+
+  @override
+  String sellerHomeNewOrders(int count) {
+    return 'New orders ($count)';
+  }
+
+  @override
+  String get sellerNoNewOrders => 'No new orders';
+
+  @override
+  String sellerOldestWaiting(String duration) {
+    return 'The oldest has waited $duration';
+  }
+
+  @override
+  String sellerWaiting(String duration) {
+    return 'Waiting $duration';
+  }
+
+  @override
+  String sellerMinutes(int count) {
+    String _temp0 = intl.Intl.pluralLogic(count, locale: localeName, other: '$count minutes', one: '1 minute');
+    return '$_temp0';
+  }
+
+  @override
+  String sellerHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(count, locale: localeName, other: '$count hours', one: '1 hour');
+    return '$_temp0';
+  }
+
+  @override
+  String sellerDays(int count) {
+    String _temp0 = intl.Intl.pluralLogic(count, locale: localeName, other: '$count days', one: '1 day');
+    return '$_temp0';
+  }
+
+  @override
+  String sellerHomeToday(int count) {
+    return 'Deliver today ($count)';
+  }
+
+  @override
+  String sellerTodayTotal(String total) {
+    return 'Total $total';
+  }
+
+  @override
+  String get sellerNothingToday => 'Nothing to deliver today';
+
+  @override
+  String get sellerHomeProducts => 'Products & prices';
+
+  @override
+  String sellerProductsActive(int count) {
+    return '$count on sale';
+  }
+
+  @override
+  String sellerProductsOutOfStock(int count) {
+    return '$count out of stock';
+  }
+
+  @override
+  String sellerProductsLowStock(int count) {
+    return '$count running low';
+  }
+
+  @override
+  String sellerProductsDraft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(count, locale: localeName, other: '$count drafts', one: '1 draft');
+    return '$_temp0';
+  }
+
+  @override
+  String get sellerHomeImport => 'Upload price list';
+
+  @override
+  String get sellerImportNone => 'Take a photo or pick an Excel file. AI makes your product list.';
+
+  @override
+  String get sellerImportProcessing => 'AI is reading your price list…';
+
+  @override
+  String get sellerImportReview => 'AI is done. Check it and put it on sale.';
+
+  @override
+  String get sellerImportFailed => 'The last one couldn\'t be read. Please upload again.';
+
+  @override
+  String sellerImportApplied(String date) {
+    return 'Put on sale on $date';
+  }
+
+  @override
+  String get sellerPendingBanner =>
+      'We\'re checking your details. Buyers can\'t see you until then, but you can add products and prices now.';
+
+  @override
+  String get sellerSuspendedBanner =>
+      'Your account is on hold, so buyers can\'t see you now. Please contact customer service.';
+
+  @override
+  String get sellerOrdersTitle => 'Orders';
+
+  @override
+  String get sellerTabPending => 'New';
+
+  @override
+  String get sellerTabToday => 'Today';
+
+  @override
+  String get sellerTabAll => 'All';
+
+  @override
+  String sellerTabWithCount(String label, int count) {
+    return '$label ($count)';
+  }
+
+  @override
+  String sellerTodayCount(int count, String total) {
+    String _temp0 = intl.Intl.pluralLogic(count, locale: localeName, other: '$count orders', one: '1 order');
+    return '$_temp0, total $total';
+  }
+
+  @override
+  String get sellerOpenSummary => 'Delivery list (picking, print)';
+
+  @override
+  String sellerDeliverOn(String date) {
+    return 'Deliver: $date';
+  }
+
+  @override
+  String sellerBuyerNote(String note) {
+    return 'Buyer\'s note: $note';
+  }
+
+  @override
+  String get sellerCall => 'Call';
+
+  @override
+  String get sellerWhatsapp => 'WhatsApp';
+
+  @override
+  String sellerWhatsappHello(String orderNo) {
+    return 'Hi, about your order $orderNo:';
+  }
+
+  @override
+  String get sellerCannotOpen => 'Couldn\'t open it. Is the app installed on this phone?';
+
+  @override
+  String sellerContact(String name) {
+    return 'Contact: $name';
+  }
+
+  @override
+  String get sellerConfirm => 'Confirm';
+
+  @override
+  String get sellerOutOfStock => 'Out of stock';
+
+  @override
+  String get sellerChecklistTitle => 'Anything out of stock?';
+
+  @override
+  String get sellerChecklistHint =>
+      'Tick what you don\'t have. Those won\'t be charged. If you have everything, just confirm.';
+
+  @override
+  String get sellerConfirmAllInStock => 'All in stock, confirm';
+
+  @override
+  String sellerConfirmWithOos(int count) {
+    return 'Confirm ($count out of stock)';
+  }
+
+  @override
+  String get sellerConfirmAllOos => 'Everything is out of stock';
+
+  @override
+  String get sellerOosConfirmTitle => 'Is the whole order out of stock?';
+
+  @override
+  String get sellerOosConfirmBody => 'The buyer will be told, and this order won\'t be delivered.';
+
+  @override
+  String get sellerOosConfirmButton => 'Mark out of stock';
+
+  @override
+  String get sellerConfirmedMsg => 'Confirmed. The buyer will be told.';
+
+  @override
+  String get sellerOosMsg => 'Marked out of stock. The buyer will be told.';
+
+  @override
+  String get sellerStartDelivery => 'Start delivery';
+
+  @override
+  String get sellerMarkDelivered => 'Delivered';
+
+  @override
+  String get sellerDeliveredConfirm => 'Has the order been delivered?';
+
+  @override
+  String get sellerDeliveringMsg => 'On the way. The buyer will be told.';
+
+  @override
+  String get sellerDeliveredMsg => 'Delivered. Thank you!';
+
+  @override
+  String get sellerMyBusiness => 'My business';
+
+  @override
+  String get sellerNotifyTitle => 'How should we tell you about new orders?';
+
+  @override
+  String get sellerNotifyAuto => 'Automatic (recommended)';
+
+  @override
+  String get sellerNotifyAutoHint => 'App notification if the app is on your phone, otherwise WhatsApp';
+
+  @override
+  String get sellerNotifyPush => 'App notification';
+
+  @override
+  String get sellerNotifyWhatsapp => 'WhatsApp';
+
+  @override
+  String sellerNotifyWhatsappTo(String phone) {
+    return 'Sent to $phone';
+  }
+
+  @override
+  String get sellerNotifyNoWhatsapp => 'No WhatsApp number yet. Customer service can add it for you.';
+
+  @override
+  String get sellerWhatsappOptIn => 'Get orders on WhatsApp';
+
+  @override
+  String get sellerWhatsappOptInHint => 'If this is off, we won\'t send you WhatsApp messages';
+
+  @override
+  String get sellerNotifyOwnerOnly => 'Only the owner can change this. Customer service can also change it for you.';
+
+  @override
+  String get pushSettingsTitle => 'Notifications on this phone';
+
+  @override
+  String get pushStatusOn => 'On. Your phone will ring for new orders.';
+
+  @override
+  String get pushStatusOff => 'Notifications are not on yet';
+
+  @override
+  String get pushNotSupported => 'This phone can\'t get app notifications. You can get orders on WhatsApp instead.';
+
+  @override
+  String get sellerSummaryTitle => 'Delivery list';
+
+  @override
+  String sellerSummaryHeading(String date) {
+    return 'Delivery list $date';
+  }
+
+  @override
+  String get sellerSummaryPrevDay => 'Previous day';
+
+  @override
+  String get sellerSummaryNextDay => 'Next day';
+
+  @override
+  String sellerSummaryPending(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count orders are not confirmed yet',
+      one: '1 order is not confirmed yet',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get sellerSummaryGoConfirm => 'Confirm';
+
+  @override
+  String get sellerSummaryPicking => 'Picking list';
+
+  @override
+  String get sellerSummaryPickingHint => 'All orders added up. Out-of-stock items are not included.';
+
+  @override
+  String sellerSummaryQty(int qty, String unit) {
+    return '$qty $unit';
+  }
+
+  @override
+  String get sellerSummaryEmpty => 'Nothing to deliver on this day';
+
+  @override
+  String get sellerSummaryOrders => 'Orders (by area, then shop)';
+
+  @override
+  String get sellerSummaryOtherArea => 'Other areas';
+
+  @override
+  String get sellerSummaryPrint => 'Print';
+
+  @override
+  String get sellerSummaryShare => 'Share with driver';
+
+  @override
+  String sellerSummaryPhone(String phone) {
+    return 'Phone: $phone';
+  }
+
+  @override
+  String sellerSummaryAddress(String address) {
+    return 'Address: $address';
+  }
+
+  @override
+  String get sellerSummaryOosMark => '(out of stock)';
+
+  @override
+  String get sellerSummarySignature => 'Received by:';
+
+  @override
+  String sellerSummaryPage(int page, int total) {
+    return 'Page $page of $total';
+  }
+
+  @override
+  String get sellerSummaryColItem => 'Item';
+
+  @override
+  String get sellerSummaryColQty => 'Qty';
+
+  @override
+  String get sellerSummaryColPack => 'Pack size';
+
+  @override
+  String get sellerSummaryPrintFailed => 'Couldn\'t print. Please try again.';
+
+  @override
+  String get sellerSummaryShareFailed => 'Couldn\'t share. Please try again.';
+
+  @override
+  String get sellerProductsSearch => 'Search products';
+
+  @override
+  String get sellerFilterAll => 'All';
+
+  @override
+  String get sellerFilterOutOfStock => 'Out of stock';
+
+  @override
+  String get sellerFilterDraft => 'Drafts';
+
+  @override
+  String get sellerStockIn => 'In stock';
+
+  @override
+  String get sellerStockLow => 'Running low';
+
+  @override
+  String get sellerStockOut => 'Out of stock';
+
+  @override
+  String get sellerStatusDraft => 'Draft';
+
+  @override
+  String get sellerStatusArchived => 'Off sale';
+
+  @override
+  String get sellerProductsEmpty =>
+      'No products yet. Tap \"Add product\", or upload a price list and let the AI make them for you.';
+
+  @override
+  String get sellerProductsNoMatch => 'No matching products';
+
+  @override
+  String get sellerAddProduct => 'Add product';
+
+  @override
+  String get sellerEditProduct => 'Edit product';
+
+  @override
+  String get sellerFieldName => 'Product name';
+
+  @override
+  String get sellerFieldNameHint => 'e.g. 16oz PP cup 95mm';
+
+  @override
+  String get sellerFieldUnit => 'What unit do you sell in?';
+
+  @override
+  String sellerFieldPackQty(String unit) {
+    return 'How many pieces in 1 $unit?';
+  }
+
+  @override
+  String sellerFieldPrice(String unit) {
+    return 'Price for 1 $unit';
+  }
+
+  @override
+  String get sellerFieldPriceHint => 'e.g. 12.50';
+
+  @override
+  String sellerFieldMinQty(String unit) {
+    return 'Minimum order ($unit)';
+  }
+
+  @override
+  String get sellerFieldStock => 'Stock';
+
+  @override
+  String get sellerFieldStatus => 'Can buyers see it?';
+
+  @override
+  String get sellerOnSale => 'On sale';
+
+  @override
+  String get sellerOffSale => 'Off sale';
+
+  @override
+  String get sellerDraftHint => 'This is a draft, so buyers can\'t see it yet. Choose \"On sale\" and save.';
+
+  @override
+  String get sellerOffSaleHint => 'Buyers won\'t see it. You can put it back on sale any time.';
+
+  @override
+  String get sellerErrName => 'Please enter the product name';
+
+  @override
+  String get sellerErrPrice => 'Please enter a price, e.g. 12.50';
+
+  @override
+  String get sellerErrPackQty => 'At least 1';
+
+  @override
+  String get sellerErrForm => 'Some details are missing. Please check the parts in red.';
+
+  @override
+  String get sellerPhoto => 'Photo (optional)';
+
+  @override
+  String get sellerPhotoTake => 'Take photo';
+
+  @override
+  String get sellerPhotoPick => 'Choose photo';
+
+  @override
+  String get sellerPhotoRemove => 'Remove photo';
+
+  @override
+  String get sellerErrPhotoFile => 'Photos must be JPG, PNG or WebP, up to 5 MB';
+
+  @override
+  String get sellerErrNoPermission => 'Please allow this app to use the camera and photos in your phone\'s Settings';
+
+  @override
+  String get sellerImportIntro =>
+      'Take a photo of your price list, or choose an Excel or PDF file. The AI turns it into products, and nothing goes on sale until you check it.';
+
+  @override
+  String get sellerImportCamera => 'Take a photo';
+
+  @override
+  String get sellerImportCameraHint => 'Snap the printed price list clearly';
+
+  @override
+  String get sellerImportGallery => 'Choose a photo';
+
+  @override
+  String get sellerImportGalleryHint => 'A photo or screenshot on your phone';
+
+  @override
+  String get sellerImportFile => 'Choose a file (Excel, PDF)';
+
+  @override
+  String get sellerImportFileHint => 'Excel, PDF or CSV, up to 10 MB';
+
+  @override
+  String get sellerImportUploading => 'Uploading…';
+
+  @override
+  String get sellerImportUploaded => 'Uploaded';
+
+  @override
+  String get sellerImportWaitHint =>
+      'This usually takes 1 to 3 minutes. You can leave this page. The home screen will tell you when it\'s ready.';
+
+  @override
+  String get sellerImportStillReading => 'Still reading. Long price lists take a bit longer…';
+
+  @override
+  String get sellerImportFailedTitle => 'The AI couldn\'t read this price list';
+
+  @override
+  String get sellerImportRetry => 'Upload again';
+
+  @override
+  String get sellerBackHome => 'Back to home';
+
+  @override
+  String get sellerErrHeic =>
+      'This is an iPhone HEIC photo, which the AI can\'t read. Tap \"Choose a photo\" and pick it again. The app will turn it into a JPG.';
+
+  @override
+  String get sellerImportErrRefused =>
+      'The AI wouldn\'t read this file. Please make sure it\'s a price list and try again.';
+
+  @override
+  String get sellerImportErrTruncated =>
+      'The price list is too long for the AI to finish. Please split it into a few photos or files and upload them one at a time.';
+
+  @override
+  String get sellerReviewTitle => 'Check price list';
+
+  @override
+  String sellerReviewSummary(int total, int create, int update, int skip) {
+    return '$total rows: $create new, $update update, $skip skip';
+  }
+
+  @override
+  String sellerReviewUnsure(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'The AI isn\'t sure about $count rows. Please check the yellow ones.',
+      one: 'The AI isn\'t sure about 1 row. Please check the yellow one.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get sellerReviewHint => 'For each row, choose New, Update or Skip. Tap Edit to fix anything wrong.';
+
+  @override
+  String sellerReviewRow(int row) {
+    return 'Row $row';
+  }
+
+  @override
+  String get sellerReviewCheck => 'Please check';
+
+  @override
+  String get sellerReviewNoName => '(no name)';
+
+  @override
+  String get sellerReviewNoPrice => 'No price';
+
+  @override
+  String sellerReviewRaw(String text) {
+    return 'Original: $text';
+  }
+
+  @override
+  String sellerReviewMatched(String name) {
+    return 'Will update: $name';
+  }
+
+  @override
+  String sellerReviewPriceNow(String price) {
+    return 'now $price';
+  }
+
+  @override
+  String get sellerReviewNoMatch => 'None of your products match. You can add it as new.';
+
+  @override
+  String get sellerReviewNoRows => 'The AI found no products in this price list';
+
+  @override
+  String get sellerActionCreate => 'New';
+
+  @override
+  String get sellerActionUpdate => 'Update';
+
+  @override
+  String get sellerActionSkip => 'Skip';
+
+  @override
+  String sellerReviewMissing(String fields) {
+    return 'Missing: $fields';
+  }
+
+  @override
+  String get sellerMissingName => 'name';
+
+  @override
+  String get sellerMissingUnit => 'unit';
+
+  @override
+  String get sellerMissingPack => 'pack size';
+
+  @override
+  String get sellerMissingPrice => 'price';
+
+  @override
+  String get sellerMissingMatch => 'which product to update';
+
+  @override
+  String get sellerReviewEdit => 'Edit';
+
+  @override
+  String sellerReviewEditTitle(int row) {
+    return 'Edit row $row';
+  }
+
+  @override
+  String sellerApply(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Put $count items on sale',
+      one: 'Put 1 item on sale',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sellerApplyDone(int created, int updated) {
+    return 'Done: $created added, $updated updated';
+  }
+
+  @override
+  String get sellerReviewApplied => 'This price list is already on sale';
+
+  @override
+  String get sellerReviewGoProducts => 'See products';
+
+  @override
+  String get sellerReviewWait => 'Wait for the AI';
 }

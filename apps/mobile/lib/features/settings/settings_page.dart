@@ -7,7 +7,7 @@ import '../../app/l10n_x.dart';
 import '../../l10n/app_localizations.dart';
 import '../../app/providers.dart';
 import '../../widgets/common.dart';
-import '../auth/language_page.dart';
+import 'settings_widgets.dart';
 
 /// 设定：语言、我的店、订阅状态、登出
 class SettingsPage extends ConsumerWidget {
@@ -28,24 +28,7 @@ class SettingsPage extends ConsumerWidget {
         children: [
           Text(l.language, style: t.titleMedium),
           const SizedBox(height: 8),
-          Card(
-            child: RadioGroup<String>(
-              groupValue: session.localeCode,
-              onChanged: (code) {
-                if (code != null) ref.read(sessionProvider).setLocale(code);
-              },
-              child: Column(
-                children: [
-                  for (final (code, label) in LanguagePage.options)
-                    RadioListTile<String>(
-                      key: Key('settings-lang-$code'),
-                      value: code,
-                      title: Text(label, style: t.titleMedium),
-                    ),
-                ],
-              ),
-            ),
-          ),
+          const LanguageCard(),
           const SizedBox(height: 20),
           Text(l.myShop, style: t.titleMedium),
           const SizedBox(height: 8),
@@ -96,16 +79,7 @@ class SettingsPage extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 28),
-          OutlinedButton.icon(
-            key: const Key('logout'),
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              if (await confirmDialog(context, title: l.logoutConfirm, confirmLabel: l.logout)) {
-                await ref.read(sessionProvider).signOut();
-              }
-            },
-            label: Text(l.logout),
-          ),
+          const LogoutButton(),
         ],
       ),
     );

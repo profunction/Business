@@ -461,6 +461,7 @@ class SellerProduct {
   Json toWriteJson() => {
     'name': name.trim(),
     'description': description == null || description!.trim().isEmpty ? null : description!.trim(),
+    'photo_paths': photoPaths,
     'catalog_item_id': catalogItemId,
     'category_id': categoryId,
     'unit': sellUnitCode(unit),
@@ -483,6 +484,7 @@ class SellerProduct {
     int? minOrderQty,
     StockStatus? stockStatus,
     ProductStatus? status,
+    List<String>? photoPaths,
   }) => SellerProduct(
     id: id,
     wholesalerId: wholesalerId,
@@ -490,7 +492,7 @@ class SellerProduct {
     categoryId: categoryId ?? this.categoryId,
     name: name ?? this.name,
     description: description ?? this.description,
-    photoPaths: photoPaths,
+    photoPaths: photoPaths ?? this.photoPaths,
     unit: unit ?? this.unit,
     packQty: packQty ?? this.packQty,
     priceSen: priceSen ?? this.priceSen,

@@ -735,4 +735,609 @@ class L10nZh extends L10n {
 
   @override
   String get sellerErrNotFound => '找不到，可能已经被删掉了';
+
+  @override
+  String sellerHomeNewOrders(int count) {
+    return '新订单（$count）';
+  }
+
+  @override
+  String get sellerNoNewOrders => '没有新订单';
+
+  @override
+  String sellerOldestWaiting(String duration) {
+    return '最久的一张等了 $duration';
+  }
+
+  @override
+  String sellerWaiting(String duration) {
+    return '等了 $duration';
+  }
+
+  @override
+  String sellerMinutes(int count) {
+    return '$count 分钟';
+  }
+
+  @override
+  String sellerHours(int count) {
+    return '$count 小时';
+  }
+
+  @override
+  String sellerDays(int count) {
+    return '$count 天';
+  }
+
+  @override
+  String sellerHomeToday(int count) {
+    return '今天要送（$count）';
+  }
+
+  @override
+  String sellerTodayTotal(String total) {
+    return '总额 $total';
+  }
+
+  @override
+  String get sellerNothingToday => '今天没有要送的单';
+
+  @override
+  String get sellerHomeProducts => '商品和价钱';
+
+  @override
+  String sellerProductsActive(int count) {
+    return '上架 $count 样';
+  }
+
+  @override
+  String sellerProductsOutOfStock(int count) {
+    return '$count 样缺货';
+  }
+
+  @override
+  String sellerProductsLowStock(int count) {
+    return '$count 样快卖完';
+  }
+
+  @override
+  String sellerProductsDraft(int count) {
+    return '$count 样草稿';
+  }
+
+  @override
+  String get sellerHomeImport => '上传价目表';
+
+  @override
+  String get sellerImportNone => '拍照或选 Excel，AI 帮你建商品';
+
+  @override
+  String get sellerImportProcessing => 'AI 正在读你的价目表…';
+
+  @override
+  String get sellerImportReview => 'AI 读好了，去确认上架';
+
+  @override
+  String get sellerImportFailed => '上次的读不到，请再上传一次';
+
+  @override
+  String sellerImportApplied(String date) {
+    return '$date 上架了';
+  }
+
+  @override
+  String get sellerPendingBanner => '客服正在审核你的资料。审核好之前买家还看不到你，你可以先放商品和价钱。';
+
+  @override
+  String get sellerSuspendedBanner => '你的账号暂停了，买家现在看不到你。请联系客服。';
+
+  @override
+  String get sellerOrdersTitle => '订单';
+
+  @override
+  String get sellerTabPending => '新订单';
+
+  @override
+  String get sellerTabToday => '今天要送';
+
+  @override
+  String get sellerTabAll => '全部';
+
+  @override
+  String sellerTabWithCount(String label, int count) {
+    return '$label（$count）';
+  }
+
+  @override
+  String sellerTodayCount(int count, String total) {
+    return '$count 张单，总额 $total';
+  }
+
+  @override
+  String get sellerOpenSummary => '送货单（拣货、打印）';
+
+  @override
+  String sellerDeliverOn(String date) {
+    return '送货：$date';
+  }
+
+  @override
+  String sellerBuyerNote(String note) {
+    return '买家备注：$note';
+  }
+
+  @override
+  String get sellerCall => '打电话';
+
+  @override
+  String get sellerWhatsapp => 'WhatsApp';
+
+  @override
+  String sellerWhatsappHello(String orderNo) {
+    return '你好，关于你的订单 $orderNo：';
+  }
+
+  @override
+  String get sellerCannotOpen => '打不开，请检查手机有没有装这个 App';
+
+  @override
+  String sellerContact(String name) {
+    return '联络人：$name';
+  }
+
+  @override
+  String get sellerConfirm => '确认';
+
+  @override
+  String get sellerOutOfStock => '缺货';
+
+  @override
+  String get sellerChecklistTitle => '哪几样缺货？';
+
+  @override
+  String get sellerChecklistHint => '缺货的勾起来，那几样不算钱。全部都有货就直接按确认。';
+
+  @override
+  String get sellerConfirmAllInStock => '全部有货，确认';
+
+  @override
+  String sellerConfirmWithOos(int count) {
+    return '确认（$count 样缺货）';
+  }
+
+  @override
+  String get sellerConfirmAllOos => '全部都缺货';
+
+  @override
+  String get sellerOosConfirmTitle => '整张单都缺货？';
+
+  @override
+  String get sellerOosConfirmBody => '买家会收到通知，这张单不会送。';
+
+  @override
+  String get sellerOosConfirmButton => '整张单缺货';
+
+  @override
+  String get sellerConfirmedMsg => '已确认，买家会收到通知';
+
+  @override
+  String get sellerOosMsg => '已标缺货，买家会收到通知';
+
+  @override
+  String get sellerStartDelivery => '出发送货';
+
+  @override
+  String get sellerMarkDelivered => '已送达';
+
+  @override
+  String get sellerDeliveredConfirm => '确定货已经送到了？';
+
+  @override
+  String get sellerDeliveringMsg => '已出发，买家会收到通知';
+
+  @override
+  String get sellerDeliveredMsg => '送到了，谢谢！';
+
+  @override
+  String get sellerMyBusiness => '我的公司';
+
+  @override
+  String get sellerNotifyTitle => '新订单怎么通知你？';
+
+  @override
+  String get sellerNotifyAuto => '自动（建议）';
+
+  @override
+  String get sellerNotifyAutoHint => '手机有装 App 就用推送，没有就用 WhatsApp';
+
+  @override
+  String get sellerNotifyPush => 'App 推送';
+
+  @override
+  String get sellerNotifyWhatsapp => 'WhatsApp';
+
+  @override
+  String sellerNotifyWhatsappTo(String phone) {
+    return '发到 $phone';
+  }
+
+  @override
+  String get sellerNotifyNoWhatsapp => '还没有 WhatsApp 号码，客服可以帮你加';
+
+  @override
+  String get sellerWhatsappOptIn => '同意用 WhatsApp 收订单';
+
+  @override
+  String get sellerWhatsappOptInHint => '关掉的话，我们不会发 WhatsApp 给你';
+
+  @override
+  String get sellerNotifyOwnerOnly => '只有老板可以改。客服也可以帮你改。';
+
+  @override
+  String get pushSettingsTitle => '这部手机的通知';
+
+  @override
+  String get pushStatusOn => '已经打开，有新订单手机会响';
+
+  @override
+  String get pushStatusOff => '通知还没打开';
+
+  @override
+  String get pushNotSupported => '这部手机收不到 App 推送，可以改用 WhatsApp 收订单';
+
+  @override
+  String get sellerSummaryTitle => '送货单';
+
+  @override
+  String sellerSummaryHeading(String date) {
+    return '送货单 $date';
+  }
+
+  @override
+  String get sellerSummaryPrevDay => '前一天';
+
+  @override
+  String get sellerSummaryNextDay => '后一天';
+
+  @override
+  String sellerSummaryPending(int count) {
+    return '还有 $count 张没确认';
+  }
+
+  @override
+  String get sellerSummaryGoConfirm => '去确认';
+
+  @override
+  String get sellerSummaryPicking => '拣货单';
+
+  @override
+  String get sellerSummaryPickingHint => '全部单加起来，缺货的不算';
+
+  @override
+  String sellerSummaryQty(int qty, String unit) {
+    return '$qty $unit';
+  }
+
+  @override
+  String get sellerSummaryEmpty => '这天没有要送的单';
+
+  @override
+  String get sellerSummaryOrders => '每张单（按区、再按店）';
+
+  @override
+  String get sellerSummaryOtherArea => '其他地区';
+
+  @override
+  String get sellerSummaryPrint => '打印';
+
+  @override
+  String get sellerSummaryShare => '分享给送货员';
+
+  @override
+  String sellerSummaryPhone(String phone) {
+    return '电话：$phone';
+  }
+
+  @override
+  String sellerSummaryAddress(String address) {
+    return '地址：$address';
+  }
+
+  @override
+  String get sellerSummaryOosMark => '（缺货）';
+
+  @override
+  String get sellerSummarySignature => '收货人签名：';
+
+  @override
+  String sellerSummaryPage(int page, int total) {
+    return '第 $page / $total 页';
+  }
+
+  @override
+  String get sellerSummaryColItem => '商品';
+
+  @override
+  String get sellerSummaryColQty => '数量';
+
+  @override
+  String get sellerSummaryColPack => '包装';
+
+  @override
+  String get sellerSummaryPrintFailed => '打印不了，请再试一次';
+
+  @override
+  String get sellerSummaryShareFailed => '分享不了，请再试一次';
+
+  @override
+  String get sellerProductsSearch => '找商品';
+
+  @override
+  String get sellerFilterAll => '全部';
+
+  @override
+  String get sellerFilterOutOfStock => '缺货';
+
+  @override
+  String get sellerFilterDraft => '草稿';
+
+  @override
+  String get sellerStockIn => '有货';
+
+  @override
+  String get sellerStockLow => '快卖完';
+
+  @override
+  String get sellerStockOut => '缺货';
+
+  @override
+  String get sellerStatusDraft => '草稿';
+
+  @override
+  String get sellerStatusArchived => '已下架';
+
+  @override
+  String get sellerProductsEmpty => '还没有商品。按「新增商品」一样一样加，或者上传价目表让 AI 帮你建。';
+
+  @override
+  String get sellerProductsNoMatch => '找不到符合的商品';
+
+  @override
+  String get sellerAddProduct => '新增商品';
+
+  @override
+  String get sellerEditProduct => '改商品';
+
+  @override
+  String get sellerFieldName => '商品名字';
+
+  @override
+  String get sellerFieldNameHint => '例如：16安士 PP杯 95口径';
+
+  @override
+  String get sellerFieldUnit => '用什么单位卖？';
+
+  @override
+  String sellerFieldPackQty(String unit) {
+    return '一$unit有几个？';
+  }
+
+  @override
+  String sellerFieldPrice(String unit) {
+    return '一$unit多少钱？';
+  }
+
+  @override
+  String get sellerFieldPriceHint => '例如 12.50';
+
+  @override
+  String sellerFieldMinQty(String unit) {
+    return '最少要买几$unit？';
+  }
+
+  @override
+  String get sellerFieldStock => '还有货吗？';
+
+  @override
+  String get sellerFieldStatus => '买家看得到吗？';
+
+  @override
+  String get sellerOnSale => '上架';
+
+  @override
+  String get sellerOffSale => '下架';
+
+  @override
+  String get sellerDraftHint => '这是草稿，买家还看不到。选「上架」再保存。';
+
+  @override
+  String get sellerOffSaleHint => '下架了买家就看不到，以后可以再上架';
+
+  @override
+  String get sellerErrName => '请写商品名字';
+
+  @override
+  String get sellerErrPrice => '请写价钱，例如 12.50';
+
+  @override
+  String get sellerErrPackQty => '最少 1 个';
+
+  @override
+  String get sellerErrForm => '还有资料没填好，请看红色的地方';
+
+  @override
+  String get sellerPhoto => '照片（可以不放）';
+
+  @override
+  String get sellerPhotoTake => '拍照';
+
+  @override
+  String get sellerPhotoPick => '选照片';
+
+  @override
+  String get sellerPhotoRemove => '拿掉照片';
+
+  @override
+  String get sellerErrPhotoFile => '照片只收 JPG、PNG、WebP，最多 5 MB';
+
+  @override
+  String get sellerErrNoPermission => '请到手机的「设定」，允许这个 App 用相机和照片';
+
+  @override
+  String get sellerImportIntro => '拍价目表的照片，或选 Excel、PDF 档案。AI 会读成商品，你检查好了才上架。';
+
+  @override
+  String get sellerImportCamera => '拍照';
+
+  @override
+  String get sellerImportCameraHint => '对着纸本价目表拍，拍清楚一点';
+
+  @override
+  String get sellerImportGallery => '选照片';
+
+  @override
+  String get sellerImportGalleryHint => '手机里的照片或截图';
+
+  @override
+  String get sellerImportFile => '选文件（Excel、PDF）';
+
+  @override
+  String get sellerImportFileHint => 'Excel、PDF 或 CSV，最多 10 MB';
+
+  @override
+  String get sellerImportUploading => '正在上传…';
+
+  @override
+  String get sellerImportUploaded => '已经上传';
+
+  @override
+  String get sellerImportWaitHint => '通常要 1 到 3 分钟。你可以先离开这一页，读好了首页会告诉你。';
+
+  @override
+  String get sellerImportStillReading => '还在读，价目表长的话要久一点…';
+
+  @override
+  String get sellerImportFailedTitle => 'AI 读不到这份价目表';
+
+  @override
+  String get sellerImportRetry => '再上传一次';
+
+  @override
+  String get sellerBackHome => '回首页';
+
+  @override
+  String get sellerErrHeic => '这是 iPhone 的 HEIC 照片，AI 看不懂。请按「选照片」再选一次这张，App 会自动转成 JPG。';
+
+  @override
+  String get sellerImportErrRefused => 'AI 不肯读这份档案。请确认是价目表，再试一次。';
+
+  @override
+  String get sellerImportErrTruncated => '价目表太长，AI 读不完。请分成几张照片或几个档案，一份一份上传。';
+
+  @override
+  String get sellerReviewTitle => '检查价目表';
+
+  @override
+  String sellerReviewSummary(int total, int create, int update, int skip) {
+    return '共 $total 行：新增 $create、更新 $update、跳过 $skip';
+  }
+
+  @override
+  String sellerReviewUnsure(int count) {
+    return '有 $count 行 AI 不太肯定，请检查黄色的';
+  }
+
+  @override
+  String get sellerReviewHint => '每一行选「新增」「更新」或「跳过」。不对的按「改」。';
+
+  @override
+  String sellerReviewRow(int row) {
+    return '第 $row 行';
+  }
+
+  @override
+  String get sellerReviewCheck => '请检查';
+
+  @override
+  String get sellerReviewNoName => '（没有名字）';
+
+  @override
+  String get sellerReviewNoPrice => '没有价钱';
+
+  @override
+  String sellerReviewRaw(String text) {
+    return '原文：$text';
+  }
+
+  @override
+  String sellerReviewMatched(String name) {
+    return '会更新：$name';
+  }
+
+  @override
+  String sellerReviewPriceNow(String price) {
+    return '现在 $price';
+  }
+
+  @override
+  String get sellerReviewNoMatch => '你的商品里没有一样的，可以新增';
+
+  @override
+  String get sellerReviewNoRows => 'AI 在这份价目表里找不到商品';
+
+  @override
+  String get sellerActionCreate => '新增';
+
+  @override
+  String get sellerActionUpdate => '更新';
+
+  @override
+  String get sellerActionSkip => '跳过';
+
+  @override
+  String sellerReviewMissing(String fields) {
+    return '还缺：$fields';
+  }
+
+  @override
+  String get sellerMissingName => '名字';
+
+  @override
+  String get sellerMissingUnit => '单位';
+
+  @override
+  String get sellerMissingPack => '包装数量';
+
+  @override
+  String get sellerMissingPrice => '价钱';
+
+  @override
+  String get sellerMissingMatch => '要更新哪样商品';
+
+  @override
+  String get sellerReviewEdit => '改';
+
+  @override
+  String sellerReviewEditTitle(int row) {
+    return '改第 $row 行';
+  }
+
+  @override
+  String sellerApply(int count) {
+    return '确认上架（$count 样）';
+  }
+
+  @override
+  String sellerApplyDone(int created, int updated) {
+    return '上架好了：新增 $created 样，更新 $updated 样';
+  }
+
+  @override
+  String get sellerReviewApplied => '这份价目表已经上架了';
+
+  @override
+  String get sellerReviewGoProducts => '去看商品';
+
+  @override
+  String get sellerReviewWait => '等 AI 读完';
 }

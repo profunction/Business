@@ -1,9 +1,15 @@
-import { assert, assertEquals, assertStringIncludes, assertThrows } from "@std/assert";
+import { assert, assertEquals, assertFalse, assertStringIncludes, assertThrows } from "@std/assert";
+// @deno-types="https://cdn.sheetjs.com/xlsx-0.20.3/package/types/index.d.ts"
+import * as XLSX from "xlsx";
 import { isImage, isSpreadsheet, sniffFileType } from "../_shared/filetype.ts";
 import {
   chunkLines,
   decodeText,
+  findHeader,
+  isHeaderCell,
+  lastFilledLine,
   MAX_LINES,
+  MAX_SCAN_ROWS,
   readWorkbook,
   renderChunk,
   type SheetLine,
@@ -102,6 +108,109 @@ Deno.test("看不懂的 Excel / 空的 → SpreadsheetError", () => {
 Deno.test("太多行 → TOO_MANY_ROWS", () => {
   const csv = "Item,Price\n" + Array.from({ length: MAX_LINES + 5 }, (_, i) => `item ${i},${i + 1}`).join("\n");
   assertThrows(() => workbookLines(readWorkbook(ascii(csv), "csv")), SpreadsheetError, "TOO_MANY_ROWS");
+  // 刚好 MAX_LINES 样商品可以
+  const ok = "Item,Price\n" + Array.from({ length: MAX_LINES }, (_, i) => `item ${i},${i + 1}`).join("\n");
+  assertEquals(workbookLines(readWorkbook(ascii(ok), "csv")).filter((l) => !l.header).length, MAX_LINES);
+});
+
+/** 1066 样商品放在第 1 到 1600 行，每 3 行有 1 行空白（排版用的） */
+function spacedRows(): unknown[][] {
+  const rows: unknown[][] = [["Item", "Price"]];
+  let n = 0;
+  while (rows.length < 1600) rows.push(rows.length % 3 === 2 ? [] : [`item ${++n}`, `${n}.50`]);
+  return rows;
+}
+
+function xlsxOf(sheet: XLSX.WorkSheet, bookType: "xlsx" | "biff8" = "xlsx"): Uint8Array {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, sheet, "S");
+  return new Uint8Array(XLSX.write(wb, { type: "array", bookType }) as ArrayBuffer);
+}
+
+Deno.test("中间有空行、超过第 1250 行的表：全部商品都读到（以前会在第 1250 行悄悄切掉）", () => {
+  const rows = spacedRows();
+  const products = rows.filter((r) => r.length && r[0] !== "Item").length;
+  assertEquals(products, 1066);
+  const csv = ascii(rows.map((r) => r.join(",")).join("\n"));
+  for (const [kind, bytes] of [
+    ["csv", csv],
+    ["xlsx", xlsxOf(XLSX.utils.aoa_to_sheet(rows))],
+    ["xls", xlsxOf(XLSX.utils.aoa_to_sheet(rows), "biff8")],
+  ] as const) {
+    const lines = workbookLines(readWorkbook(bytes, kind));
+    assertEquals(lines.filter((l) => !l.header).length, products, kind);
+    assertEquals(lines.at(-1)!.ref.replace(/^.*!/, ""), "R1600", kind);
+  }
+});
+
+Deno.test("表从很下面才开始（第 2000 行）也读得到", () => {
+  const ws = XLSX.utils.aoa_to_sheet([]);
+  XLSX.utils.sheet_add_aoa(ws, [["Item", "Price"], ...Array.from({ length: 300 }, (_, i) => [`item ${i}`, i + 1])], {
+    origin: "B2000",
+  });
+  const lines = workbookLines(readWorkbook(xlsxOf(ws), "xlsx"));
+  assertEquals(lines.length, 301);
+  assertEquals([lines[0].ref, lines[0].header, lines.at(-1)!.ref], ["S!R2000", true, "S!R2300"]);
+});
+
+Deno.test("表长过 MAX_SCAN_ROWS（就算商品不到 1200 样）→ TOO_MANY_ROWS，不会悄悄少掉后面的", () => {
+  // CSV：1000 样商品，每样中间隔 4 行空白 → 5000 行
+  const csv = "Item,Price\n" + Array.from({ length: 1000 }, (_, i) => `item ${i},${i + 1}\n,,\n\n\n\n`).join("");
+  assert(lastFilledLine(csv) >= MAX_SCAN_ROWS);
+  assertThrows(() => workbookLines(readWorkbook(ascii(csv), "csv")), SpreadsheetError, "TOO_MANY_ROWS");
+  // xlsx：前面 10 样，第 5000 行还有一样（中间全空）
+  const ws = XLSX.utils.aoa_to_sheet(Array.from({ length: 10 }, (_, i) => [`item ${i}`, i + 1]));
+  XLSX.utils.sheet_add_aoa(ws, [["late item", 9]], { origin: "A5000" });
+  for (const bookType of ["xlsx", "biff8"] as const) {
+    assertThrows(
+      () => workbookLines(readWorkbook(xlsxOf(ws, bookType), bookType === "xlsx" ? "xlsx" : "xls")),
+      SpreadsheetError,
+      "TOO_MANY_ROWS",
+    );
+  }
+  // 刚好最后一行在 MAX_SCAN_ROWS 以内：可以
+  const edge = XLSX.utils.aoa_to_sheet([["item", 1]]);
+  XLSX.utils.sheet_add_aoa(edge, [["last", 2]], { origin: `A${MAX_SCAN_ROWS}` });
+  assertEquals(workbookLines(readWorkbook(xlsxOf(edge), "xlsx")).map((l) => l.ref), ["S!R1", `S!R${MAX_SCAN_ROWS}`]);
+});
+
+Deno.test("lastFilledLine：空白、只有逗号的行不算；\r\n / \r 都算换行", () => {
+  assertEquals(lastFilledLine(""), -1);
+  assertEquals(lastFilledLine("a\n\n,,\n  \n"), 0);
+  assertEquals(lastFilledLine("a\r\nb\rc"), 2);
+  assertEquals(lastFilledLine(",,\n;\t\nx,\n"), 2);
+});
+
+Deno.test("很宽的行（一格放在第 5000 栏）：只看前面 256 栏，不会每行都变成几千栏", () => {
+  const csv = ascii("Item,Price" + ",".repeat(5000) + "far away\nitem 1,1\nitem 2,2\n");
+  const lines = workbookLines(readWorkbook(csv, "csv"));
+  assertEquals(lines.map((l) => l.text), ["Item | Price", "item 1 | 1", "item 2 | 2"]);
+});
+
+Deno.test("表头：公司名 / PRICE LIST 那种标题行不会被当成表头；后面的段落重复真正的表头", () => {
+  const csv = [
+    "JB PACKAGING SUPPLY SDN BHD,Tel: 07-3345678",
+    "PRICE LIST,Effective Nov 2026",
+    "No,Item,Pack (pcs/ctn),Price (RM),MOQ",
+    ...Array.from({ length: 150 }, (_, i) => `${i + 1},Item ${i + 1},1000,${(i + 1) * 0.5 + 0.25},5`),
+  ].join("\n");
+  const lines = workbookLines(readWorkbook(ascii(csv), "csv"));
+  assertEquals(lines.filter((l) => l.header).map((l) => l.ref), ["Sheet1!R3"]);
+  const chunks = chunkLines(lines);
+  assertEquals(chunks.length, 2);
+  assert(renderChunk(chunks[1]).startsWith("[context] Sheet1!R3: No | Item | Pack (pcs/ctn) | Price (RM) | MOQ\n"));
+
+  assertFalse(isHeaderCell("JB PACKAGING SUPPLY SDN BHD"));
+  assertFalse(isHeaderCell("Tel: 07-3345678"));
+  assertFalse(isHeaderCell("No. 12, Jalan Perindustrian, 81100 Johor Bahru (Postcode)"));
+  assert(isHeaderCell("PRICE LIST")); // 只有一格：分数不够当表头
+  for (const c of ["No", "No.", "#", "Bil", "Item", "货品 Item", "Pack (pcs/ctn)", "Harga (RM)", "Unit Price", "MOQ", "单价"]) {
+    assert(isHeaderCell(c), c);
+  }
+  // 只有一格像栏名：退回「全是文字而下一行有数字」的那行
+  assertEquals(findHeader([["Company", "Tel"], ["Description", "Amount"], ["cup", "85"]]), 1);
+  assertEquals(findHeader([["Description", "Price"], ["cup", "85"]]), 0);
+  assertEquals(findHeader([["cup", "85"]]), -1);
 });
 
 function lines(n: number, sheets = 1): SheetLine[] {

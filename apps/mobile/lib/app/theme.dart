@@ -91,6 +91,19 @@ class AppTheme {
   };
 
   static const problem = Color(0xFFC62828);
+
+  /// 批发商的「确认」按钮（绿色 = 可以送）
+  static const confirm = Color(0xFF2E7D32);
   static const warningBg = Color(0xFFFFF4E0);
   static const successBg = Color(0xFFE6F4EA);
+
+  /// 库存的颜色（一定跟文字一起出现）：有货绿、快卖完橙、缺货红
+  static Color stockColor(StockStatus s) => switch (s) {
+    StockStatus.inStock => const Color(0xFF2E7D32),
+    StockStatus.lowStock => const Color(0xFFB26A00),
+    StockStatus.outOfStock => problem,
+  };
+
+  /// AI 不太肯定的那几行（价目表导入）：黄色框
+  static const unsure = Color(0xFFE0A800);
 }

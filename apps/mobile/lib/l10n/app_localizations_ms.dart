@@ -745,4 +745,619 @@ class L10nMs extends L10n {
 
   @override
   String get sellerErrNotFound => 'Tidak dijumpai. Mungkin sudah dibuang.';
+
+  @override
+  String sellerHomeNewOrders(int count) {
+    return 'Pesanan baharu ($count)';
+  }
+
+  @override
+  String get sellerNoNewOrders => 'Tiada pesanan baharu';
+
+  @override
+  String sellerOldestWaiting(String duration) {
+    return 'Yang paling lama sudah menunggu $duration';
+  }
+
+  @override
+  String sellerWaiting(String duration) {
+    return 'Menunggu $duration';
+  }
+
+  @override
+  String sellerMinutes(int count) {
+    return '$count minit';
+  }
+
+  @override
+  String sellerHours(int count) {
+    return '$count jam';
+  }
+
+  @override
+  String sellerDays(int count) {
+    return '$count hari';
+  }
+
+  @override
+  String sellerHomeToday(int count) {
+    return 'Hantar hari ini ($count)';
+  }
+
+  @override
+  String sellerTodayTotal(String total) {
+    return 'Jumlah $total';
+  }
+
+  @override
+  String get sellerNothingToday => 'Tiada penghantaran hari ini';
+
+  @override
+  String get sellerHomeProducts => 'Produk & harga';
+
+  @override
+  String sellerProductsActive(int count) {
+    return '$count dijual';
+  }
+
+  @override
+  String sellerProductsOutOfStock(int count) {
+    return '$count habis stok';
+  }
+
+  @override
+  String sellerProductsLowStock(int count) {
+    return '$count hampir habis';
+  }
+
+  @override
+  String sellerProductsDraft(int count) {
+    return '$count draf';
+  }
+
+  @override
+  String get sellerHomeImport => 'Muat naik senarai harga';
+
+  @override
+  String get sellerImportNone => 'Ambil gambar atau pilih fail Excel. AI sediakan senarai produk anda.';
+
+  @override
+  String get sellerImportProcessing => 'AI sedang membaca senarai harga anda…';
+
+  @override
+  String get sellerImportReview => 'AI sudah siap. Semak dan mula jual.';
+
+  @override
+  String get sellerImportFailed => 'Yang lepas tidak dapat dibaca. Sila muat naik semula.';
+
+  @override
+  String sellerImportApplied(String date) {
+    return 'Mula dijual pada $date';
+  }
+
+  @override
+  String get sellerPendingBanner =>
+      'Kami sedang menyemak maklumat anda. Pembeli belum nampak anda, tetapi anda boleh mula masukkan produk dan harga.';
+
+  @override
+  String get sellerSuspendedBanner =>
+      'Akaun anda digantung, jadi pembeli tidak nampak anda sekarang. Sila hubungi khidmat pelanggan.';
+
+  @override
+  String get sellerOrdersTitle => 'Pesanan';
+
+  @override
+  String get sellerTabPending => 'Baharu';
+
+  @override
+  String get sellerTabToday => 'Hari ini';
+
+  @override
+  String get sellerTabAll => 'Semua';
+
+  @override
+  String sellerTabWithCount(String label, int count) {
+    return '$label ($count)';
+  }
+
+  @override
+  String sellerTodayCount(int count, String total) {
+    return '$count pesanan, jumlah $total';
+  }
+
+  @override
+  String get sellerOpenSummary => 'Senarai hantar (ambil barang, cetak)';
+
+  @override
+  String sellerDeliverOn(String date) {
+    return 'Hantar: $date';
+  }
+
+  @override
+  String sellerBuyerNote(String note) {
+    return 'Nota pembeli: $note';
+  }
+
+  @override
+  String get sellerCall => 'Telefon';
+
+  @override
+  String get sellerWhatsapp => 'WhatsApp';
+
+  @override
+  String sellerWhatsappHello(String orderNo) {
+    return 'Hai, tentang pesanan anda $orderNo:';
+  }
+
+  @override
+  String get sellerCannotOpen => 'Tidak dapat dibuka. Adakah aplikasi itu ada di telefon ini?';
+
+  @override
+  String sellerContact(String name) {
+    return 'Hubungi: $name';
+  }
+
+  @override
+  String get sellerConfirm => 'Sahkan';
+
+  @override
+  String get sellerOutOfStock => 'Habis stok';
+
+  @override
+  String get sellerChecklistTitle => 'Ada barang yang habis stok?';
+
+  @override
+  String get sellerChecklistHint =>
+      'Tandakan barang yang tiada. Barang itu tidak dicaj. Kalau semua ada, terus sahkan.';
+
+  @override
+  String get sellerConfirmAllInStock => 'Semua ada, sahkan';
+
+  @override
+  String sellerConfirmWithOos(int count) {
+    return 'Sahkan ($count habis stok)';
+  }
+
+  @override
+  String get sellerConfirmAllOos => 'Semua habis stok';
+
+  @override
+  String get sellerOosConfirmTitle => 'Seluruh pesanan habis stok?';
+
+  @override
+  String get sellerOosConfirmBody => 'Pembeli akan dimaklumkan dan pesanan ini tidak akan dihantar.';
+
+  @override
+  String get sellerOosConfirmButton => 'Tanda habis stok';
+
+  @override
+  String get sellerConfirmedMsg => 'Disahkan. Pembeli akan dimaklumkan.';
+
+  @override
+  String get sellerOosMsg => 'Ditanda habis stok. Pembeli akan dimaklumkan.';
+
+  @override
+  String get sellerStartDelivery => 'Mula hantar';
+
+  @override
+  String get sellerMarkDelivered => 'Sudah dihantar';
+
+  @override
+  String get sellerDeliveredConfirm => 'Pesanan sudah sampai?';
+
+  @override
+  String get sellerDeliveringMsg => 'Dalam perjalanan. Pembeli akan dimaklumkan.';
+
+  @override
+  String get sellerDeliveredMsg => 'Sudah dihantar. Terima kasih!';
+
+  @override
+  String get sellerMyBusiness => 'Perniagaan saya';
+
+  @override
+  String get sellerNotifyTitle => 'Bagaimana kami maklumkan pesanan baharu?';
+
+  @override
+  String get sellerNotifyAuto => 'Automatik (disyorkan)';
+
+  @override
+  String get sellerNotifyAutoHint => 'Notifikasi aplikasi jika aplikasi ada di telefon, jika tidak WhatsApp';
+
+  @override
+  String get sellerNotifyPush => 'Notifikasi aplikasi';
+
+  @override
+  String get sellerNotifyWhatsapp => 'WhatsApp';
+
+  @override
+  String sellerNotifyWhatsappTo(String phone) {
+    return 'Dihantar ke $phone';
+  }
+
+  @override
+  String get sellerNotifyNoWhatsapp => 'Belum ada nombor WhatsApp. Khidmat pelanggan boleh tambahkan.';
+
+  @override
+  String get sellerWhatsappOptIn => 'Terima pesanan melalui WhatsApp';
+
+  @override
+  String get sellerWhatsappOptInHint => 'Jika ditutup, kami tidak akan hantar WhatsApp kepada anda';
+
+  @override
+  String get sellerNotifyOwnerOnly => 'Hanya pemilik boleh ubah. Khidmat pelanggan juga boleh tolong ubah.';
+
+  @override
+  String get pushSettingsTitle => 'Notifikasi di telefon ini';
+
+  @override
+  String get pushStatusOn => 'Dihidupkan. Telefon akan berbunyi untuk pesanan baharu.';
+
+  @override
+  String get pushStatusOff => 'Notifikasi belum dihidupkan';
+
+  @override
+  String get pushNotSupported =>
+      'Telefon ini tidak boleh terima notifikasi aplikasi. Anda boleh terima pesanan melalui WhatsApp.';
+
+  @override
+  String get sellerSummaryTitle => 'Senarai hantar';
+
+  @override
+  String sellerSummaryHeading(String date) {
+    return 'Senarai hantar $date';
+  }
+
+  @override
+  String get sellerSummaryPrevDay => 'Hari sebelumnya';
+
+  @override
+  String get sellerSummaryNextDay => 'Hari berikutnya';
+
+  @override
+  String sellerSummaryPending(int count) {
+    return '$count pesanan belum disahkan';
+  }
+
+  @override
+  String get sellerSummaryGoConfirm => 'Sahkan';
+
+  @override
+  String get sellerSummaryPicking => 'Senarai ambil barang';
+
+  @override
+  String get sellerSummaryPickingHint => 'Semua pesanan dicampur. Barang habis stok tidak dikira.';
+
+  @override
+  String sellerSummaryQty(int qty, String unit) {
+    return '$qty $unit';
+  }
+
+  @override
+  String get sellerSummaryEmpty => 'Tiada penghantaran pada hari ini';
+
+  @override
+  String get sellerSummaryOrders => 'Pesanan (ikut kawasan, kemudian kedai)';
+
+  @override
+  String get sellerSummaryOtherArea => 'Kawasan lain';
+
+  @override
+  String get sellerSummaryPrint => 'Cetak';
+
+  @override
+  String get sellerSummaryShare => 'Kongsi dengan pemandu';
+
+  @override
+  String sellerSummaryPhone(String phone) {
+    return 'Telefon: $phone';
+  }
+
+  @override
+  String sellerSummaryAddress(String address) {
+    return 'Alamat: $address';
+  }
+
+  @override
+  String get sellerSummaryOosMark => '(habis stok)';
+
+  @override
+  String get sellerSummarySignature => 'Diterima oleh:';
+
+  @override
+  String sellerSummaryPage(int page, int total) {
+    return 'Halaman $page / $total';
+  }
+
+  @override
+  String get sellerSummaryColItem => 'Barang';
+
+  @override
+  String get sellerSummaryColQty => 'Kuantiti';
+
+  @override
+  String get sellerSummaryColPack => 'Saiz pek';
+
+  @override
+  String get sellerSummaryPrintFailed => 'Tidak dapat mencetak. Sila cuba lagi.';
+
+  @override
+  String get sellerSummaryShareFailed => 'Tidak dapat berkongsi. Sila cuba lagi.';
+
+  @override
+  String get sellerProductsSearch => 'Cari barang';
+
+  @override
+  String get sellerFilterAll => 'Semua';
+
+  @override
+  String get sellerFilterOutOfStock => 'Habis stok';
+
+  @override
+  String get sellerFilterDraft => 'Draf';
+
+  @override
+  String get sellerStockIn => 'Ada stok';
+
+  @override
+  String get sellerStockLow => 'Stok rendah';
+
+  @override
+  String get sellerStockOut => 'Habis stok';
+
+  @override
+  String get sellerStatusDraft => 'Draf';
+
+  @override
+  String get sellerStatusArchived => 'Tidak dijual';
+
+  @override
+  String get sellerProductsEmpty =>
+      'Belum ada barang. Tekan \"Tambah barang\", atau muat naik senarai harga dan biar AI buatkan.';
+
+  @override
+  String get sellerProductsNoMatch => 'Tiada barang yang sepadan';
+
+  @override
+  String get sellerAddProduct => 'Tambah barang';
+
+  @override
+  String get sellerEditProduct => 'Ubah barang';
+
+  @override
+  String get sellerFieldName => 'Nama barang';
+
+  @override
+  String get sellerFieldNameHint => 'cth. Cawan PP 16oz 95mm';
+
+  @override
+  String get sellerFieldUnit => 'Dijual dalam unit apa?';
+
+  @override
+  String sellerFieldPackQty(String unit) {
+    return 'Berapa biji dalam 1 $unit?';
+  }
+
+  @override
+  String sellerFieldPrice(String unit) {
+    return 'Harga untuk 1 $unit';
+  }
+
+  @override
+  String get sellerFieldPriceHint => 'cth. 12.50';
+
+  @override
+  String sellerFieldMinQty(String unit) {
+    return 'Pesanan minimum ($unit)';
+  }
+
+  @override
+  String get sellerFieldStock => 'Stok';
+
+  @override
+  String get sellerFieldStatus => 'Pembeli boleh nampak?';
+
+  @override
+  String get sellerOnSale => 'Dijual';
+
+  @override
+  String get sellerOffSale => 'Tidak dijual';
+
+  @override
+  String get sellerDraftHint => 'Ini draf, jadi pembeli belum nampak. Pilih \"Dijual\" dan simpan.';
+
+  @override
+  String get sellerOffSaleHint => 'Pembeli tidak akan nampak. Boleh dijual semula bila-bila masa.';
+
+  @override
+  String get sellerErrName => 'Sila tulis nama barang';
+
+  @override
+  String get sellerErrPrice => 'Sila tulis harga, cth. 12.50';
+
+  @override
+  String get sellerErrPackQty => 'Sekurang-kurangnya 1';
+
+  @override
+  String get sellerErrForm => 'Ada maklumat belum lengkap. Sila semak bahagian merah.';
+
+  @override
+  String get sellerPhoto => 'Gambar (tidak wajib)';
+
+  @override
+  String get sellerPhotoTake => 'Ambil gambar';
+
+  @override
+  String get sellerPhotoPick => 'Pilih gambar';
+
+  @override
+  String get sellerPhotoRemove => 'Buang gambar';
+
+  @override
+  String get sellerErrPhotoFile => 'Gambar mesti JPG, PNG atau WebP, maksimum 5 MB';
+
+  @override
+  String get sellerErrNoPermission => 'Sila benarkan aplikasi ini guna kamera dan gambar dalam Tetapan telefon';
+
+  @override
+  String get sellerImportIntro =>
+      'Ambil gambar senarai harga, atau pilih fail Excel atau PDF. AI akan jadikannya barang, dan tiada yang dijual sehingga anda semak.';
+
+  @override
+  String get sellerImportCamera => 'Ambil gambar';
+
+  @override
+  String get sellerImportCameraHint => 'Ambil gambar senarai harga bercetak dengan jelas';
+
+  @override
+  String get sellerImportGallery => 'Pilih gambar';
+
+  @override
+  String get sellerImportGalleryHint => 'Gambar atau tangkapan skrin dalam telefon';
+
+  @override
+  String get sellerImportFile => 'Pilih fail (Excel, PDF)';
+
+  @override
+  String get sellerImportFileHint => 'Excel, PDF atau CSV, maksimum 10 MB';
+
+  @override
+  String get sellerImportUploading => 'Sedang memuat naik…';
+
+  @override
+  String get sellerImportUploaded => 'Sudah dimuat naik';
+
+  @override
+  String get sellerImportWaitHint =>
+      'Biasanya ambil masa 1 hingga 3 minit. Anda boleh tinggalkan halaman ini. Skrin utama akan beritahu bila siap.';
+
+  @override
+  String get sellerImportStillReading => 'Masih membaca. Senarai harga yang panjang ambil masa lebih sikit…';
+
+  @override
+  String get sellerImportFailedTitle => 'AI tidak dapat membaca senarai harga ini';
+
+  @override
+  String get sellerImportRetry => 'Muat naik semula';
+
+  @override
+  String get sellerBackHome => 'Kembali ke halaman utama';
+
+  @override
+  String get sellerErrHeic =>
+      'Ini gambar HEIC iPhone, yang AI tidak dapat baca. Tekan \"Pilih gambar\" dan pilih semula. Aplikasi akan tukar kepada JPG.';
+
+  @override
+  String get sellerImportErrRefused => 'AI tidak mahu membaca fail ini. Pastikan ia senarai harga dan cuba lagi.';
+
+  @override
+  String get sellerImportErrTruncated =>
+      'Senarai harga terlalu panjang untuk AI habiskan. Sila bahagikan kepada beberapa gambar atau fail dan muat naik satu demi satu.';
+
+  @override
+  String get sellerReviewTitle => 'Semak senarai harga';
+
+  @override
+  String sellerReviewSummary(int total, int create, int update, int skip) {
+    return '$total baris: $create baharu, $update kemas kini, $skip langkau';
+  }
+
+  @override
+  String sellerReviewUnsure(int count) {
+    return 'AI kurang pasti tentang $count baris. Sila semak yang kuning.';
+  }
+
+  @override
+  String get sellerReviewHint =>
+      'Untuk setiap baris, pilih Baharu, Kemas kini atau Langkau. Tekan Ubah untuk betulkan.';
+
+  @override
+  String sellerReviewRow(int row) {
+    return 'Baris $row';
+  }
+
+  @override
+  String get sellerReviewCheck => 'Sila semak';
+
+  @override
+  String get sellerReviewNoName => '(tiada nama)';
+
+  @override
+  String get sellerReviewNoPrice => 'Tiada harga';
+
+  @override
+  String sellerReviewRaw(String text) {
+    return 'Asal: $text';
+  }
+
+  @override
+  String sellerReviewMatched(String name) {
+    return 'Akan kemas kini: $name';
+  }
+
+  @override
+  String sellerReviewPriceNow(String price) {
+    return 'sekarang $price';
+  }
+
+  @override
+  String get sellerReviewNoMatch => 'Tiada barang anda yang sepadan. Boleh tambah sebagai baharu.';
+
+  @override
+  String get sellerReviewNoRows => 'AI tidak jumpa barang dalam senarai harga ini';
+
+  @override
+  String get sellerActionCreate => 'Baharu';
+
+  @override
+  String get sellerActionUpdate => 'Kemas kini';
+
+  @override
+  String get sellerActionSkip => 'Langkau';
+
+  @override
+  String sellerReviewMissing(String fields) {
+    return 'Belum ada: $fields';
+  }
+
+  @override
+  String get sellerMissingName => 'nama';
+
+  @override
+  String get sellerMissingUnit => 'unit';
+
+  @override
+  String get sellerMissingPack => 'saiz pek';
+
+  @override
+  String get sellerMissingPrice => 'harga';
+
+  @override
+  String get sellerMissingMatch => 'barang yang hendak dikemas kini';
+
+  @override
+  String get sellerReviewEdit => 'Ubah';
+
+  @override
+  String sellerReviewEditTitle(int row) {
+    return 'Ubah baris $row';
+  }
+
+  @override
+  String sellerApply(int count) {
+    return 'Jual $count barang';
+  }
+
+  @override
+  String sellerApplyDone(int created, int updated) {
+    return 'Siap: $created ditambah, $updated dikemas kini';
+  }
+
+  @override
+  String get sellerReviewApplied => 'Senarai harga ini sudah dijual';
+
+  @override
+  String get sellerReviewGoProducts => 'Lihat barang';
+
+  @override
+  String get sellerReviewWait => 'Tunggu AI';
 }

@@ -32,6 +32,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # 测试里换掉打电话 / WhatsApp（不会真的开别的 App），检查网址对不对
+  url_launcher_platform_interface: ^2.3.2
 
 flutter:
   generate: true

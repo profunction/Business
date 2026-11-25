@@ -1,6 +1,8 @@
 // whatsapp-webhook：Meta 的 WhatsApp webhook（config.toml 里 verify_jwt = false，Meta 不会带 Supabase 的钥匙）。
 //   GET  验证握手：hub.verify_token 对（WHATSAPP_VERIFY_TOKEN）→ 原样回 hub.challenge（纯文字 200），不对 403
 //   POST 先验 X-Hub-Signature-256（WHATSAPP_APP_SECRET，用原始 body 算 HMAC），不对 401，验过才 JSON.parse
+//        验之前：没有签名 / 格式不对 → 直接 401（不读 body）；body 最多 MAX_WEBHOOK_BODY_BYTES（Meta 最多 3 MB），
+//        超过 → 413（Content-Length 写超过就不读；没写就边读边数）——公开的端点，不能让人用大 body 塞爆 worker 记忆体
 //        一次可能很多笔（entry[] / changes[] / messages[] / statuses[]），全部照顺序处理：
 //          按钮 → handle_whatsapp_button → 回一句普通文字（Meta 重送的 duplicate 不回）
 //          其他消息 → record_whatsapp_message（只记录，第六步再处理）
@@ -9,10 +11,24 @@
 //        数据库暂时有问题 → 回 500，Meta 会重送（已经处理过的会变 duplicate，重送是安全的）。
 
 import { whatsappAppSecret, whatsappConfig, whatsappVerifyToken } from "../_shared/env.ts";
-import { errorMessage, json, log, runInBackground, text, timingSafeEqual } from "../_shared/http.ts";
+import {
+  BodyTooLargeError,
+  errorMessage,
+  json,
+  log,
+  readBodyLimited,
+  runInBackground,
+  text,
+  timingSafeEqual,
+} from "../_shared/http.ts";
 import { buttonReplyText, toLocale } from "../_shared/messages.ts";
 import { adminClient, DbError, rpc } from "../_shared/supabase.ts";
 import { parseWebhook, type Recipient, sendText, verifySignature, type WebhookEvent } from "../_shared/whatsapp.ts";
+
+/** Meta 的 webhook 最多 3 MB（docs/research/step4/verifications.json）；留一点余地 */
+export const MAX_WEBHOOK_BODY_BYTES = 4 * 1024 * 1024;
+
+const SIGNATURE_RE = /^\s*sha256=[0-9a-fA-F]{64}\s*$/;
 
 /** handle_whatsapp_button 回传的 JSON */
 export interface ButtonResult {
@@ -75,8 +91,25 @@ export async function handler(req: Request): Promise<Response> {
     log("error", "whatsapp_webhook_not_configured", { reason: "WHATSAPP_APP_SECRET missing" });
     return json({ error: "WEBHOOK_NOT_CONFIGURED" }, 500);
   }
-  const raw = new Uint8Array(await req.arrayBuffer()); // 原始 bytes：签名要算在这上面
-  if (!(await verifySignature(raw, req.headers.get("x-hub-signature-256"), secret))) {
+  const signature = req.headers.get("x-hub-signature-256");
+  if (!signature || !SIGNATURE_RE.test(signature)) {
+    // 连签名都没有：不用读 body
+    await req.body?.cancel().catch(() => {});
+    log("warn", "whatsapp_webhook_bad_signature", { reason: "missing_or_malformed" });
+    return json({ error: "INVALID_SIGNATURE" }, 401);
+  }
+  let raw: Uint8Array; // 原始 bytes：签名要算在这上面
+  try {
+    raw = await readBodyLimited(req, MAX_WEBHOOK_BODY_BYTES);
+  } catch (e) {
+    if (e instanceof BodyTooLargeError) {
+      log("warn", "whatsapp_webhook_body_too_large", { limit: MAX_WEBHOOK_BODY_BYTES });
+      return json({ error: "BODY_TOO_LARGE" }, 413);
+    }
+    log("warn", "whatsapp_webhook_body_unreadable", { error: errorMessage(e) });
+    return json({ error: "INVALID_BODY" }, 400);
+  }
+  if (!(await verifySignature(raw, signature, secret))) {
     log("warn", "whatsapp_webhook_bad_signature", {});
     return json({ error: "INVALID_SIGNATURE" }, 401);
   }

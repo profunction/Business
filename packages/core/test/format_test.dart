@@ -21,6 +21,40 @@ void main() {
     });
   });
 
+  group('parseRmToSen', () {
+    test('切字串，不经过 double', () {
+      expect(parseRmToSen('12.50'), 1250);
+      expect(parseRmToSen('12.5'), 1250);
+      expect(parseRmToSen('12'), 1200);
+      expect(parseRmToSen('12.'), 1200);
+      expect(parseRmToSen('.5'), 50);
+      expect(parseRmToSen('0.05'), 5);
+      expect(parseRmToSen(' RM 8.60 '), 860);
+      expect(parseRmToSen('rm4.20'), 420);
+      expect(parseRmToSen('1,250.00'), 125000);
+      expect(parseRmToSen('999999.99'), 99999999);
+      // double 会算错的几个：0.29 * 100 = 28.999999999999996、4.35 * 100 = 434.99999999999994
+      expect(parseRmToSen('0.29'), 29);
+      expect(parseRmToSen('4.35'), 435);
+      expect(parseRmToSen('1.15'), 115);
+      for (var sen = 1; sen <= 100000; sen += 7) {
+        expect(parseRmToSen(senToInput(sen)), sen);
+      }
+    });
+
+    test('看不懂、0、太多小数位 → null', () {
+      for (final bad in ['', ' ', '.', 'RM', 'abc', '12.345', '12,50', '1.2.3', '-5', '0', '0.00', '1e3', '1000000']) {
+        expect(parseRmToSen(bad), isNull, reason: bad);
+      }
+    });
+
+    test('senToInput', () {
+      expect(senToInput(1250), '12.50');
+      expect(senToInput(5), '0.05');
+      expect(senToInput(100000), '1000.00');
+    });
+  });
+
   group('normalizeMalaysianMobile', () {
     test('各种写法都转成 +60', () {
       expect(normalizeMalaysianMobile('012-345 6789'), '+60123456789');

@@ -1364,6 +1364,1056 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'找不到，可能已经被删掉了'**
   String get sellerErrNotFound;
+
+  /// No description provided for @sellerHomeNewOrders.
+  ///
+  /// In zh, this message translates to:
+  /// **'新订单（{count}）'**
+  String sellerHomeNewOrders(int count);
+
+  /// No description provided for @sellerNoNewOrders.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有新订单'**
+  String get sellerNoNewOrders;
+
+  /// No description provided for @sellerOldestWaiting.
+  ///
+  /// In zh, this message translates to:
+  /// **'最久的一张等了 {duration}'**
+  String sellerOldestWaiting(String duration);
+
+  /// No description provided for @sellerWaiting.
+  ///
+  /// In zh, this message translates to:
+  /// **'等了 {duration}'**
+  String sellerWaiting(String duration);
+
+  /// No description provided for @sellerMinutes.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 分钟'**
+  String sellerMinutes(int count);
+
+  /// No description provided for @sellerHours.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 小时'**
+  String sellerHours(int count);
+
+  /// No description provided for @sellerDays.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 天'**
+  String sellerDays(int count);
+
+  /// No description provided for @sellerHomeToday.
+  ///
+  /// In zh, this message translates to:
+  /// **'今天要送（{count}）'**
+  String sellerHomeToday(int count);
+
+  /// No description provided for @sellerTodayTotal.
+  ///
+  /// In zh, this message translates to:
+  /// **'总额 {total}'**
+  String sellerTodayTotal(String total);
+
+  /// No description provided for @sellerNothingToday.
+  ///
+  /// In zh, this message translates to:
+  /// **'今天没有要送的单'**
+  String get sellerNothingToday;
+
+  /// No description provided for @sellerHomeProducts.
+  ///
+  /// In zh, this message translates to:
+  /// **'商品和价钱'**
+  String get sellerHomeProducts;
+
+  /// No description provided for @sellerProductsActive.
+  ///
+  /// In zh, this message translates to:
+  /// **'上架 {count} 样'**
+  String sellerProductsActive(int count);
+
+  /// No description provided for @sellerProductsOutOfStock.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 样缺货'**
+  String sellerProductsOutOfStock(int count);
+
+  /// No description provided for @sellerProductsLowStock.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 样快卖完'**
+  String sellerProductsLowStock(int count);
+
+  /// No description provided for @sellerProductsDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 样草稿'**
+  String sellerProductsDraft(int count);
+
+  /// No description provided for @sellerHomeImport.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传价目表'**
+  String get sellerHomeImport;
+
+  /// No description provided for @sellerImportNone.
+  ///
+  /// In zh, this message translates to:
+  /// **'拍照或选 Excel，AI 帮你建商品'**
+  String get sellerImportNone;
+
+  /// No description provided for @sellerImportProcessing.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 正在读你的价目表…'**
+  String get sellerImportProcessing;
+
+  /// No description provided for @sellerImportReview.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 读好了，去确认上架'**
+  String get sellerImportReview;
+
+  /// No description provided for @sellerImportFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'上次的读不到，请再上传一次'**
+  String get sellerImportFailed;
+
+  /// No description provided for @sellerImportApplied.
+  ///
+  /// In zh, this message translates to:
+  /// **'{date} 上架了'**
+  String sellerImportApplied(String date);
+
+  /// No description provided for @sellerPendingBanner.
+  ///
+  /// In zh, this message translates to:
+  /// **'客服正在审核你的资料。审核好之前买家还看不到你，你可以先放商品和价钱。'**
+  String get sellerPendingBanner;
+
+  /// No description provided for @sellerSuspendedBanner.
+  ///
+  /// In zh, this message translates to:
+  /// **'你的账号暂停了，买家现在看不到你。请联系客服。'**
+  String get sellerSuspendedBanner;
+
+  /// No description provided for @sellerOrdersTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'订单'**
+  String get sellerOrdersTitle;
+
+  /// No description provided for @sellerTabPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'新订单'**
+  String get sellerTabPending;
+
+  /// No description provided for @sellerTabToday.
+  ///
+  /// In zh, this message translates to:
+  /// **'今天要送'**
+  String get sellerTabToday;
+
+  /// No description provided for @sellerTabAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部'**
+  String get sellerTabAll;
+
+  /// No description provided for @sellerTabWithCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{label}（{count}）'**
+  String sellerTabWithCount(String label, int count);
+
+  /// No description provided for @sellerTodayCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 张单，总额 {total}'**
+  String sellerTodayCount(int count, String total);
+
+  /// No description provided for @sellerOpenSummary.
+  ///
+  /// In zh, this message translates to:
+  /// **'送货单（拣货、打印）'**
+  String get sellerOpenSummary;
+
+  /// No description provided for @sellerDeliverOn.
+  ///
+  /// In zh, this message translates to:
+  /// **'送货：{date}'**
+  String sellerDeliverOn(String date);
+
+  /// No description provided for @sellerBuyerNote.
+  ///
+  /// In zh, this message translates to:
+  /// **'买家备注：{note}'**
+  String sellerBuyerNote(String note);
+
+  /// No description provided for @sellerCall.
+  ///
+  /// In zh, this message translates to:
+  /// **'打电话'**
+  String get sellerCall;
+
+  /// No description provided for @sellerWhatsapp.
+  ///
+  /// In zh, this message translates to:
+  /// **'WhatsApp'**
+  String get sellerWhatsapp;
+
+  /// No description provided for @sellerWhatsappHello.
+  ///
+  /// In zh, this message translates to:
+  /// **'你好，关于你的订单 {orderNo}：'**
+  String sellerWhatsappHello(String orderNo);
+
+  /// No description provided for @sellerCannotOpen.
+  ///
+  /// In zh, this message translates to:
+  /// **'打不开，请检查手机有没有装这个 App'**
+  String get sellerCannotOpen;
+
+  /// No description provided for @sellerContact.
+  ///
+  /// In zh, this message translates to:
+  /// **'联络人：{name}'**
+  String sellerContact(String name);
+
+  /// No description provided for @sellerConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认'**
+  String get sellerConfirm;
+
+  /// No description provided for @sellerOutOfStock.
+  ///
+  /// In zh, this message translates to:
+  /// **'缺货'**
+  String get sellerOutOfStock;
+
+  /// No description provided for @sellerChecklistTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'哪几样缺货？'**
+  String get sellerChecklistTitle;
+
+  /// No description provided for @sellerChecklistHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'缺货的勾起来，那几样不算钱。全部都有货就直接按确认。'**
+  String get sellerChecklistHint;
+
+  /// No description provided for @sellerConfirmAllInStock.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部有货，确认'**
+  String get sellerConfirmAllInStock;
+
+  /// No description provided for @sellerConfirmWithOos.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认（{count} 样缺货）'**
+  String sellerConfirmWithOos(int count);
+
+  /// No description provided for @sellerConfirmAllOos.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部都缺货'**
+  String get sellerConfirmAllOos;
+
+  /// No description provided for @sellerOosConfirmTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'整张单都缺货？'**
+  String get sellerOosConfirmTitle;
+
+  /// No description provided for @sellerOosConfirmBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'买家会收到通知，这张单不会送。'**
+  String get sellerOosConfirmBody;
+
+  /// No description provided for @sellerOosConfirmButton.
+  ///
+  /// In zh, this message translates to:
+  /// **'整张单缺货'**
+  String get sellerOosConfirmButton;
+
+  /// No description provided for @sellerConfirmedMsg.
+  ///
+  /// In zh, this message translates to:
+  /// **'已确认，买家会收到通知'**
+  String get sellerConfirmedMsg;
+
+  /// No description provided for @sellerOosMsg.
+  ///
+  /// In zh, this message translates to:
+  /// **'已标缺货，买家会收到通知'**
+  String get sellerOosMsg;
+
+  /// No description provided for @sellerStartDelivery.
+  ///
+  /// In zh, this message translates to:
+  /// **'出发送货'**
+  String get sellerStartDelivery;
+
+  /// No description provided for @sellerMarkDelivered.
+  ///
+  /// In zh, this message translates to:
+  /// **'已送达'**
+  String get sellerMarkDelivered;
+
+  /// No description provided for @sellerDeliveredConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'确定货已经送到了？'**
+  String get sellerDeliveredConfirm;
+
+  /// No description provided for @sellerDeliveringMsg.
+  ///
+  /// In zh, this message translates to:
+  /// **'已出发，买家会收到通知'**
+  String get sellerDeliveringMsg;
+
+  /// No description provided for @sellerDeliveredMsg.
+  ///
+  /// In zh, this message translates to:
+  /// **'送到了，谢谢！'**
+  String get sellerDeliveredMsg;
+
+  /// No description provided for @sellerMyBusiness.
+  ///
+  /// In zh, this message translates to:
+  /// **'我的公司'**
+  String get sellerMyBusiness;
+
+  /// No description provided for @sellerNotifyTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'新订单怎么通知你？'**
+  String get sellerNotifyTitle;
+
+  /// No description provided for @sellerNotifyAuto.
+  ///
+  /// In zh, this message translates to:
+  /// **'自动（建议）'**
+  String get sellerNotifyAuto;
+
+  /// No description provided for @sellerNotifyAutoHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'手机有装 App 就用推送，没有就用 WhatsApp'**
+  String get sellerNotifyAutoHint;
+
+  /// No description provided for @sellerNotifyPush.
+  ///
+  /// In zh, this message translates to:
+  /// **'App 推送'**
+  String get sellerNotifyPush;
+
+  /// No description provided for @sellerNotifyWhatsapp.
+  ///
+  /// In zh, this message translates to:
+  /// **'WhatsApp'**
+  String get sellerNotifyWhatsapp;
+
+  /// No description provided for @sellerNotifyWhatsappTo.
+  ///
+  /// In zh, this message translates to:
+  /// **'发到 {phone}'**
+  String sellerNotifyWhatsappTo(String phone);
+
+  /// No description provided for @sellerNotifyNoWhatsapp.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有 WhatsApp 号码，客服可以帮你加'**
+  String get sellerNotifyNoWhatsapp;
+
+  /// No description provided for @sellerWhatsappOptIn.
+  ///
+  /// In zh, this message translates to:
+  /// **'同意用 WhatsApp 收订单'**
+  String get sellerWhatsappOptIn;
+
+  /// No description provided for @sellerWhatsappOptInHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'关掉的话，我们不会发 WhatsApp 给你'**
+  String get sellerWhatsappOptInHint;
+
+  /// No description provided for @sellerNotifyOwnerOnly.
+  ///
+  /// In zh, this message translates to:
+  /// **'只有老板可以改。客服也可以帮你改。'**
+  String get sellerNotifyOwnerOnly;
+
+  /// No description provided for @pushSettingsTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'这部手机的通知'**
+  String get pushSettingsTitle;
+
+  /// No description provided for @pushStatusOn.
+  ///
+  /// In zh, this message translates to:
+  /// **'已经打开，有新订单手机会响'**
+  String get pushStatusOn;
+
+  /// No description provided for @pushStatusOff.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知还没打开'**
+  String get pushStatusOff;
+
+  /// No description provided for @pushNotSupported.
+  ///
+  /// In zh, this message translates to:
+  /// **'这部手机收不到 App 推送，可以改用 WhatsApp 收订单'**
+  String get pushNotSupported;
+
+  /// No description provided for @sellerSummaryTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'送货单'**
+  String get sellerSummaryTitle;
+
+  /// No description provided for @sellerSummaryHeading.
+  ///
+  /// In zh, this message translates to:
+  /// **'送货单 {date}'**
+  String sellerSummaryHeading(String date);
+
+  /// No description provided for @sellerSummaryPrevDay.
+  ///
+  /// In zh, this message translates to:
+  /// **'前一天'**
+  String get sellerSummaryPrevDay;
+
+  /// No description provided for @sellerSummaryNextDay.
+  ///
+  /// In zh, this message translates to:
+  /// **'后一天'**
+  String get sellerSummaryNextDay;
+
+  /// No description provided for @sellerSummaryPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'还有 {count} 张没确认'**
+  String sellerSummaryPending(int count);
+
+  /// No description provided for @sellerSummaryGoConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'去确认'**
+  String get sellerSummaryGoConfirm;
+
+  /// No description provided for @sellerSummaryPicking.
+  ///
+  /// In zh, this message translates to:
+  /// **'拣货单'**
+  String get sellerSummaryPicking;
+
+  /// No description provided for @sellerSummaryPickingHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部单加起来，缺货的不算'**
+  String get sellerSummaryPickingHint;
+
+  /// No description provided for @sellerSummaryQty.
+  ///
+  /// In zh, this message translates to:
+  /// **'{qty} {unit}'**
+  String sellerSummaryQty(int qty, String unit);
+
+  /// No description provided for @sellerSummaryEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'这天没有要送的单'**
+  String get sellerSummaryEmpty;
+
+  /// No description provided for @sellerSummaryOrders.
+  ///
+  /// In zh, this message translates to:
+  /// **'每张单（按区、再按店）'**
+  String get sellerSummaryOrders;
+
+  /// No description provided for @sellerSummaryOtherArea.
+  ///
+  /// In zh, this message translates to:
+  /// **'其他地区'**
+  String get sellerSummaryOtherArea;
+
+  /// No description provided for @sellerSummaryPrint.
+  ///
+  /// In zh, this message translates to:
+  /// **'打印'**
+  String get sellerSummaryPrint;
+
+  /// No description provided for @sellerSummaryShare.
+  ///
+  /// In zh, this message translates to:
+  /// **'分享给送货员'**
+  String get sellerSummaryShare;
+
+  /// No description provided for @sellerSummaryPhone.
+  ///
+  /// In zh, this message translates to:
+  /// **'电话：{phone}'**
+  String sellerSummaryPhone(String phone);
+
+  /// No description provided for @sellerSummaryAddress.
+  ///
+  /// In zh, this message translates to:
+  /// **'地址：{address}'**
+  String sellerSummaryAddress(String address);
+
+  /// No description provided for @sellerSummaryOosMark.
+  ///
+  /// In zh, this message translates to:
+  /// **'（缺货）'**
+  String get sellerSummaryOosMark;
+
+  /// No description provided for @sellerSummarySignature.
+  ///
+  /// In zh, this message translates to:
+  /// **'收货人签名：'**
+  String get sellerSummarySignature;
+
+  /// No description provided for @sellerSummaryPage.
+  ///
+  /// In zh, this message translates to:
+  /// **'第 {page} / {total} 页'**
+  String sellerSummaryPage(int page, int total);
+
+  /// No description provided for @sellerSummaryColItem.
+  ///
+  /// In zh, this message translates to:
+  /// **'商品'**
+  String get sellerSummaryColItem;
+
+  /// No description provided for @sellerSummaryColQty.
+  ///
+  /// In zh, this message translates to:
+  /// **'数量'**
+  String get sellerSummaryColQty;
+
+  /// No description provided for @sellerSummaryColPack.
+  ///
+  /// In zh, this message translates to:
+  /// **'包装'**
+  String get sellerSummaryColPack;
+
+  /// No description provided for @sellerSummaryPrintFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'打印不了，请再试一次'**
+  String get sellerSummaryPrintFailed;
+
+  /// No description provided for @sellerSummaryShareFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'分享不了，请再试一次'**
+  String get sellerSummaryShareFailed;
+
+  /// No description provided for @sellerProductsSearch.
+  ///
+  /// In zh, this message translates to:
+  /// **'找商品'**
+  String get sellerProductsSearch;
+
+  /// No description provided for @sellerFilterAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部'**
+  String get sellerFilterAll;
+
+  /// No description provided for @sellerFilterOutOfStock.
+  ///
+  /// In zh, this message translates to:
+  /// **'缺货'**
+  String get sellerFilterOutOfStock;
+
+  /// No description provided for @sellerFilterDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'草稿'**
+  String get sellerFilterDraft;
+
+  /// No description provided for @sellerStockIn.
+  ///
+  /// In zh, this message translates to:
+  /// **'有货'**
+  String get sellerStockIn;
+
+  /// No description provided for @sellerStockLow.
+  ///
+  /// In zh, this message translates to:
+  /// **'快卖完'**
+  String get sellerStockLow;
+
+  /// No description provided for @sellerStockOut.
+  ///
+  /// In zh, this message translates to:
+  /// **'缺货'**
+  String get sellerStockOut;
+
+  /// No description provided for @sellerStatusDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'草稿'**
+  String get sellerStatusDraft;
+
+  /// No description provided for @sellerStatusArchived.
+  ///
+  /// In zh, this message translates to:
+  /// **'已下架'**
+  String get sellerStatusArchived;
+
+  /// No description provided for @sellerProductsEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有商品。按「新增商品」一样一样加，或者上传价目表让 AI 帮你建。'**
+  String get sellerProductsEmpty;
+
+  /// No description provided for @sellerProductsNoMatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'找不到符合的商品'**
+  String get sellerProductsNoMatch;
+
+  /// No description provided for @sellerAddProduct.
+  ///
+  /// In zh, this message translates to:
+  /// **'新增商品'**
+  String get sellerAddProduct;
+
+  /// No description provided for @sellerEditProduct.
+  ///
+  /// In zh, this message translates to:
+  /// **'改商品'**
+  String get sellerEditProduct;
+
+  /// No description provided for @sellerFieldName.
+  ///
+  /// In zh, this message translates to:
+  /// **'商品名字'**
+  String get sellerFieldName;
+
+  /// No description provided for @sellerFieldNameHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如：16安士 PP杯 95口径'**
+  String get sellerFieldNameHint;
+
+  /// No description provided for @sellerFieldUnit.
+  ///
+  /// In zh, this message translates to:
+  /// **'用什么单位卖？'**
+  String get sellerFieldUnit;
+
+  /// No description provided for @sellerFieldPackQty.
+  ///
+  /// In zh, this message translates to:
+  /// **'一{unit}有几个？'**
+  String sellerFieldPackQty(String unit);
+
+  /// No description provided for @sellerFieldPrice.
+  ///
+  /// In zh, this message translates to:
+  /// **'一{unit}多少钱？'**
+  String sellerFieldPrice(String unit);
+
+  /// No description provided for @sellerFieldPriceHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'例如 12.50'**
+  String get sellerFieldPriceHint;
+
+  /// No description provided for @sellerFieldMinQty.
+  ///
+  /// In zh, this message translates to:
+  /// **'最少要买几{unit}？'**
+  String sellerFieldMinQty(String unit);
+
+  /// No description provided for @sellerFieldStock.
+  ///
+  /// In zh, this message translates to:
+  /// **'还有货吗？'**
+  String get sellerFieldStock;
+
+  /// No description provided for @sellerFieldStatus.
+  ///
+  /// In zh, this message translates to:
+  /// **'买家看得到吗？'**
+  String get sellerFieldStatus;
+
+  /// No description provided for @sellerOnSale.
+  ///
+  /// In zh, this message translates to:
+  /// **'上架'**
+  String get sellerOnSale;
+
+  /// No description provided for @sellerOffSale.
+  ///
+  /// In zh, this message translates to:
+  /// **'下架'**
+  String get sellerOffSale;
+
+  /// No description provided for @sellerDraftHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'这是草稿，买家还看不到。选「上架」再保存。'**
+  String get sellerDraftHint;
+
+  /// No description provided for @sellerOffSaleHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'下架了买家就看不到，以后可以再上架'**
+  String get sellerOffSaleHint;
+
+  /// No description provided for @sellerErrName.
+  ///
+  /// In zh, this message translates to:
+  /// **'请写商品名字'**
+  String get sellerErrName;
+
+  /// No description provided for @sellerErrPrice.
+  ///
+  /// In zh, this message translates to:
+  /// **'请写价钱，例如 12.50'**
+  String get sellerErrPrice;
+
+  /// No description provided for @sellerErrPackQty.
+  ///
+  /// In zh, this message translates to:
+  /// **'最少 1 个'**
+  String get sellerErrPackQty;
+
+  /// No description provided for @sellerErrForm.
+  ///
+  /// In zh, this message translates to:
+  /// **'还有资料没填好，请看红色的地方'**
+  String get sellerErrForm;
+
+  /// No description provided for @sellerPhoto.
+  ///
+  /// In zh, this message translates to:
+  /// **'照片（可以不放）'**
+  String get sellerPhoto;
+
+  /// No description provided for @sellerPhotoTake.
+  ///
+  /// In zh, this message translates to:
+  /// **'拍照'**
+  String get sellerPhotoTake;
+
+  /// No description provided for @sellerPhotoPick.
+  ///
+  /// In zh, this message translates to:
+  /// **'选照片'**
+  String get sellerPhotoPick;
+
+  /// No description provided for @sellerPhotoRemove.
+  ///
+  /// In zh, this message translates to:
+  /// **'拿掉照片'**
+  String get sellerPhotoRemove;
+
+  /// No description provided for @sellerErrPhotoFile.
+  ///
+  /// In zh, this message translates to:
+  /// **'照片只收 JPG、PNG、WebP，最多 5 MB'**
+  String get sellerErrPhotoFile;
+
+  /// No description provided for @sellerErrNoPermission.
+  ///
+  /// In zh, this message translates to:
+  /// **'请到手机的「设定」，允许这个 App 用相机和照片'**
+  String get sellerErrNoPermission;
+
+  /// No description provided for @sellerImportIntro.
+  ///
+  /// In zh, this message translates to:
+  /// **'拍价目表的照片，或选 Excel、PDF 档案。AI 会读成商品，你检查好了才上架。'**
+  String get sellerImportIntro;
+
+  /// No description provided for @sellerImportCamera.
+  ///
+  /// In zh, this message translates to:
+  /// **'拍照'**
+  String get sellerImportCamera;
+
+  /// No description provided for @sellerImportCameraHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'对着纸本价目表拍，拍清楚一点'**
+  String get sellerImportCameraHint;
+
+  /// No description provided for @sellerImportGallery.
+  ///
+  /// In zh, this message translates to:
+  /// **'选照片'**
+  String get sellerImportGallery;
+
+  /// No description provided for @sellerImportGalleryHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'手机里的照片或截图'**
+  String get sellerImportGalleryHint;
+
+  /// No description provided for @sellerImportFile.
+  ///
+  /// In zh, this message translates to:
+  /// **'选文件（Excel、PDF）'**
+  String get sellerImportFile;
+
+  /// No description provided for @sellerImportFileHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'Excel、PDF 或 CSV，最多 10 MB'**
+  String get sellerImportFileHint;
+
+  /// No description provided for @sellerImportUploading.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在上传…'**
+  String get sellerImportUploading;
+
+  /// No description provided for @sellerImportUploaded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已经上传'**
+  String get sellerImportUploaded;
+
+  /// No description provided for @sellerImportWaitHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'通常要 1 到 3 分钟。你可以先离开这一页，读好了首页会告诉你。'**
+  String get sellerImportWaitHint;
+
+  /// No description provided for @sellerImportStillReading.
+  ///
+  /// In zh, this message translates to:
+  /// **'还在读，价目表长的话要久一点…'**
+  String get sellerImportStillReading;
+
+  /// No description provided for @sellerImportFailedTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 读不到这份价目表'**
+  String get sellerImportFailedTitle;
+
+  /// No description provided for @sellerImportRetry.
+  ///
+  /// In zh, this message translates to:
+  /// **'再上传一次'**
+  String get sellerImportRetry;
+
+  /// No description provided for @sellerBackHome.
+  ///
+  /// In zh, this message translates to:
+  /// **'回首页'**
+  String get sellerBackHome;
+
+  /// No description provided for @sellerErrHeic.
+  ///
+  /// In zh, this message translates to:
+  /// **'这是 iPhone 的 HEIC 照片，AI 看不懂。请按「选照片」再选一次这张，App 会自动转成 JPG。'**
+  String get sellerErrHeic;
+
+  /// No description provided for @sellerImportErrRefused.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 不肯读这份档案。请确认是价目表，再试一次。'**
+  String get sellerImportErrRefused;
+
+  /// No description provided for @sellerImportErrTruncated.
+  ///
+  /// In zh, this message translates to:
+  /// **'价目表太长，AI 读不完。请分成几张照片或几个档案，一份一份上传。'**
+  String get sellerImportErrTruncated;
+
+  /// No description provided for @sellerReviewTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'检查价目表'**
+  String get sellerReviewTitle;
+
+  /// No description provided for @sellerReviewSummary.
+  ///
+  /// In zh, this message translates to:
+  /// **'共 {total} 行：新增 {create}、更新 {update}、跳过 {skip}'**
+  String sellerReviewSummary(int total, int create, int update, int skip);
+
+  /// No description provided for @sellerReviewUnsure.
+  ///
+  /// In zh, this message translates to:
+  /// **'有 {count} 行 AI 不太肯定，请检查黄色的'**
+  String sellerReviewUnsure(int count);
+
+  /// No description provided for @sellerReviewHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'每一行选「新增」「更新」或「跳过」。不对的按「改」。'**
+  String get sellerReviewHint;
+
+  /// No description provided for @sellerReviewRow.
+  ///
+  /// In zh, this message translates to:
+  /// **'第 {row} 行'**
+  String sellerReviewRow(int row);
+
+  /// No description provided for @sellerReviewCheck.
+  ///
+  /// In zh, this message translates to:
+  /// **'请检查'**
+  String get sellerReviewCheck;
+
+  /// No description provided for @sellerReviewNoName.
+  ///
+  /// In zh, this message translates to:
+  /// **'（没有名字）'**
+  String get sellerReviewNoName;
+
+  /// No description provided for @sellerReviewNoPrice.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有价钱'**
+  String get sellerReviewNoPrice;
+
+  /// No description provided for @sellerReviewRaw.
+  ///
+  /// In zh, this message translates to:
+  /// **'原文：{text}'**
+  String sellerReviewRaw(String text);
+
+  /// No description provided for @sellerReviewMatched.
+  ///
+  /// In zh, this message translates to:
+  /// **'会更新：{name}'**
+  String sellerReviewMatched(String name);
+
+  /// No description provided for @sellerReviewPriceNow.
+  ///
+  /// In zh, this message translates to:
+  /// **'现在 {price}'**
+  String sellerReviewPriceNow(String price);
+
+  /// No description provided for @sellerReviewNoMatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'你的商品里没有一样的，可以新增'**
+  String get sellerReviewNoMatch;
+
+  /// No description provided for @sellerReviewNoRows.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 在这份价目表里找不到商品'**
+  String get sellerReviewNoRows;
+
+  /// No description provided for @sellerActionCreate.
+  ///
+  /// In zh, this message translates to:
+  /// **'新增'**
+  String get sellerActionCreate;
+
+  /// No description provided for @sellerActionUpdate.
+  ///
+  /// In zh, this message translates to:
+  /// **'更新'**
+  String get sellerActionUpdate;
+
+  /// No description provided for @sellerActionSkip.
+  ///
+  /// In zh, this message translates to:
+  /// **'跳过'**
+  String get sellerActionSkip;
+
+  /// No description provided for @sellerReviewMissing.
+  ///
+  /// In zh, this message translates to:
+  /// **'还缺：{fields}'**
+  String sellerReviewMissing(String fields);
+
+  /// No description provided for @sellerMissingName.
+  ///
+  /// In zh, this message translates to:
+  /// **'名字'**
+  String get sellerMissingName;
+
+  /// No description provided for @sellerMissingUnit.
+  ///
+  /// In zh, this message translates to:
+  /// **'单位'**
+  String get sellerMissingUnit;
+
+  /// No description provided for @sellerMissingPack.
+  ///
+  /// In zh, this message translates to:
+  /// **'包装数量'**
+  String get sellerMissingPack;
+
+  /// No description provided for @sellerMissingPrice.
+  ///
+  /// In zh, this message translates to:
+  /// **'价钱'**
+  String get sellerMissingPrice;
+
+  /// No description provided for @sellerMissingMatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'要更新哪样商品'**
+  String get sellerMissingMatch;
+
+  /// No description provided for @sellerReviewEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'改'**
+  String get sellerReviewEdit;
+
+  /// No description provided for @sellerReviewEditTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'改第 {row} 行'**
+  String sellerReviewEditTitle(int row);
+
+  /// No description provided for @sellerApply.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认上架（{count} 样）'**
+  String sellerApply(int count);
+
+  /// No description provided for @sellerApplyDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'上架好了：新增 {created} 样，更新 {updated} 样'**
+  String sellerApplyDone(int created, int updated);
+
+  /// No description provided for @sellerReviewApplied.
+  ///
+  /// In zh, this message translates to:
+  /// **'这份价目表已经上架了'**
+  String get sellerReviewApplied;
+
+  /// No description provided for @sellerReviewGoProducts.
+  ///
+  /// In zh, this message translates to:
+  /// **'去看商品'**
+  String get sellerReviewGoProducts;
+
+  /// No description provided for @sellerReviewWait.
+  ///
+  /// In zh, this message translates to:
+  /// **'等 AI 读完'**
+  String get sellerReviewWait;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

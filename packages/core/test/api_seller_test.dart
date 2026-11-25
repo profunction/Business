@@ -192,6 +192,44 @@ void main() {
     });
   });
 
+  group('上传前检查', () {
+    final heic = Uint8List.fromList([0, 0, 0, 0x18, ...'ftypheic'.codeUnits, 0, 0, 0, 0]);
+    final png = Uint8List.fromList([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0]);
+    final pdf = Uint8List.fromList('%PDF-1.7\n'.codeUnits);
+
+    test('价目表：按内容判断，不信档名', () {
+      expect(checkPriceListFile(jpeg, fileName: 'IMG_0001.HEIC'), FileKind.jpeg);
+      expect(checkPriceListFile(pdf, fileName: 'list.xlsx'), FileKind.pdf);
+      expect(
+        () => checkPriceListFile(heic, fileName: 'IMG_0001.jpg'),
+        throwsA(
+          isA<AppError>().having((e) => e.code, 'code', 'UNSUPPORTED_FILE').having((e) => e.detail, 'detail', 'heic'),
+        ),
+      );
+      expect(
+        () => checkPriceListFile(Uint8List.fromList([1, 2, 3, 0, 4])),
+        throwsA(isA<AppError>().having((e) => e.detail, 'detail', 'unknown')),
+      );
+      expect(
+        () => checkPriceListFile(Uint8List(priceListMaxBytes + 1)),
+        throwsA(isA<AppError>().having((e) => e.code, 'code', 'FILE_TOO_LARGE')),
+      );
+    });
+
+    test('商品照片：只收 JPEG / PNG / WebP，最多 5 MB', () {
+      expect(checkProductPhoto(jpeg), FileKind.jpeg);
+      expect(checkProductPhoto(png), FileKind.png);
+      for (final bad in [heic, pdf]) {
+        expect(
+          () => checkProductPhoto(bad),
+          throwsA(isA<AppError>().having((e) => e.code, 'code', 'UNSUPPORTED_FILE')),
+        );
+      }
+      final big = Uint8List(productPhotoMaxBytes + 1)..setAll(0, jpeg);
+      expect(() => checkProductPhoto(big), throwsA(isA<AppError>().having((e) => e.code, 'code', 'FILE_TOO_LARGE')));
+    });
+  });
+
   test('updateImportRow 只能改批发商可以改的字段', () {
     expect(() => FakeApi().updateImportRow('r', {'import_id': 'other'}), throwsA(isA<AppError>()));
   });

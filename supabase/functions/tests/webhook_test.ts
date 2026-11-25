@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
-import fn from "../whatsapp-webhook/index.ts";
+import fn, { MAX_WEBHOOK_BODY_BYTES } from "../whatsapp-webhook/index.ts";
 import { hmacSha256Hex } from "../_shared/whatsapp.ts";
 import {
   type Call,
@@ -337,5 +337,90 @@ Deno.test("POST：不是 WhatsApp 的通知 → 200 不处理；没设 App Secre
     assertEquals((await fn.fetch(await signed(envelope([])))).status, 500);
   } finally {
     t2.restore();
+  }
+});
+
+/** 会数被读了多少的 body（不用真的做出几百 MB） */
+function countingBody(chunkSize: number, maxChunks: number) {
+  const seen = { pulls: 0, bytes: 0, cancelled: false };
+  const stream = new ReadableStream<Uint8Array>({
+    pull(c) {
+      if (seen.pulls >= maxChunks) return c.close();
+      seen.pulls++;
+      seen.bytes += chunkSize;
+      c.enqueue(new Uint8Array(chunkSize).fill(0x20));
+    },
+    cancel() {
+      seen.cancelled = true;
+    },
+  }, { highWaterMark: 0 });
+  return { stream, seen };
+}
+
+const JUNK_SIG = `sha256=${"0".repeat(64)}`;
+
+Deno.test("POST 大 body：Content-Length 超过上限 → 413，一个字都不读、不碰数据库", async () => {
+  const t = setup();
+  try {
+    const { stream, seen } = countingBody(1024 * 1024, 100); // 100 MB
+    const res = await fn.fetch(
+      new Request(URL_, {
+        method: "POST",
+        headers: { "x-hub-signature-256": JUNK_SIG, "content-length": String(100 * 1024 * 1024) },
+        body: stream,
+        duplex: "half",
+      } as RequestInit),
+    );
+    assertEquals(res.status, 413);
+    assertEquals((await res.json()).error, "BODY_TOO_LARGE");
+    assertEquals(seen.bytes, 0);
+    assertEquals(t.net.calls.length, 0);
+  } finally {
+    t.restore();
+  }
+});
+
+Deno.test("POST 大 body：没写 Content-Length（chunked）→ 读到上限就停，413", async () => {
+  const t = setup();
+  try {
+    const chunk = 256 * 1024;
+    const { stream, seen } = countingBody(chunk, 400); // 100 MB
+    const res = await fn.fetch(
+      new Request(URL_, { method: "POST", headers: { "x-hub-signature-256": JUNK_SIG }, body: stream, duplex: "half" } as RequestInit),
+    );
+    assertEquals(res.status, 413);
+    assert(seen.bytes <= MAX_WEBHOOK_BODY_BYTES + 2 * chunk, `read ${seen.bytes} bytes`);
+    assert(seen.cancelled);
+    assertEquals(t.net.calls.length, 0);
+  } finally {
+    t.restore();
+  }
+});
+
+Deno.test("POST：没有签名 / 签名格式不对 → 401，不读 body", async () => {
+  const t = setup();
+  try {
+    for (const headers of [{}, { "x-hub-signature-256": "sha1=abc" }, { "x-hub-signature-256": "sha256=xyz" }]) {
+      const { stream, seen } = countingBody(1024 * 1024, 100);
+      const res = await fn.fetch(new Request(URL_, { method: "POST", headers, body: stream, duplex: "half" } as RequestInit));
+      assertEquals(res.status, 401);
+      assertEquals(seen.bytes, 0);
+    }
+    assertEquals(t.net.calls.length, 0);
+  } finally {
+    t.restore();
+  }
+});
+
+Deno.test("POST：上限以内的大 body（签名对）照常处理", async () => {
+  const t = setup();
+  try {
+    const padding = "x".repeat(MAX_WEBHOOK_BODY_BYTES - 64 * 1024);
+    const body = JSON.stringify({ object: "page", entry: [], padding });
+    const res = await fn.fetch(await signed(body));
+    assertEquals(res.status, 200);
+    assertEquals(await res.json(), { ok: true, events: 0 });
+  } finally {
+    t.restore();
   }
 });

@@ -18,8 +18,18 @@ import '../features/onboarding/register_shop_page.dart';
 import '../features/orders/order_detail_page.dart';
 import '../features/orders/orders_page.dart';
 import '../features/orders/review_page.dart';
+import '../features/seller/delivery_summary_page.dart';
+import '../features/seller/import_page.dart';
+import '../features/seller/import_review_page.dart';
+import '../features/seller/product_edit_page.dart';
+import '../features/seller/products_page.dart';
+import '../features/seller/seller_home_page.dart';
+import '../features/seller/seller_order_detail_page.dart';
+import '../features/seller/seller_orders_page.dart';
+import '../features/seller/seller_settings_page.dart';
 import '../features/settings/free_wholesalers_page.dart';
 import '../features/settings/settings_page.dart';
+import 'seller_providers.dart';
 import 'session.dart';
 
 /// 这些页面只在某个阶段出现；进了别的阶段就自动跳走
@@ -41,10 +51,10 @@ GoRouter buildRouter(SessionController session) {
       final path = state.uri.path;
       final stage = session.stage;
       final from = state.uri.queryParameters['from'];
-      // 批发商：只能在 /seller 和底下的页面；从通知打开的页面读完资料后回去
+      // 批发商：只能在 /seller 和底下的页面；从通知 / 链接打开的页面读完资料后回去
       if (stage == SessionStage.seller) {
         if (isSellerPath(path)) return null;
-        if (path == '/loading' && from != null && isSellerPath(Uri.parse(from).path)) return from;
+        if (path == '/loading' && _isLocalPath(from) && isSellerPath(Uri.parse(from!).path)) return from;
         return '/seller';
       }
       final target = _stagePages[stage];
@@ -62,7 +72,7 @@ GoRouter buildRouter(SessionController session) {
       if (isSellerPath(path)) return '/home';
       // 买家：离开所有「阶段页面」，有记住原本要去的就回去
       if (_stagePages.values.any((p) => path == p || path.startsWith('/login'))) {
-        return from != null && from.startsWith('/') && !from.startsWith('/loading') && !isSellerPath(from)
+        return _isLocalPath(from) && !from!.startsWith('/loading') && !isSellerPath(Uri.parse(from).path)
             ? from
             : '/home';
       }
@@ -77,9 +87,50 @@ GoRouter buildRouter(SessionController session) {
       ),
       GoRoute(path: '/loading', builder: (_, _) => const LoadingPage()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterShopPage()),
-      // 批发商端（第四步）：/seller/orders、/seller/orders/:id、/seller/summary、/seller/products、/seller/import……
-      // 都放在 /seller 底下（通知会打开 /seller/orders/<id> 和 /seller/summary?date=）
-      GoRoute(path: '/seller', builder: (_, _) => const SellerPlaceholderPage()),
+      // 批发商端（第四步）。全部放在 /seller 底下：从通知 / 链接直接打开 /seller/orders/<id> 时，
+      // 按「返回」会回到批发商首页
+      GoRoute(
+        path: '/seller',
+        builder: (_, _) => const SellerHomePage(),
+        routes: [
+          GoRoute(
+            path: 'orders',
+            builder: (_, s) => SellerOrdersPage(initialTab: sellerOrdersTabFrom(s.uri.queryParameters['tab'])),
+          ),
+          GoRoute(
+            path: 'orders/:id',
+            builder: (_, s) => SellerOrderDetailPage(orderId: s.pathParameters['id']!),
+          ),
+          GoRoute(path: 'settings', builder: (_, _) => const SellerSettingsPage()),
+          GoRoute(
+            path: 'summary',
+            builder: (_, s) => DeliverySummaryPage(date: s.uri.queryParameters['date']),
+          ),
+          GoRoute(
+            path: 'products',
+            builder: (_, _) => const ProductsPage(),
+            routes: [
+              // 'new' 要放在 ':id' 前面
+              GoRoute(path: 'new', builder: (_, _) => const ProductEditPage()),
+              GoRoute(
+                path: ':id',
+                builder: (_, s) => ProductEditPage(productId: s.pathParameters['id']),
+              ),
+            ],
+          ),
+          GoRoute(
+            path: 'import',
+            // ?id= 等那一份读完（从首页回来看「AI 在读」的那一份）
+            builder: (_, s) => ImportPage(importId: s.uri.queryParameters['id']),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (_, s) => ImportReviewPage(importId: s.pathParameters['id']!),
+              ),
+            ],
+          ),
+        ],
+      ),
       GoRoute(path: '/admin', builder: (_, _) => const AdminPlaceholderPage()),
       GoRoute(path: '/home', builder: (_, _) => const HomePage()),
       GoRoute(
@@ -125,7 +176,7 @@ GoRouter buildRouter(SessionController session) {
       GoRoute(path: '/free-wholesalers', builder: (_, _) => const FreeWholesalersPage()),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
     ],
-    errorBuilder: (_, _) => session.stage == SessionStage.seller ? const SellerPlaceholderPage() : const HomePage(),
+    errorBuilder: (_, _) => session.stage == SessionStage.seller ? const SellerHomePage() : const HomePage(),
   );
 }
 
@@ -142,6 +193,9 @@ Uri currentLocation(GoRouter router) {
 
 /// 批发商端的页面：/seller 和底下的
 bool isSellerPath(String path) => path == '/seller' || path.startsWith('/seller/');
+
+/// ?from= 只接受 App 自己的页面（'/orders/x'），不接受 '//别的网站' 或完整网址
+bool _isLocalPath(String? from) => from != null && from.startsWith('/') && !from.startsWith('//');
 
 /// 登录、读取资料、开店这些「过渡」页面：从通知打开的页面要等离开这些才打开
 bool isTransientPage(String path) =>

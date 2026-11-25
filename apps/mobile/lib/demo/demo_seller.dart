@@ -29,12 +29,18 @@ class DemoSeller {
   /// 样本的「今天」（马来西亚时间）
   DateTime get today => asDateOrNull(_homeFixture['today']) ?? DateTime.now();
 
+  /// 批发商的审核状态：示范 / 测试可以改成 'pending'（等客服审核）或 'suspended'
+  late String wholesalerStatus = asStringOrNull(_wholesaler['status']) ?? 'active';
+
+  /// 登录的人在这家批发商的角色：'owner'（老板）或 'staff'（员工不能改通知方式，跟数据库的 RLS 一样）
+  String memberRole = 'owner';
+
   /// get_my_context()：示范批发商的老板（my_context 样本是买家，这里另外做一个）
   Json myContext() => {
     'profile': {'id': userId, 'role': 'seller', 'full_name': 'Demo', 'phone': '60120000002', 'locale': 'zh'},
     'shops': <Object>[],
     'wholesalers': [
-      {'id': wholesalerId, 'name': wholesalerName, 'status': _wholesaler['status'], 'member_role': 'owner'},
+      {'id': wholesalerId, 'name': wholesalerName, 'status': wholesalerStatus, 'member_role': memberRole},
     ],
   };
 
@@ -403,6 +409,11 @@ class DemoSeller {
     final pending = _orders.where((o) => o['status'] == 'pending').toList();
     final todays = _orders.where((o) => _isTodayDelivery(o, todayCode)).toList();
     final active = _products.where((p) => p['status'] == 'active');
+    h['wholesaler'] = {
+      ...asJson(h['wholesaler']),
+      'status': wholesalerStatus,
+      'notify_channel': _settings['notify_channel'],
+    };
     h['pending_count'] = pending.length;
     h['oldest_pending_at'] = pending.isEmpty
         ? null
@@ -652,13 +663,20 @@ class DemoSeller {
   WholesalerSettings settings() => WholesalerSettings.fromJson(_settings);
 
   WholesalerSettings setNotifyChannel(NotifyChannel channel) {
+    _checkOwner();
     _settings = {..._settings, 'notify_channel': channel.name};
     if (channel == NotifyChannel.whatsapp) setWhatsappOptIn(true);
     return settings();
   }
 
   void setWhatsappOptIn(bool optIn) {
+    _checkOwner();
     if (optIn && _settings['whatsapp_opt_in_at'] != null) return;
     _settings = {..._settings, 'whatsapp_opt_in_at': optIn ? DateTime.now().toUtc().toIso8601String() : null};
+  }
+
+  /// 只有老板能改批发商的资料（数据库：wholesalers 的 update policy 只给老板，员工改了 0 行 → NOT_ALLOWED）
+  void _checkOwner() {
+    if (memberRole != 'owner') throw const AppError('NOT_ALLOWED');
   }
 }

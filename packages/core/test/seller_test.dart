@@ -193,6 +193,8 @@ void main() {
     expect(w['price_sen'], 8800);
     expect(w['stock_status'], 'out_of_stock');
     expect(w['status'], 'archived');
+    expect(w['photo_paths'], isEmpty);
+    expect(p.copyWith(photoPaths: ['w/a.jpg']).toWriteJson()['photo_paths'], ['w/a.jpg']);
     expect(w.containsKey('wholesaler_id'), isFalse, reason: 'wholesaler_id 受保护，不能改');
     expect(w.containsKey('id'), isFalse);
 

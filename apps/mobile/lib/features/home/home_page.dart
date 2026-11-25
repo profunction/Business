@@ -142,7 +142,7 @@ class _SubscriptionBanner extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final days = info.trialDaysLeft(DateTime.now());
     if (days != null) {
-      return _Banner(
+      return NoticeBanner(
         color: AppTheme.successBg,
         icon: Icons.celebration,
         text: l.trialBanner(days),
@@ -150,7 +150,7 @@ class _SubscriptionBanner extends StatelessWidget {
       );
     }
     if (info.hasFullAccess) return const SizedBox.shrink();
-    return _Banner(
+    return NoticeBanner(
       color: AppTheme.warningBg,
       icon: Icons.lock_open,
       text: l.freeBanner(info.freeUnlockedLimit),
@@ -159,32 +159,6 @@ class _SubscriptionBanner extends StatelessWidget {
         key: const Key('banner-choose-wholesalers'),
         onPressed: () => context.push('/free-wholesalers'),
         child: Text(l.chooseWholesalers),
-      ),
-    );
-  }
-}
-
-class _Banner extends StatelessWidget {
-  const _Banner({required this.color, required this.icon, required this.text, this.textStyle, this.action});
-
-  final Color color;
-  final IconData icon;
-  final String text;
-  final TextStyle? textStyle;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(16)),
-      child: Row(
-        children: [
-          Icon(icon, size: 30),
-          const SizedBox(width: 12),
-          Expanded(child: Text(text, style: textStyle)),
-          ?action,
-        ],
       ),
     );
   }

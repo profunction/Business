@@ -9,6 +9,7 @@ import {
   PRICE_LIST_MODEL,
   PRICE_LIST_SCHEMA,
   SYSTEM_PROMPT,
+  textCandidates,
 } from "../_shared/claude.ts";
 import { claudeStream, extractionJson, fakeFetch, isAnthropic } from "./_helpers.ts";
 
@@ -90,21 +91,24 @@ Deno.test("整理结果：unit 转小写、不认识的当 piece 并降低 confi
   assertEquals(normalizeExtraction({ rows: [] })?.unreadable, []);
 });
 
-Deno.test("fallback：只取最后一个 fallback block 之后的文字", () => {
+Deno.test("fallback：text block 全部照顺序接起来（中途被拒绝时 fallback 模型接着写）", () => {
   assertEquals(
     finalText([{ type: "thinking" }, { type: "text", text: '{"a":' }, { type: "text", text: "1}" }]),
     '{"a":1}',
   );
-  assertEquals(
-    finalText([
-      { type: "text", text: '{"rows":[{"na' },
-      { type: "fallback" },
-      { type: "thinking" },
-      { type: "text", text: '{"rows":' },
-      { type: "text", text: "[]}" },
-    ]),
-    '{"rows":[]}',
-  );
+  const split = [
+    { type: "thinking" },
+    { type: "text", text: '{"rows":[{"na' },
+    { type: "fallback" },
+    { type: "text", text: 'me":"Cup"}],' },
+    { type: "text", text: '"unreadable":[]}' },
+  ];
+  assertEquals(finalText(split), '{"rows":[{"name":"Cup"}],"unreadable":[]}');
+  assertEquals(JSON.parse(textCandidates(split)[0]).rows[0].name, "Cup");
+  // 重写一份的情况：全部接起来 parse 不了，第二个候选（fallback block 之后的）可以
+  const restart = [{ type: "text", text: '{"rows":[{"na' }, { type: "fallback" }, { type: "text", text: '{"rows":[]}' }];
+  assertEquals(textCandidates(restart), ['{"rows":[{"na{"rows":[]}', '{"rows":[]}']);
+  assertEquals(textCandidates([{ type: "text", text: "{}" }]), ["{}"]);
 });
 
 Deno.test("内容包在 <pasted_content id=...>（开头结尾同一个随机 id）", () => {
@@ -213,7 +217,35 @@ Deno.test("max_tokens → 不 parse，回 max_tokens", async () => {
   }
 });
 
-Deno.test("fallback block：前面断掉的 JSON 不要，只取后面的；model 是 fallback 的", async () => {
+Deno.test("fallback block：streaming 中途被拒绝，fallback 模型从断掉的地方接着写 → 接起来 parse；model 是 fallback 的", async () => {
+  const full = extractionJson([{ name: "Cup 8oz", unit: "PACK" }]);
+  const cut = full.indexOf('"name":"Cup') + '"name":"Cup'.length; // 断在商品名字中间
+  const net = fakeFetch((c) =>
+    isAnthropic(c)
+      ? claudeStream({
+        blocks: [
+          { type: "thinking" },
+          { type: "text", text: full.slice(0, cut) },
+          { type: "fallback", from: "claude-opus-5-5", to: "claude-opus-4-8" },
+          { type: "text", text: full.slice(cut) },
+        ],
+      })
+      : undefined
+  );
+  try {
+    const out = await extractPriceList(IMAGE, OPTS);
+    assert(out.ok, JSON.stringify(out));
+    assertEquals(out.meta.fallback, true);
+    assertEquals(out.meta.model, "claude-opus-4-8");
+    assertEquals(out.meta.stop_reason, "end_turn");
+    assertEquals(out.data.rows.map((r) => [r.name, r.unit]), [["Cup 8oz", "pack"]]);
+    assertEquals(net.calls.length, 1);
+  } finally {
+    net.restore();
+  }
+});
+
+Deno.test("fallback block：如果 fallback 模型是从头重写一份，前面断掉的半段丢掉", async () => {
   const net = fakeFetch((c) =>
     isAnthropic(c)
       ? claudeStream({
@@ -229,7 +261,6 @@ Deno.test("fallback block：前面断掉的 JSON 不要，只取后面的；mode
     const out = await extractPriceList(IMAGE, OPTS);
     assert(out.ok);
     assertEquals(out.meta.fallback, true);
-    assertEquals(out.meta.model, "claude-opus-4-8");
     assertEquals(out.data.rows.map((r) => [r.name, r.unit]), [["Cup 8oz", "pack"]]);
   } finally {
     net.restore();

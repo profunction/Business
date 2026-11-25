@@ -2,7 +2,9 @@
 // 查证结果：docs/04-research.md 第 4 节、docs/research/step4/claude.json（提示词和 schema 是核对过的版本）。
 //   * SDK 1.x 默认 anthropic-version 2026-10-21：不能送 temperature / top_p / top_k
 //   * claude-opus-5-5 不能关 thinking、不能强制 tool_choice → 用 output_config.format（json_schema）
-//   * 先看 stop_reason（refusal / max_tokens）再 parse；伺服器端 fallback 时只取最后一个 fallback block 之后的文字
+//   * 先看 stop_reason（refusal / max_tokens）再 parse；伺服器端 fallback 时 text block 全部接起来
+//     （streaming 中途被拒绝时，fallback 模型从断掉的地方接着写，JSON 会分在 fallback block 前后；
+//     verifications.json 的更正 + refusals-and-fallback 文件）。接起来 parse 不了才试 fallback block 之后的（重写一份的情况）
 //   * enum 的大小写不保证 → 先转小写；min / max 不能放在 schema → 在这里夹
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -241,13 +243,39 @@ export function normalizeExtraction(json: unknown): Extraction | null {
 
 type ContentBlock = { type: string; text?: string };
 
-/** 伺服器端 fallback 时，内容可能被 fallback block 切开：只取最后一个 fallback block 之后的文字。 */
+/**
+ * 回答的文字：全部 text block 照顺序接起来（不是 text 的 block 跳过）。
+ * streaming 中途被拒绝时，fallback 模型从断掉的地方接着写：[text(前半), fallback, text(后半)] 要接起来才是完整的 JSON。
+ */
 export function finalText(content: readonly ContentBlock[]): string {
-  let last = -1;
+  return content.filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
+}
+
+/**
+ * 要试着 parse 的文字（照顺序）：先全部接起来；有 fallback block 的话，再试每个 fallback block 之后的
+ * （文件没说带 json_schema 的请求 fallback 时一定接着写；如果是从头重写一份，前面断掉的那半段要丢掉）。
+ */
+export function textCandidates(content: readonly ContentBlock[]): string[] {
+  const out = [finalText(content)];
   content.forEach((b, i) => {
-    if (b.type === "fallback") last = i;
+    if (b.type === "fallback") out.push(finalText(content.slice(i + 1)));
   });
-  return content.slice(last + 1).filter((b) => b.type === "text").map((b) => b.text ?? "").join("");
+  return [...new Set(out)];
+}
+
+/** 第一个 parse 得了、格式也对的候选；都不行 → null */
+function firstValid(candidates: string[]): { data: Extraction; output: unknown } | null {
+  for (const t of candidates) {
+    let output: unknown;
+    try {
+      output = JSON.parse(t);
+    } catch {
+      continue;
+    }
+    const data = normalizeExtraction(output);
+    if (data) return { data, output };
+  }
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -364,15 +392,9 @@ export async function extractPriceList(input: ExtractInput, opts: ExtractOptions
   if (msg.stop_reason === "refusal") return { ok: false, reason: "refusal", meta };
   if (msg.stop_reason === "max_tokens") return { ok: false, reason: "max_tokens", meta };
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(finalText(content));
-  } catch {
-    return { ok: false, reason: "invalid_output", meta };
-  }
-  const data = normalizeExtraction(parsed);
-  if (!data) return { ok: false, reason: "invalid_output", meta };
-  return { ok: true, data, output: parsed, meta };
+  const valid = firstValid(textCandidates(content));
+  if (!valid) return { ok: false, reason: "invalid_output", meta };
+  return { ok: true, data: valid.data, output: valid.output, meta };
 }
 
 /** SDK 丢出来的错误 → 给 App 看的简短代码；不是 SDK 的错误 → null */

@@ -10,7 +10,7 @@ import 'package:jb_wholesale/app/router.dart';
 import 'package:jb_wholesale/app/session.dart';
 import 'package:jb_wholesale/demo/demo_api.dart';
 import 'package:jb_wholesale/demo/demo_session.dart';
-import 'package:jb_wholesale/features/auth/status_pages.dart';
+import 'package:jb_wholesale/features/seller/seller_home_page.dart';
 import 'package:jb_wholesale/main.dart';
 import 'package:jb_wholesale/push/push_config.dart';
 import 'package:jb_wholesale/push/push_routes.dart';
@@ -247,7 +247,7 @@ void main() {
     await settle(tester);
     expect(s.push.calls, contains('ask'));
     expect(find.textContaining('通知没有打开'), findsOneWidget);
-    expect(find.byType(SellerPlaceholderPage), findsOneWidget);
+    expect(find.byType(SellerHomePage), findsOneWidget);
     expect((await SharedPreferences.getInstance()).getBool('push_permission_asked'), isTrue);
   });
 
