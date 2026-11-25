@@ -240,6 +240,7 @@ class OrderSummary {
 class OrderItem {
   const OrderItem({
     required this.id,
+    this.productId,
     required this.name,
     required this.unit,
     required this.packQty,
@@ -251,6 +252,7 @@ class OrderItem {
 
   factory OrderItem.fromJson(Json j) => OrderItem(
     id: j['id'] as String,
+    productId: asStringOrNull(j['product_id']),
     name: asStringOrNull(j['name']) ?? '',
     unit: sellUnitFrom(j['unit']),
     packQty: asInt(j['pack_qty'], 1),
@@ -261,6 +263,9 @@ class OrderItem {
   );
 
   final String id;
+
+  /// 商品可能已经删掉了（订单里的名字、价钱是下单时的快照）
+  final String? productId;
   final String name;
   final SellUnit unit;
   final int packQty;
@@ -347,6 +352,10 @@ class OrderDetail {
     required this.paymentTerms,
     required this.shopName,
     this.shopAddress,
+    this.shopPhone,
+    this.shopContactName,
+    this.shopZoneName,
+    this.source,
     required this.items,
     required this.events,
     this.review,
@@ -374,6 +383,10 @@ class OrderDetail {
       paymentTerms: asStringList(w['payment_terms']),
       shopName: asStringOrNull(s['name']) ?? '',
       shopAddress: asStringOrNull(s['address']),
+      shopPhone: asStringOrNull(s['phone']) ?? asStringOrNull(s['whatsapp_phone']),
+      shopContactName: asStringOrNull(s['contact_name']),
+      shopZoneName: s['zone_name'] is Map ? LocalizedName.fromJson(s['zone_name']) : null,
+      source: asStringOrNull(j['source']),
       items: asJsonList(j['items']).map(OrderItem.fromJson).toList(),
       events: asJsonList(j['events']).map(OrderEvent.fromJson).toList(),
       review: r == null ? null : OrderReview.fromJson(r),
@@ -397,6 +410,14 @@ class OrderDetail {
   final List<String> paymentTerms;
   final String shopName;
   final String? shopAddress;
+
+  /// 批发商打电话 / WhatsApp 给店用（国际格式数字）
+  final String? shopPhone;
+  final String? shopContactName;
+  final LocalizedName? shopZoneName;
+
+  /// app / voice / whatsapp / admin / reorder
+  final String? source;
   final List<OrderItem> items;
   final List<OrderEvent> events;
   final OrderReview? review;

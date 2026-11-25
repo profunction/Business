@@ -49,3 +49,5 @@ app.*.map.json
 
 # 本机的服务器设定（复制 config/local.example.json）
 config/local.json
+# Firebase 的设定值（复制 config/firebase.example.json）。不是秘密，但每个环境不一样
+config/firebase.json

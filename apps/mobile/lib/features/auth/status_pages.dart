@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../app/l10n_x.dart';
 import '../../app/providers.dart';
+import '../../push/push_prompt.dart';
 import '../../widgets/common.dart';
 
 /// 登录后读取「我是谁」的时候；读不到（例如没网络）就给「再试一次」
@@ -33,12 +34,25 @@ class LoadingPage extends ConsumerWidget {
   }
 }
 
-/// 第四步才做批发商端，现在先显示一句话
-class SellerPlaceholderPage extends ConsumerWidget {
+/// 批发商首页（第四步的页面做好之前先显示一句话）。第一次打开时问要不要打开通知
+class SellerPlaceholderPage extends ConsumerStatefulWidget {
   const SellerPlaceholderPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SellerPlaceholderPage> createState() => _SellerPlaceholderPageState();
+}
+
+class _SellerPlaceholderPageState extends ConsumerState<SellerPlaceholderPage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) askForPushOnce(context, ref, seller: true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final session = ref.watch(sessionProvider);
     final pending = session.context?.wholesalers.any((w) => w.status == 'pending') ?? false;
     return _MessagePage(

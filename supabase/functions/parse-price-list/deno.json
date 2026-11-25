@@ -1,0 +1,8 @@
+{
+  "imports": {
+    "@anthropic-ai/sdk": "npm:@anthropic-ai/sdk@1.13.0",
+    "@std/encoding/base64": "jsr:@std/encoding@1.0.11/base64",
+    "@supabase/supabase-js": "npm:@supabase/supabase-js@2.119.2",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs"
+  }
+}

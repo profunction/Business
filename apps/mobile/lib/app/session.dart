@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthChangeEvent;
 import 'package:wholesale_core/wholesale_core.dart';
 
+import '../push/push_service.dart';
+
 /// App 现在在哪一个阶段，决定打开哪个页面
 enum SessionStage {
   chooseLanguage, // 第一次打开：先选语言
@@ -19,7 +21,7 @@ enum SessionStage {
 
 /// 登录状态、语言、我是谁、现在用哪间店。页面跳转（router.dart）跟着这个走。
 class SessionController extends ChangeNotifier {
-  SessionController({required this.api, required this.prefs}) {
+  SessionController({required this.api, required this.prefs, this.push = const NoopPushService()}) {
     _localeCode = prefs.getString(_kLocale);
     _authSub = api.client.auth.onAuthStateChange.listen((state) {
       if (state.event == AuthChangeEvent.signedIn || state.event == AuthChangeEvent.initialSession) {
@@ -35,9 +37,13 @@ class SessionController extends ChangeNotifier {
 
   static const _kLocale = 'locale';
   static const _kShop = 'selected_shop_id';
+  static const _kWholesaler = 'selected_wholesaler_id';
 
   final WholesaleApi api;
   final SharedPreferences prefs;
+
+  /// 登录后登记这部手机收推送，登出前删掉
+  final PushService push;
   StreamSubscription<dynamic>? _authSub;
 
   String? _localeCode;
@@ -72,6 +78,16 @@ class SessionController extends ChangeNotifier {
 
   String? get shopId => shop?.id;
 
+  /// 现在用哪家批发商（一个人可以是几家批发商的成员）
+  MyWholesaler? get wholesaler {
+    final list = _context?.wholesalers ?? const [];
+    if (list.isEmpty) return null;
+    final saved = prefs.getString(_kWholesaler);
+    return list.firstWhere((w) => w.id == saved, orElse: () => list.first);
+  }
+
+  String? get wholesalerId => wholesaler?.id;
+
   Future<void> refresh() async {
     if (!isLoggedIn) return;
     _loading = true;
@@ -84,6 +100,8 @@ class SessionController extends ChangeNotifier {
       if (code != null && _context!.profile.locale != code) {
         unawaited(api.setMyLocale(_context!.profile.id, code).catchError((_) {}));
       }
+      // 买家、批发商都登记推送（每次开 App 都更新一次）；失败也不影响用 App
+      unawaited(push.registerDevice(localeCode: code).catchError((_) {}));
     } catch (e) {
       _error = e;
     } finally {
@@ -96,6 +114,7 @@ class SessionController extends ChangeNotifier {
     _localeCode = code;
     await prefs.setString(_kLocale, code);
     notifyListeners();
+    unawaited(push.setLocale(code).catchError((_) {}));
     final c = _context;
     if (c != null) {
       try {
@@ -111,8 +130,18 @@ class SessionController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> selectWholesaler(String wholesalerId) async {
+    await prefs.setString(_kWholesaler, wholesalerId);
+    notifyListeners();
+  }
+
   Future<void> signOut() async {
     await prefs.remove(_kShop);
+    await prefs.remove(_kWholesaler);
+    // 要在登出前删（RLS：只能删自己的）
+    try {
+      await push.unregisterDevice().timeout(const Duration(seconds: 5));
+    } catch (_) {}
     await api.signOut();
     _context = null;
     notifyListeners();

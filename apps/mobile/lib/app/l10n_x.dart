@@ -101,9 +101,29 @@ extension L10nText on L10n {
       'INVALID_TRANSITION' || 'ORDER_NOT_FOUND' => errInvalidTransition,
       'ORDER_NOT_DELIVERED' => errOrderNotDelivered,
       'NO_PREVIOUS_ORDER' => errNoPreviousOrder,
+      // 批发商端
+      'ITEM_NOT_IN_ORDER' => sellerErrItemNotInOrder,
+      'UNSUPPORTED_FILE' => sellerErrUnsupportedFile,
+      'FILE_TOO_LARGE' => sellerErrFileTooLarge,
+      'IMPORT_TIMEOUT' => sellerErrImportTimeout,
+      'IMPORT_NOT_IN_REVIEW' || 'IMPORT_NOT_PROCESSING' || 'IMPORT_ALREADY_APPLIED' => sellerErrImportDone,
+      'IMPORT_ROW_INCOMPLETE' => sellerErrRowIncomplete(_row(e)),
+      'IMPORT_ROW_INVALID_PRODUCT' => sellerErrRowInvalidProduct(_row(e)),
+      'IMPORT_DUPLICATE_PRODUCT' => sellerErrDuplicateProduct(_row(e)),
+      'IMPORT_NOT_FOUND' || 'PRODUCT_NOT_FOUND' || 'WHOLESALER_NOT_FOUND' || 'NOT_FOUND' => sellerErrNotFound,
       _ => errUnknown,
     };
   }
+
+  int _row(Object e) => (e is AppError ? e.rowNo : null) ?? 0;
+
+  /// 价目表 AI 读失败的原因（price_list_imports.error_message，parse-price-list 写的英文代码）
+  String importFailure(String? code) => switch (code) {
+    'UNSUPPORTED_FILE' => sellerErrUnsupportedFile,
+    'FILE_TOO_LARGE' => sellerErrFileTooLarge,
+    'START_FAILED' || 'NETWORK' => errNetwork,
+    _ => sellerErrAiFailed, // AI_REFUSED、AI_TRUNCATED、其他
+  };
 
   // ---------- 日期（全部按马来西亚时间显示） ----------
 

@@ -284,7 +284,9 @@ enabled = false
 enabled = true
 # Configure one of the supported request policies: `oneshot`, `per_worker`.
 # Use `oneshot` for hot reload, or `per_worker` for load testing.
-policy = "oneshot"
+# 第四步：parse-price-list（和 whatsapp-webhook 的回复文字）先回应、再用 EdgeRuntime.waitUntil 在背景做；
+# 本机 `supabase functions serve` 要 per_worker 背景工作才会跑完（oneshot 回应后就结束）。代价：改代码要重开 serve。
+policy = "per_worker"
 # Port to attach the Chrome inspector for debugging edge functions.
 inspector_port = 8083
 # The Deno major version to use.
@@ -292,6 +294,25 @@ deno_version = 1
 
 # [edge_runtime.secrets]
 # secret_key = "env(SECRET_VALUE)"
+
+# 第四步的 Edge Functions：全部关掉平台的 JWT 检查，在代码里自己验身份
+# （新的 sb_secret_ / sb_publishable_ 钥匙不是 JWT，平台检查对它们不可靠）。
+# 每个函数用自己目录的 deno.json（import map），不用另外设定 import_map。
+
+# pg_cron / trigger 用 pg_net 叫：代码检查 apikey 头 = secret key（固定时间比较）
+[functions.dispatch-notifications]
+enabled = true
+verify_jwt = false
+
+# Meta 叫：GET 验 hub.verify_token；POST 验 X-Hub-Signature-256（App Secret，原始 body）
+[functions.whatsapp-webhook]
+enabled = true
+verify_jwt = false
+
+# App 用 functions.invoke 叫：代码用 auth.getUser(jwt) 验用户，再用用户身份（RLS）读 import
+[functions.parse-price-list]
+enabled = true
+verify_jwt = false
 
 [analytics]
 enabled = true

@@ -1,0 +1,8 @@
+{
+  "FIREBASE_API_KEY": "Firebase 主控台 → 专案设定 → 一般 → 你的应用程式（或 flutterfire configure 产生的 lib/firebase_options.dart 里的 apiKey）",
+  "FIREBASE_APP_ID_ANDROID": "1:123456789012:android:0123456789abcdef",
+  "FIREBASE_APP_ID_IOS": "1:123456789012:ios:0123456789abcdef",
+  "FIREBASE_MESSAGING_SENDER_ID": "123456789012",
+  "FIREBASE_PROJECT_ID": "your-firebase-project-id",
+  "FIREBASE_IOS_BUNDLE_ID": "my.jbwholesale.jbWholesale"
+}

@@ -675,4 +675,64 @@ class L10nZh extends L10n {
 
   @override
   String get adminUseWeb => '客服请用网页后台';
+
+  @override
+  String get pushChannelName => '订单通知';
+
+  @override
+  String get pushChannelDescription => '新订单、订单状态和每天的送货总结';
+
+  @override
+  String get pushAskTitle => '打开通知？';
+
+  @override
+  String get pushAskSellerBody => '有新订单时手机会响，不会漏单。';
+
+  @override
+  String get pushAskBuyerBody => '批发商确认、缺货或出发送货时，马上通知你。';
+
+  @override
+  String get pushAskAllow => '打开通知';
+
+  @override
+  String get pushAskLater => '以后再说';
+
+  @override
+  String get pushDenied => '通知没有打开。想打开的话，到手机的「设定」→「通知」。';
+
+  @override
+  String get sellerErrUnsupportedFile => '这种档案看不懂。请拍照，或选 Excel、PDF、CSV 档案。';
+
+  @override
+  String get sellerErrFileTooLarge => '档案太大了（最多 10 MB）';
+
+  @override
+  String get sellerErrAiFailed => 'AI 读不懂这份价目表。请拍清楚一点再试一次。';
+
+  @override
+  String get sellerErrImportTimeout => 'AI 还没读完。请过几分钟再回来看。';
+
+  @override
+  String get sellerErrImportDone => '这份价目表已经处理过了';
+
+  @override
+  String sellerErrRowIncomplete(int row) {
+    return '第 $row 行还缺名字、单位、包装数量或价钱';
+  }
+
+  @override
+  String sellerErrRowInvalidProduct(int row) {
+    return '第 $row 行对到的商品不对，请重新选';
+  }
+
+  @override
+  String sellerErrDuplicateProduct(int row) {
+    return '第 $row 行跟另一行改同一样商品，请改掉其中一行';
+  }
+
+  @override
+  String get sellerErrItemNotInOrder => '这样东西不在这张订单里，请重新打开订单';
+
+  @override
+  String get sellerErrNotFound => '找不到，可能已经被删掉了';
 }

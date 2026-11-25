@@ -193,4 +193,22 @@ as $$
   limit 1;
 $$;
 
+-- 执行一句 SQL，回传错误「代码:detail」（throws_ok 看不到 detail）；没出错就回传 null。
+-- 在子交易里跑，出错的改动会退回。
+create or replace function tests.error_of(p_sql text)
+returns text
+language plpgsql
+as $$
+declare
+  v_msg text;
+  v_detail text;
+begin
+  execute p_sql;
+  return null;
+exception when others then
+  get stacked diagnostics v_msg = message_text, v_detail = pg_exception_detail;
+  return v_msg || coalesce(':' || nullif(v_detail, ''), '');
+end;
+$$;
+
 grant execute on all functions in schema tests to anon, authenticated, service_role;

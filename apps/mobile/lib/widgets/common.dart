@@ -358,6 +358,7 @@ Future<bool> confirmDialog(
   required String title,
   required String confirmLabel,
   Widget? content,
+  String? cancelLabel,
 }) async {
   final l = context.l10n;
   final ok = await showDialog<bool>(
@@ -367,7 +368,7 @@ Future<bool> confirmDialog(
       content: content,
       actionsAlignment: MainAxisAlignment.spaceBetween,
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context, false), child: Text(l.cancel)),
+        TextButton(onPressed: () => Navigator.pop(context, false), child: Text(cancelLabel ?? l.cancel)),
         FilledButton(
           style: FilledButton.styleFrom(minimumSize: const Size(120, 56)),
           onPressed: () => Navigator.pop(context, true),

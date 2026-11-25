@@ -1,0 +1,4 @@
+# 本机的秘密（照 .env.example 填）不要放进 git
+.env
+.env.*
+!.env.example

@@ -1,17 +1,27 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:wholesale_core/wholesale_core.dart';
 
 import 'demo_data.dart';
+import 'demo_seller.dart';
 
 /// 示范模式 / 自动测试用：不连服务器，数据来自本机数据库导出的真实样本（demo_data.dart）。
 /// 只有 main_demo.dart 和测试会用到，正式 App（main.dart）不会打包进去。
 class DemoApi extends WholesaleApi {
-  DemoApi({this.freeUser = false, this.newUser = false, this.failNextPlaceOrderWithPriceChange = false})
-    : super(
-        SupabaseClient('http://127.0.0.1:1', 'demo-key', authOptions: const AuthClientOptions(autoRefreshToken: false)),
-      );
+  DemoApi({
+    this.freeUser = false,
+    this.newUser = false,
+    this.failNextPlaceOrderWithPriceChange = false,
+    this.seller = false,
+  }) : super(
+         SupabaseClient(
+           'http://127.0.0.1:1',
+           'demo-key',
+           authOptions: const AuthClientOptions(autoRefreshToken: false),
+         ),
+       );
 
   /// 试用已用完的老板（只看得到 1 家的价钱）
   final bool freeUser;
@@ -21,6 +31,12 @@ class DemoApi extends WholesaleApi {
 
   /// 测试「价钱刚好改了」
   bool failNextPlaceOrderWithPriceChange;
+
+  /// 用示范批发商 A 的账号登录（批发商端）
+  final bool seller;
+
+  /// 批发商端的示范资料（订单、商品、价目表导入……），按了按钮会跟着变
+  late final DemoSeller sellerData = DemoSeller();
 
   bool loggedIn = true;
 
@@ -52,6 +68,7 @@ class DemoApi extends WholesaleApi {
 
   @override
   Future<MyContext> getMyContext() => _later(() {
+    if (seller) return MyContext.fromJson(sellerData.myContext());
     final c = asJson(_j('my_context'));
     if (newUser) c['shops'] = <Object>[];
     return MyContext.fromJson(c);
@@ -198,6 +215,7 @@ class DemoApi extends WholesaleApi {
 
   @override
   Future<OrderDetail> getOrder(String orderId) => _later(() {
+    if (seller) return sellerData.order(orderId);
     final confirmed = asJson(_j('order_detail_confirmed'));
     return OrderDetail.fromJson(confirmed['id'] == orderId ? confirmed : asJson(_j('order_detail')));
   });
@@ -217,4 +235,144 @@ class DemoApi extends WholesaleApi {
 
   @override
   Future<void> stopWatching(RealtimeChannel channel) async {}
+
+  // ---------------- 推送 ----------------
+
+  @override
+  Future<void> registerDeviceToken(String token, {required String platform, String kind = 'fid'}) =>
+      _later(() => calls.add('registerDevice $platform $kind'));
+
+  @override
+  Future<void> unregisterDeviceToken(String token) => _later(() => calls.add('unregisterDevice'));
+
+  // ---------------- 批发商端 ----------------
+
+  @override
+  Future<SellerHome> getSellerHome(String wholesalerId) => _later(sellerData.home);
+
+  @override
+  Future<List<SellerOrderSummary>> listSellerOrders(
+    String wholesalerId, {
+    List<OrderStatus>? statuses,
+    DateTime? deliveryDate,
+    int limit = 50,
+  }) => _later(() => sellerData.orders(statuses: statuses, deliveryDate: deliveryDate, limit: limit));
+
+  @override
+  Future<DeliverySummary> getDeliverySummary(String wholesalerId, {DateTime? date}) =>
+      _later(() => sellerData.delivery(date));
+
+  @override
+  Future<OrderStatus> confirmOrder(String orderId, {List<String> outOfStockItemIds = const []}) => _later(() {
+    calls.add('confirm $orderId ${outOfStockItemIds.length}');
+    return sellerData.confirm(orderId, outOfStockItemIds);
+  });
+
+  @override
+  Future<void> markOutOfStock(String orderId, {String? note}) => _later(() {
+    calls.add('outOfStock $orderId');
+    sellerData.setStatus(orderId, OrderStatus.outOfStock);
+  });
+
+  @override
+  Future<void> markDelivering(String orderId) => _later(() {
+    calls.add('delivering $orderId');
+    sellerData.setStatus(orderId, OrderStatus.delivering);
+  });
+
+  @override
+  Future<void> markDelivered(String orderId) => _later(() {
+    calls.add('delivered $orderId');
+    sellerData.setStatus(orderId, OrderStatus.delivered);
+  });
+
+  @override
+  RealtimeChannel watchWholesalerOrders(String wholesalerId, void Function() onChange) => client.channel('demo');
+
+  @override
+  Future<List<SellerProduct>> listMyProducts(String wholesalerId) => _later(sellerData.products);
+
+  @override
+  Future<SellerProduct> getProduct(String productId) => _later(() => sellerData.product(productId));
+
+  @override
+  Future<SellerProduct> saveProduct(SellerProduct product) => _later(() {
+    calls.add('saveProduct ${product.name} ${product.priceSen}');
+    return sellerData.saveProduct(product);
+  });
+
+  @override
+  Future<SellerProduct> setStockStatus(String productId, StockStatus status) => _later(() {
+    calls.add('stock $productId ${stockStatusCode(status)}');
+    return sellerData.updateProduct(productId, {'stock_status': stockStatusCode(status)});
+  });
+
+  @override
+  Future<SellerProduct> setProductStatus(String productId, ProductStatus status) => _later(() {
+    calls.add('productStatus $productId ${status.name}');
+    return sellerData.updateProduct(productId, {'status': status.name});
+  });
+
+  /// 示范模式不用等 3 秒
+  @override
+  Duration get importPollInterval => const Duration(milliseconds: 200);
+
+  @override
+  Future<String> uploadPriceList(String wholesalerId, Uint8List bytes, String ext, String contentType) => _later(() {
+    calls.add('upload $ext $contentType');
+    return '$wholesalerId/${newUuidV4()}.$ext';
+  });
+
+  @override
+  Future<PriceListImport> createImport({
+    required String wholesalerId,
+    required String filePath,
+    required ImportFileType fileType,
+  }) => _later(() {
+    calls.add('createImport ${fileType.name}');
+    return sellerData.createImport(filePath, fileType);
+  });
+
+  @override
+  Future<void> startParse(String importId) => _later(() {
+    calls.add('startParse');
+    sellerData.startParse(importId);
+  });
+
+  @override
+  Future<void> markImportFailed(String importId, String code) => _later(() => sellerData.markFailed(importId, code));
+
+  @override
+  Future<PriceListImport> getImport(String importId) => _later(() => sellerData.getImport(importId));
+
+  @override
+  Future<List<PriceListImport>> listImports(String wholesalerId, {int limit = 10}) => _later(sellerData.imports);
+
+  @override
+  Future<List<PriceListImportRow>> listImportRows(String importId) => _later(() => sellerData.rows(importId));
+
+  @override
+  Future<PriceListImportRow> updateImportRow(String rowId, Map<String, Object?> fields) => _later(() {
+    calls.add('updateRow $rowId ${fields['action']}');
+    return sellerData.updateRow(rowId, fields);
+  });
+
+  @override
+  Future<ApplyImportResult> applyImport(String importId) => _later(() {
+    final r = sellerData.apply(importId);
+    calls.add('applyImport ${r.created} ${r.updated} ${r.skipped}');
+    return r;
+  });
+
+  @override
+  Future<WholesalerSettings> getWholesalerSettings(String wholesalerId) => _later(sellerData.settings);
+
+  @override
+  Future<WholesalerSettings> setNotifyChannel(String wholesalerId, NotifyChannel channel) => _later(() {
+    calls.add('notifyChannel ${channel.name}');
+    return sellerData.setNotifyChannel(channel);
+  });
+
+  @override
+  Future<void> setWhatsappOptIn(String wholesalerId, bool optIn) => _later(() => sellerData.setWhatsappOptIn(optIn));
 }

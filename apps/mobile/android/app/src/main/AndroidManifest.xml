@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <!-- 连服务器（正式版也要；Flutter 预设只在开发版加） -->
     <uses-permission android:name="android.permission.INTERNET"/>
+    <!-- Android 13+ 显示通知要问（firebase_messaging 也会自动合并进来，这里写清楚） -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application
         android:label="新山批发"
         android:name="${applicationName}"
@@ -32,6 +34,21 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+        <!-- 推送（FCM）：用 Firebase Installation ID 登记（firebase_messaging 17 的 register / onRegistered） -->
+        <meta-data
+            android:name="firebase_messaging_installation_id_enabled"
+            android:value="true" />
+        <!-- 推送没写频道、或频道还没建时用的频道（App 一打开就会建「订单通知」orders，高重要性） -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="orders" />
+        <!-- App 在背景时系统显示推送用的小图示和颜色（不然是灰色方块） -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@drawable/ic_stat_order" />
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_color"
+            android:resource="@color/notification_color" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

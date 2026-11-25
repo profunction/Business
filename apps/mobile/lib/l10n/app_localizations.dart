@@ -1256,6 +1256,114 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'客服请用网页后台'**
   String get adminUseWeb;
+
+  /// No description provided for @pushChannelName.
+  ///
+  /// In zh, this message translates to:
+  /// **'订单通知'**
+  String get pushChannelName;
+
+  /// No description provided for @pushChannelDescription.
+  ///
+  /// In zh, this message translates to:
+  /// **'新订单、订单状态和每天的送货总结'**
+  String get pushChannelDescription;
+
+  /// No description provided for @pushAskTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开通知？'**
+  String get pushAskTitle;
+
+  /// No description provided for @pushAskSellerBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'有新订单时手机会响，不会漏单。'**
+  String get pushAskSellerBody;
+
+  /// No description provided for @pushAskBuyerBody.
+  ///
+  /// In zh, this message translates to:
+  /// **'批发商确认、缺货或出发送货时，马上通知你。'**
+  String get pushAskBuyerBody;
+
+  /// No description provided for @pushAskAllow.
+  ///
+  /// In zh, this message translates to:
+  /// **'打开通知'**
+  String get pushAskAllow;
+
+  /// No description provided for @pushAskLater.
+  ///
+  /// In zh, this message translates to:
+  /// **'以后再说'**
+  String get pushAskLater;
+
+  /// No description provided for @pushDenied.
+  ///
+  /// In zh, this message translates to:
+  /// **'通知没有打开。想打开的话，到手机的「设定」→「通知」。'**
+  String get pushDenied;
+
+  /// No description provided for @sellerErrUnsupportedFile.
+  ///
+  /// In zh, this message translates to:
+  /// **'这种档案看不懂。请拍照，或选 Excel、PDF、CSV 档案。'**
+  String get sellerErrUnsupportedFile;
+
+  /// No description provided for @sellerErrFileTooLarge.
+  ///
+  /// In zh, this message translates to:
+  /// **'档案太大了（最多 10 MB）'**
+  String get sellerErrFileTooLarge;
+
+  /// No description provided for @sellerErrAiFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 读不懂这份价目表。请拍清楚一点再试一次。'**
+  String get sellerErrAiFailed;
+
+  /// No description provided for @sellerErrImportTimeout.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 还没读完。请过几分钟再回来看。'**
+  String get sellerErrImportTimeout;
+
+  /// No description provided for @sellerErrImportDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'这份价目表已经处理过了'**
+  String get sellerErrImportDone;
+
+  /// No description provided for @sellerErrRowIncomplete.
+  ///
+  /// In zh, this message translates to:
+  /// **'第 {row} 行还缺名字、单位、包装数量或价钱'**
+  String sellerErrRowIncomplete(int row);
+
+  /// No description provided for @sellerErrRowInvalidProduct.
+  ///
+  /// In zh, this message translates to:
+  /// **'第 {row} 行对到的商品不对，请重新选'**
+  String sellerErrRowInvalidProduct(int row);
+
+  /// No description provided for @sellerErrDuplicateProduct.
+  ///
+  /// In zh, this message translates to:
+  /// **'第 {row} 行跟另一行改同一样商品，请改掉其中一行'**
+  String sellerErrDuplicateProduct(int row);
+
+  /// No description provided for @sellerErrItemNotInOrder.
+  ///
+  /// In zh, this message translates to:
+  /// **'这样东西不在这张订单里，请重新打开订单'**
+  String get sellerErrItemNotInOrder;
+
+  /// No description provided for @sellerErrNotFound.
+  ///
+  /// In zh, this message translates to:
+  /// **'找不到，可能已经被删掉了'**
+  String get sellerErrNotFound;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

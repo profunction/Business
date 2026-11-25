@@ -681,4 +681,68 @@ class L10nMs extends L10n {
 
   @override
   String get adminUseWeb => 'Khidmat pelanggan: sila guna laman admin';
+
+  @override
+  String get pushChannelName => 'Notifikasi pesanan';
+
+  @override
+  String get pushChannelDescription => 'Pesanan baharu, kemas kini pesanan dan ringkasan penghantaran harian';
+
+  @override
+  String get pushAskTitle => 'Hidupkan notifikasi?';
+
+  @override
+  String get pushAskSellerBody =>
+      'Telefon anda akan berbunyi bila ada pesanan baharu, jadi tiada pesanan yang terlepas.';
+
+  @override
+  String get pushAskBuyerBody =>
+      'Kami akan maklumkan sebaik sahaja pemborong mengesahkan, kehabisan stok atau menghantar pesanan anda.';
+
+  @override
+  String get pushAskAllow => 'Hidupkan';
+
+  @override
+  String get pushAskLater => 'Nanti dulu';
+
+  @override
+  String get pushDenied => 'Notifikasi tidak dihidupkan. Anda boleh hidupkan di Tetapan > Notifikasi telefon anda.';
+
+  @override
+  String get sellerErrUnsupportedFile =>
+      'Fail jenis ini tidak dapat dibaca. Sila ambil gambar, atau pilih fail Excel, PDF atau CSV.';
+
+  @override
+  String get sellerErrFileTooLarge => 'Fail terlalu besar (maksimum 10 MB).';
+
+  @override
+  String get sellerErrAiFailed =>
+      'AI tidak dapat membaca senarai harga ini. Sila ambil gambar yang lebih jelas dan cuba lagi.';
+
+  @override
+  String get sellerErrImportTimeout => 'AI masih membaca. Sila semak semula dalam beberapa minit.';
+
+  @override
+  String get sellerErrImportDone => 'Senarai harga ini sudah diproses.';
+
+  @override
+  String sellerErrRowIncomplete(int row) {
+    return 'Baris $row tiada nama, unit, saiz pek atau harga.';
+  }
+
+  @override
+  String sellerErrRowInvalidProduct(int row) {
+    return 'Baris $row dipadankan dengan produk yang salah. Sila pilih semula.';
+  }
+
+  @override
+  String sellerErrDuplicateProduct(int row) {
+    return 'Baris $row mengemas kini produk yang sama dengan baris lain. Sila tukar salah satu.';
+  }
+
+  @override
+  String get sellerErrItemNotInOrder => 'Barang itu tiada dalam pesanan ini. Sila buka semula pesanan.';
+
+  @override
+  String get sellerErrNotFound => 'Tidak dijumpai. Mungkin sudah dibuang.';
 }

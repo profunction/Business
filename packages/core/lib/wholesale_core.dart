@@ -2,10 +2,13 @@
 library;
 
 export 'src/api.dart';
+export 'src/file_type.dart';
+export 'src/ids.dart';
 export 'src/json.dart';
 export 'src/models/account.dart';
 export 'src/models/catalog.dart';
 export 'src/models/common.dart';
 export 'src/models/orders.dart';
+export 'src/models/seller.dart';
 export 'src/money.dart';
 export 'src/phone.dart';

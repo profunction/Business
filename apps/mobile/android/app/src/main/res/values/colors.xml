@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 通知图示的颜色（跟 App 主题的深绿一样，lib/app/theme.dart AppTheme.seed） -->
+    <color name="notification_color">#1B6E3C</color>
+</resources>

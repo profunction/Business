@@ -2,11 +2,22 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
 import 'package:wholesale_core/wholesale_core.dart';
 
+import '../push/push_service.dart';
 import 'session.dart';
 
 /// main.dart 里用真正的值覆盖
 final apiProvider = Provider<WholesaleApi>((ref) => throw UnimplementedError('apiProvider'));
 final sessionProvider = ChangeNotifierProvider<SessionController>((ref) => throw UnimplementedError('sessionProvider'));
+
+/// 推送通知（main.dart 换成 FirebasePushService；示范模式、测试是不做事的版本）
+final pushServiceProvider = Provider<PushService>((ref) => const NoopPushService());
+
+/// 现在用的批发商。只有批发商页面会用到，那时一定有
+final wholesalerIdProvider = Provider<String>((ref) {
+  final id = ref.watch(sessionProvider.select((s) => s.wholesalerId));
+  if (id == null) throw StateError('no wholesaler');
+  return id;
+});
 
 /// 现在用的店。只有买家页面会用到，那时一定有店
 final shopIdProvider = Provider<String>((ref) {

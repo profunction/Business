@@ -1,16 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../app/l10n_x.dart';
+import '../../push/push_prompt.dart';
 import '../../widgets/common.dart';
 
-class OrderPlacedPage extends StatelessWidget {
+class OrderPlacedPage extends ConsumerStatefulWidget {
   const OrderPlacedPage({super.key, required this.orderCount});
 
   final int orderCount;
 
   @override
+  ConsumerState<OrderPlacedPage> createState() => _OrderPlacedPageState();
+}
+
+class _OrderPlacedPageState extends ConsumerState<OrderPlacedPage> {
+  @override
+  void initState() {
+    super.initState();
+    // 刚下了单：问老板要不要在批发商确认 / 送货时收到通知（只问一次）
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) askForPushOnce(context, ref, seller: false);
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final orderCount = widget.orderCount;
     final l = context.l10n;
     final t = Theme.of(context).textTheme;
     return PopScope(

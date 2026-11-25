@@ -682,4 +682,66 @@ class L10nEn extends L10n {
 
   @override
   String get adminUseWeb => 'Customer service: please use the web admin';
+
+  @override
+  String get pushChannelName => 'Order notifications';
+
+  @override
+  String get pushChannelDescription => 'New orders, order updates and the daily delivery summary';
+
+  @override
+  String get pushAskTitle => 'Turn on notifications?';
+
+  @override
+  String get pushAskSellerBody => 'Your phone will ring when a new order comes in, so you won\'t miss any.';
+
+  @override
+  String get pushAskBuyerBody =>
+      'We\'ll let you know as soon as the wholesaler confirms, runs out of stock or sends out your order.';
+
+  @override
+  String get pushAskAllow => 'Turn on';
+
+  @override
+  String get pushAskLater => 'Not now';
+
+  @override
+  String get pushDenied => 'Notifications are off. You can turn them on in your phone\'s Settings > Notifications.';
+
+  @override
+  String get sellerErrUnsupportedFile =>
+      'We can\'t read this kind of file. Please take a photo, or choose an Excel, PDF or CSV file.';
+
+  @override
+  String get sellerErrFileTooLarge => 'The file is too big (10 MB max).';
+
+  @override
+  String get sellerErrAiFailed => 'The AI couldn\'t read this price list. Please take a clearer photo and try again.';
+
+  @override
+  String get sellerErrImportTimeout => 'The AI is still reading. Please check again in a few minutes.';
+
+  @override
+  String get sellerErrImportDone => 'This price list has already been handled.';
+
+  @override
+  String sellerErrRowIncomplete(int row) {
+    return 'Row $row is missing a name, unit, pack size or price.';
+  }
+
+  @override
+  String sellerErrRowInvalidProduct(int row) {
+    return 'Row $row is matched to the wrong product. Please choose again.';
+  }
+
+  @override
+  String sellerErrDuplicateProduct(int row) {
+    return 'Row $row updates the same product as another row. Please change one of them.';
+  }
+
+  @override
+  String get sellerErrItemNotInOrder => 'That item is not in this order. Please open the order again.';
+
+  @override
+  String get sellerErrNotFound => 'Not found. It may have been removed.';
 }

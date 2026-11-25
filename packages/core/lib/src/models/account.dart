@@ -44,12 +44,14 @@ class MyShop {
 }
 
 class MyWholesaler {
-  const MyWholesaler({required this.id, required this.name, required this.status});
+  const MyWholesaler({required this.id, required this.name, required this.status, this.memberRole = 'owner'});
 
   factory MyWholesaler.fromJson(Json j) => MyWholesaler(
     id: j['id'] as String,
     name: asStringOrNull(j['name']) ?? '',
     status: asStringOrNull(j['status']) ?? 'pending',
+    // 服务器一定会给；没给就当老板，让 RLS 决定能不能改
+    memberRole: asStringOrNull(j['member_role']) ?? 'owner',
   );
 
   final String id;
@@ -57,6 +59,11 @@ class MyWholesaler {
 
   /// pending / active / suspended
   final String status;
+
+  /// owner（老板）/ staff（员工）。只有老板能改批发商的资料（例如通知方式）
+  final String memberRole;
+
+  bool get isOwner => memberRole == 'owner';
 }
 
 /// get_my_context()：登录后我是谁、我有哪些店和批发商

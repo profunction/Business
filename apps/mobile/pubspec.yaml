@@ -7,13 +7,21 @@ environment:
   sdk: ^3.13.7
 
 dependencies:
+  file_picker: ^13.4.1
+  firebase_core: ^5.2.0
+  firebase_messaging: ^17.1.0
   flutter:
     sdk: flutter
+  flutter_local_notifications: ^23.0.4
   flutter_localizations:
     sdk: flutter
   flutter_riverpod: ^3.5.0
   go_router: ^18.1.4
+  image_picker: ^1.2.4
   intl: ^0.20.3
+  pdf: ^3.13.1
+  printing: ^5.15.1
+  share_plus: ^13.3.1
   shared_preferences: ^2.5.6
   supabase_flutter: ^2.18.3
   url_launcher: ^6.3.3
@@ -28,3 +36,8 @@ dev_dependencies:
 flutter:
   generate: true
   uses-material-design: true
+  assets:
+    # 打印送货单（PDF）的中文字体。printing 的 PdfGoogleFonts.notoSansSCRegular() 会先找
+    # google_fonts/NotoSansSC-Regular.ttf，找到就不用上网下载（下载失败会静默变成方块字）。
+    # 一定要是 TrueType 轮廓的 .ttf（开头 00 01 00 00），不能用 Noto Sans CJK 的 .otf。只放 Regular，粗体也用它
+    - google_fonts/NotoSansSC-Regular.ttf

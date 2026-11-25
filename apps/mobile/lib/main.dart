@@ -12,6 +12,9 @@ import 'app/router.dart';
 import 'app/session.dart';
 import 'app/theme.dart';
 import 'l10n/app_localizations.dart';
+import 'push/firebase_push_service.dart';
+import 'push/push_navigator.dart';
+import 'push/push_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,22 +25,31 @@ Future<void> main() async {
   await Supabase.initialize(url: AppConfig.supabaseUrl, publishableKey: AppConfig.supabaseKey);
   final prefs = await SharedPreferences.getInstance();
   final api = WholesaleApi(Supabase.instance.client);
-  final session = SessionController(api: api, prefs: prefs);
+  // 推送：没有 Firebase 设定（或网页版）就不启用，App 照样能用。见 lib/push/push_config.dart
+  final PushService push = await FirebasePushService.start(api: api, prefs: prefs) ?? const NoopPushService();
+  final session = SessionController(api: api, prefs: prefs, push: push);
 
   runApp(
     ProviderScope(
       // 出错时不要自动一直重试，让老板自己按「再试一次」
       retry: (_, _) => null,
-      overrides: [apiProvider.overrideWithValue(api), sessionProvider.overrideWith((ref) => session)],
-      child: WholesaleApp(session: session),
+      overrides: [
+        apiProvider.overrideWithValue(api),
+        sessionProvider.overrideWith((ref) => session),
+        pushServiceProvider.overrideWithValue(push),
+      ],
+      child: WholesaleApp(session: session, push: push),
     ),
   );
 }
 
 class WholesaleApp extends ConsumerStatefulWidget {
-  const WholesaleApp({super.key, required this.session});
+  const WholesaleApp({super.key, required this.session, this.push = const NoopPushService()});
 
   final SessionController session;
+
+  /// 点通知 → 打开订单 / 送货总结
+  final PushService push;
 
   @override
   ConsumerState<WholesaleApp> createState() => _WholesaleAppState();
@@ -45,6 +57,20 @@ class WholesaleApp extends ConsumerStatefulWidget {
 
 class _WholesaleAppState extends ConsumerState<WholesaleApp> {
   late final GoRouter _router = buildRouter(widget.session);
+  late final PushNavigator _pushNavigator;
+
+  @override
+  void initState() {
+    super.initState();
+    // 马上开始听（App 被通知叫醒时，点的那一条已经在等）
+    _pushNavigator = PushNavigator(taps: widget.push.taps, session: widget.session, router: _router);
+  }
+
+  @override
+  void dispose() {
+    _pushNavigator.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {

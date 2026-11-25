@@ -40,6 +40,13 @@ GoRouter buildRouter(SessionController session) {
     redirect: (context, state) {
       final path = state.uri.path;
       final stage = session.stage;
+      final from = state.uri.queryParameters['from'];
+      // 批发商：只能在 /seller 和底下的页面；从通知打开的页面读完资料后回去
+      if (stage == SessionStage.seller) {
+        if (isSellerPath(path)) return null;
+        if (path == '/loading' && from != null && isSellerPath(Uri.parse(from).path)) return from;
+        return '/seller';
+      }
       final target = _stagePages[stage];
       if (target != null) {
         // 登录流程里可以从 /login 去 /login/otp
@@ -51,10 +58,13 @@ GoRouter buildRouter(SessionController session) {
         }
         return target;
       }
+      // 买家不能进批发商的页面
+      if (isSellerPath(path)) return '/home';
       // 买家：离开所有「阶段页面」，有记住原本要去的就回去
       if (_stagePages.values.any((p) => path == p || path.startsWith('/login'))) {
-        final from = state.uri.queryParameters['from'];
-        return from != null && from.startsWith('/') && !from.startsWith('/loading') ? from : '/home';
+        return from != null && from.startsWith('/') && !from.startsWith('/loading') && !isSellerPath(from)
+            ? from
+            : '/home';
       }
       return null;
     },
@@ -67,6 +77,8 @@ GoRouter buildRouter(SessionController session) {
       ),
       GoRoute(path: '/loading', builder: (_, _) => const LoadingPage()),
       GoRoute(path: '/register', builder: (_, _) => const RegisterShopPage()),
+      // 批发商端（第四步）：/seller/orders、/seller/orders/:id、/seller/summary、/seller/products、/seller/import……
+      // 都放在 /seller 底下（通知会打开 /seller/orders/<id> 和 /seller/summary?date=）
       GoRoute(path: '/seller', builder: (_, _) => const SellerPlaceholderPage()),
       GoRoute(path: '/admin', builder: (_, _) => const AdminPlaceholderPage()),
       GoRoute(path: '/home', builder: (_, _) => const HomePage()),
@@ -113,9 +125,27 @@ GoRouter buildRouter(SessionController session) {
       GoRoute(path: '/free-wholesalers', builder: (_, _) => const FreeWholesalersPage()),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
     ],
-    errorBuilder: (_, _) => const HomePage(),
+    errorBuilder: (_, _) => session.stage == SessionStage.seller ? const SellerPlaceholderPage() : const HomePage(),
   );
 }
+
+/// 现在最上面那一页的网址（包括 push 上去的；GoRouter 的 currentConfiguration.uri 只有底下那一页）
+Uri currentLocation(GoRouter router) {
+  final config = router.routerDelegate.currentConfiguration;
+  if (config.isEmpty) return config.uri;
+  try {
+    return router.state.uri;
+  } catch (_) {
+    return config.uri; // 找不到页面（errorBuilder）时
+  }
+}
+
+/// 批发商端的页面：/seller 和底下的
+bool isSellerPath(String path) => path == '/seller' || path.startsWith('/seller/');
+
+/// 登录、读取资料、开店这些「过渡」页面：从通知打开的页面要等离开这些才打开
+bool isTransientPage(String path) =>
+    path == '/language' || path == '/loading' || path == '/register' || path == '/admin' || path.startsWith('/login');
 
 /// push 一个页面，带上中文 / 英文 / 马来文都可以的标题参数
 extension PushX on BuildContext {

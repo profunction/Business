@@ -18,6 +18,19 @@
 	<array>
 		<string>tel</string>
 	</array>
+	<!-- 价目表：拍照 / 从相册选照片（image_picker）。中文 + 英文，马来文用户看得懂英文 -->
+	<key>NSCameraUsageDescription</key>
+	<string>拍价目表的照片，让 AI 转成商品和价钱 / Take a photo of your price list so it can be turned into products and prices</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>从相册选价目表的照片，让 AI 转成商品和价钱 / Choose a price list photo so it can be turned into products and prices</string>
+	<!-- 推送（FCM）：用 Firebase Installation ID 登记（firebase_messaging 17 的 register / onRegistered） -->
+	<key>FirebaseMessagingInstallationIdEnabled</key>
+	<true/>
+	<!-- 背景收推送。另外要在 Xcode 打开 Push Notifications capability（见 apps/mobile/README.md） -->
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>remote-notification</string>
+	</array>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

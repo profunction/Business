@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 正式版会删掉「没用到」的资源；通知图示只在 Dart / AndroidManifest 里用到，要留着
+     （flutter_local_notifications README「Release build configuration」） -->
+<resources xmlns:tools="http://schemas.android.com/tools"
+    tools:keep="@drawable/ic_stat_order,@color/notification_color" />

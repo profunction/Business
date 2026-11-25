@@ -93,6 +93,7 @@ RLS 已经允许批发商改自己的商品（`wholesaler_id` 受保护不能改
 
 > **实现说明**
 > - **相似度**：数据库 locale 是 C 时（本机测试、部分主机）pg_trgm 不把中文字当成字，「95 平盖」和「95 拱形盖」会被当成一模一样。所以全英文 / 数字的名字用 `extensions.similarity(lower(...))`；有中文等其他文字的用同样的三字组规则自己切（`_name_trgms` / `_trgm_sim` / `_name_similarity`，中文字也算字，全形字母数字当半形）。两种算法对英文名字结果完全一样（有测试）。
+> - **尺寸数字**：包装材料不同尺寸的名字通常只差一个数字（12oz / 16oz 杯、90mm / 95mm 盖），相似度会超过 0.45（只看 0.45 的话，价目表多了一个新尺寸，确认上架时会把新尺寸的价钱写到旧尺寸的商品上）。所以两边名字里的数字（`_name_numbers`：全形当半形，016 = 16，6.50 = 6.5）要**一边包含另一边**才算同一样：「95 平盖」和「95 平盖 1000个」可以，12oz 和 16oz、90 和 95 不行（那一行变 `create`）。标准商品的建议也照这个规则。
 > - **一对一**：一样商品只对给最像的那一行（其他行变 `create`），一样像时单位和包装数量也相同的优先；下架（archived）的商品也会对，但排在后面（`update` 时会重新上架）。没价钱的行也会算出对到哪样，方便批发商补上价钱后改成 `update`。
 > - **错误代码**：`IMPORT_NOT_FOUND`；`suggest_import_matches` 遇到已上架的 → `IMPORT_ALREADY_APPLIED`；`apply` 不是 review → `IMPORT_NOT_IN_REVIEW`（detail = 现在的状态）；`update` 行也要有 `matched_product_id` 和 `price_sen`，否则 `IMPORT_ROW_INCOMPLETE`；对到的商品不是这家批发商的（行是批发商自己可以改的）→ `IMPORT_ROW_INVALID_PRODUCT`；两行 `update` 同一样商品 → `IMPORT_DUPLICATE_PRODUCT`。detail 都是 row_no。
 

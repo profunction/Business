@@ -1,13 +1,17 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:supabase/supabase.dart';
 
+import 'file_type.dart';
+import 'ids.dart';
 import 'json.dart';
 import 'models/account.dart';
 import 'models/catalog.dart';
 import 'models/common.dart';
 import 'models/orders.dart';
+import 'models/seller.dart';
 
 /// 服务器返回的错误。code 是数据库函数 raise 的英文代码（见 docs/02-database.md 第 4 节），
 /// 另外还有 App 自己的：NETWORK（没网络）、AUTH（验证码错 / 登录过期）、UNKNOWN。
@@ -19,9 +23,55 @@ class AppError implements Exception {
     return AppError(code, detail: e.details?.toString(), message: e.message);
   }
 
+  /// Storage 上传失败（档案太大、格式不收、没权限……）
+  factory AppError.fromStorage(StorageException e) {
+    final status = e.statusCode ?? '';
+    final text = '${e.error ?? ''} ${e.message}'.toLowerCase();
+    final code = switch (status) {
+      '413' => 'FILE_TOO_LARGE',
+      '415' => 'UNSUPPORTED_FILE',
+      '401' || '403' => 'NOT_ALLOWED',
+      _ when text.contains('too large') || text.contains('maximum allowed size') => 'FILE_TOO_LARGE',
+      _ when text.contains('mime') => 'UNSUPPORTED_FILE',
+      _ when text.contains('row-level security') => 'NOT_ALLOWED',
+      _ => 'UNKNOWN',
+    };
+    return AppError(code, detail: status.isEmpty ? null : status, message: e.message);
+  }
+
+  /// Edge Function 调用失败。函数回传 {"error": "CODE"} 时用那个代码；否则按 HTTP 状态猜
+  factory AppError.fromFunction(FunctionException e, {Map<int, String> byStatus = const {}}) {
+    if (e is FunctionsFetchException) {
+      // 登录过期（refresh 失败）也会被包成 FunctionsFetchException
+      return AppError(e.details is AuthException ? 'AUTH' : 'NETWORK', message: e.details?.toString());
+    }
+    if (e is FunctionsRelayException) return AppError('UNKNOWN', detail: '${e.status}', message: e.reasonPhrase);
+    var details = e.details;
+    if (details is String && details.trimLeft().startsWith('{')) {
+      try {
+        details = jsonDecode(details);
+      } catch (_) {}
+    }
+    final fromBody = details is Map ? (details['error'] ?? details['code'])?.toString() : null;
+    final code = fromBody != null && RegExp(r'^[A-Z_]+$').hasMatch(fromBody)
+        ? fromBody
+        : byStatus[e.status] ??
+              switch (e.status) {
+                401 => 'AUTH',
+                403 => 'NOT_ALLOWED',
+                404 => 'NOT_FOUND',
+                413 => 'FILE_TOO_LARGE',
+                _ => 'UNKNOWN',
+              };
+    return AppError(code, detail: '${e.status}', message: e.reasonPhrase);
+  }
+
   final String code;
   final String? detail;
   final String? message;
+
+  /// 价目表导入的错误（IMPORT_ROW_INCOMPLETE 等），detail 是第几行
+  int? get rowNo => int.tryParse(detail ?? '');
 
   /// PRICE_CHANGED / CART_HAS_PROBLEMS 时，detail 是服务器最新的报价
   CartQuote? get quote {
@@ -51,6 +101,10 @@ class WholesaleApi {
       throw AppError.fromPostgrest(e);
     } on AuthException catch (e) {
       throw AppError('AUTH', message: e.message);
+    } on StorageException catch (e) {
+      throw AppError.fromStorage(e);
+    } on FunctionException catch (e) {
+      throw AppError.fromFunction(e);
     } on AppError {
       rethrow;
     } catch (e) {
@@ -233,4 +287,326 @@ class WholesaleApi {
   }
 
   Future<void> stopWatching(RealtimeChannel channel) => client.removeChannel(channel);
+
+  // ---------------- 推送通知 ----------------
+
+  /// 登记这部手机的推送目标（FCM 的 Firebase Installation ID 或旧的 registration token）。
+  /// platform：'android' / 'ios' / 'web'；kind：'fid'（2026 年起的新做法）或 'token'。
+  /// 同一个值再登记只会更新 last_seen_at；换人登录会转给新的人。
+  Future<void> registerDeviceToken(String token, {required String platform, String kind = 'fid'}) => _call(
+    () => client.rpc<dynamic>(
+      'register_device_token',
+      params: {'p_token': token, 'p_platform': platform, 'p_kind': kind},
+    ),
+  );
+
+  /// 登出前删掉这部手机的推送目标（RLS：只能删自己的）
+  Future<void> unregisterDeviceToken(String token) =>
+      _call(() => client.from('device_tokens').delete().eq('fcm_token', token));
+
+  // ---------------- 批发商：首页、订单、送货总结 ----------------
+
+  Future<SellerHome> getSellerHome(String wholesalerId) async =>
+      SellerHome.fromJson(await _rpcJson('get_seller_home', {'p_wholesaler_id': wholesalerId}));
+
+  /// statuses 空 = 全部；pending 排最前面（先来先做），其他新到旧。limit 1..200
+  Future<List<SellerOrderSummary>> listSellerOrders(
+    String wholesalerId, {
+    List<OrderStatus>? statuses,
+    DateTime? deliveryDate,
+    int limit = 50,
+  }) async => (await _rpcList('list_seller_orders', {
+    'p_wholesaler_id': wholesalerId,
+    'p_statuses': statuses == null || statuses.isEmpty ? null : statuses.map(orderStatusCode).toList(),
+    'p_delivery_date': deliveryDate == null ? null : dateParam(deliveryDate),
+    'p_limit': limit,
+  })).map(SellerOrderSummary.fromJson).toList();
+
+  /// date 空 = 马来西亚的今天
+  Future<DeliverySummary> getDeliverySummary(String wholesalerId, {DateTime? date}) async => DeliverySummary.fromJson(
+    await _rpcJson('get_delivery_summary', {
+      'p_wholesaler_id': wholesalerId,
+      'p_date': date == null ? null : dateParam(date),
+    }),
+  );
+
+  /// 确认订单；outOfStockItemIds 是缺货的那几样（order_items.id），不算钱。
+  /// 全部都缺货时服务器会改成 out_of_stock。回传订单的新状态
+  Future<OrderStatus> confirmOrder(String orderId, {List<String> outOfStockItemIds = const []}) => _call(
+    () async => orderStatusFrom(
+      await client.rpc<dynamic>(
+        'confirm_order',
+        params: {'p_order_id': orderId, 'p_out_of_stock_item_ids': outOfStockItemIds},
+      ),
+    ),
+  );
+
+  /// 整张单缺货（全部都没有）
+  Future<void> markOutOfStock(String orderId, {String? note}) => _setStatus(orderId, OrderStatus.outOfStock, note);
+
+  /// 出发送货
+  Future<void> markDelivering(String orderId) => _setStatus(orderId, OrderStatus.delivering);
+
+  /// 批发商按「已送达」
+  Future<void> markDelivered(String orderId) => _setStatus(orderId, OrderStatus.delivered);
+
+  Future<void> _setStatus(String orderId, OrderStatus status, [String? note]) => _call(
+    () => client.rpc<dynamic>(
+      'set_order_status',
+      params: {'p_order_id': orderId, 'p_status': orderStatusCode(status), 'p_note': note},
+    ),
+  );
+
+  /// 批发商的订单一有变化就叫 onChange（新订单、买家取消……）。用完记得 stopWatching
+  RealtimeChannel watchWholesalerOrders(String wholesalerId, void Function() onChange) {
+    return client
+        .channel('wholesaler-orders-$wholesalerId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'orders',
+          filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'wholesaler_id', value: wholesalerId),
+          callback: (_) => onChange(),
+        )
+        .subscribe();
+  }
+
+  // ---------------- 批发商：商品（直接读写 products 表，RLS 只给自己的） ----------------
+
+  /// 全部商品，包括草稿和下架的
+  Future<List<SellerProduct>> listMyProducts(String wholesalerId) => _call(() async {
+    final rows = await client
+        .from('products')
+        .select()
+        .eq('wholesaler_id', wholesalerId)
+        .order('sort_order')
+        .order('name');
+    return asJsonList(rows).map(SellerProduct.fromJson).toList();
+  });
+
+  Future<SellerProduct> getProduct(String productId) => _call(() async {
+    final row = await client.from('products').select().eq('id', productId).maybeSingle();
+    if (row == null) throw const AppError('PRODUCT_NOT_FOUND');
+    return SellerProduct.fromJson(asJson(row));
+  });
+
+  /// 新增（product.isNew）或修改一样商品，回传存好的那一行
+  Future<SellerProduct> saveProduct(SellerProduct product) => _call(() async {
+    final data = product.toWriteJson();
+    final List<dynamic> rows;
+    if (product.isNew) {
+      rows = await client.from('products').insert({
+        ...data,
+        'wholesaler_id': product.wholesalerId,
+        'created_by': client.auth.currentUser?.id,
+      }).select();
+    } else {
+      rows = await client.from('products').update(data).eq('id', product.id).select();
+    }
+    if (rows.isEmpty) throw const AppError('PRODUCT_NOT_FOUND');
+    return SellerProduct.fromJson(asJson(rows.first));
+  });
+
+  /// 库存三个大按钮：有货 / 快卖完 / 缺货
+  Future<SellerProduct> setStockStatus(String productId, StockStatus status) =>
+      _updateProduct(productId, {'stock_status': stockStatusCode(status)});
+
+  /// 上架（active）/ 下架（archived）
+  Future<SellerProduct> setProductStatus(String productId, ProductStatus status) =>
+      _updateProduct(productId, {'status': status.name});
+
+  Future<SellerProduct> _updateProduct(String productId, Json fields) => _call(() async {
+    final rows = await client.from('products').update(fields).eq('id', productId).select();
+    if (rows.isEmpty) throw const AppError('PRODUCT_NOT_FOUND');
+    return SellerProduct.fromJson(asJson(rows.first));
+  });
+
+  // ---------------- 批发商：价目表导入 ----------------
+
+  /// 查导入状态的间隔和上限（示范模式会改短）
+  Duration get importPollInterval => const Duration(seconds: 3);
+  Duration get importPollTimeout => const Duration(minutes: 5);
+
+  /// 上传价目表档案到 Storage `price-lists/<wholesalerId>/<uuid>.<ext>`，回传 bucket 里的路径。
+  /// ext、contentType 用 [sniffFileType] 从内容判断出来的（不要信档名）
+  Future<String> uploadPriceList(String wholesalerId, Uint8List bytes, String ext, String contentType) =>
+      _call(() async {
+        if (!RegExp(r'^[a-z0-9]{1,8}$').hasMatch(ext)) throw ArgumentError.value(ext, 'ext');
+        final path = '$wholesalerId/${newUuidV4()}.$ext';
+        await client.storage
+            .from('price-lists')
+            .uploadBinary(path, bytes, fileOptions: FileOptions(contentType: contentType));
+        return path;
+      });
+
+  /// 上传后建一行 price_list_imports（status = processing），回传那一行
+  Future<PriceListImport> createImport({
+    required String wholesalerId,
+    required String filePath,
+    required ImportFileType fileType,
+  }) => _call(() async {
+    final row = await client
+        .from('price_list_imports')
+        .insert({
+          'wholesaler_id': wholesalerId,
+          'file_path': filePath,
+          'file_type': fileType.name,
+          'status': 'processing',
+          'created_by': client.auth.currentUser?.id,
+        })
+        .select()
+        .single();
+    return PriceListImport.fromJson(asJson(row));
+  });
+
+  /// 叫 Edge Function parse-price-list 在背景读价目表（马上回 202）。之后用 [watchImport] 等结果。
+  /// 404 = 读不到这份导入；409 = 已经不是 processing
+  Future<void> startParse(String importId) => _call(() async {
+    try {
+      await client.functions.invoke('parse-price-list', body: {'import_id': importId});
+    } on FunctionException catch (e) {
+      throw AppError.fromFunction(e, byStatus: const {404: 'IMPORT_NOT_FOUND', 409: 'IMPORT_NOT_PROCESSING'});
+    }
+  });
+
+  /// 一次做完：判断格式 → 上传 → 建导入 → 叫 AI。回传的导入还是 processing。
+  /// 不收的格式（HEIC、Word……）→ UNSUPPORTED_FILE；超过 10 MB → FILE_TOO_LARGE
+  Future<PriceListImport> submitPriceList(String wholesalerId, Uint8List bytes, {String? fileName}) async {
+    if (bytes.length > priceListMaxBytes) throw const AppError('FILE_TOO_LARGE');
+    final kind = sniffFileType(bytes, fileName: fileName);
+    if (!kind.isPriceList) throw AppError('UNSUPPORTED_FILE', detail: kind.type.name);
+    final path = await uploadPriceList(wholesalerId, bytes, kind.ext, kind.contentType);
+    final import = await createImport(wholesalerId: wholesalerId, filePath: path, fileType: kind.importType!);
+    try {
+      await startParse(import.id);
+    } catch (_) {
+      // 叫不到 AI：标成失败，免得首页一直显示「AI 在读」。批发商重新上传就好
+      await markImportFailed(import.id, 'START_FAILED').catchError((_) {});
+      rethrow;
+    }
+    return import;
+  }
+
+  /// 还在 processing 的导入标成失败（App 叫不到 parse-price-list 时）
+  Future<void> markImportFailed(String importId, String code) => _call(
+    () => client
+        .from('price_list_imports')
+        .update({'status': 'failed', 'error_message': code})
+        .eq('id', importId)
+        .eq('status', 'processing'),
+  );
+
+  Future<PriceListImport> getImport(String importId) => _call(() async {
+    final row = await client.from('price_list_imports').select().eq('id', importId).maybeSingle();
+    if (row == null) throw const AppError('IMPORT_NOT_FOUND');
+    return PriceListImport.fromJson(asJson(row));
+  });
+
+  /// 最近的几次导入（新到旧）
+  Future<List<PriceListImport>> listImports(String wholesalerId, {int limit = 10}) => _call(() async {
+    final rows = await client
+        .from('price_list_imports')
+        .select()
+        .eq('wholesaler_id', wholesalerId)
+        .order('created_at', ascending: false)
+        .limit(limit);
+    return asJsonList(rows).map(PriceListImport.fromJson).toList();
+  });
+
+  /// 每 [importPollInterval] 查一次导入，每次都回传；不是 processing（review / failed / applied）就结束。
+  /// 超过 [importPollTimeout] → AppError('IMPORT_TIMEOUT')。中间没网络不算失败，下一次再查。
+  /// 不想等了就 cancel 这个 stream
+  Stream<PriceListImport> watchImport(String importId) async* {
+    final deadline = DateTime.now().add(importPollTimeout);
+    while (true) {
+      PriceListImport? current;
+      try {
+        current = await getImport(importId);
+      } on AppError catch (e) {
+        if (e.code != 'NETWORK') rethrow;
+      }
+      if (current != null) {
+        yield current;
+        if (current.isDone) return;
+      }
+      if (!DateTime.now().isBefore(deadline)) throw const AppError('IMPORT_TIMEOUT');
+      await Future<void>.delayed(importPollInterval);
+    }
+  }
+
+  Future<List<PriceListImportRow>> listImportRows(String importId) => _call(() async {
+    final rows = await client.from('price_list_import_rows').select().eq('import_id', importId).order('row_no');
+    return asJsonList(rows).map(PriceListImportRow.fromJson).toList();
+  });
+
+  static const _importRowFields = {
+    'name',
+    'unit',
+    'pack_qty',
+    'price_sen',
+    'min_order_qty',
+    'matched_product_id',
+    'action',
+  };
+
+  /// 批发商改一行（只能改 name、unit、pack_qty、price_sen、min_order_qty、matched_product_id、action）。
+  /// 通常传 row.copyWith(...).toWriteJson()
+  Future<PriceListImportRow> updateImportRow(String rowId, Map<String, Object?> fields) => _call(() async {
+    final bad = fields.keys.where((k) => !_importRowFields.contains(k));
+    if (bad.isNotEmpty) throw ArgumentError('not editable: ${bad.join(', ')}');
+    final rows = await client.from('price_list_import_rows').update(fields).eq('id', rowId).select();
+    if (rows.isEmpty) throw const AppError('IMPORT_NOT_FOUND');
+    return PriceListImportRow.fromJson(asJson(rows.first));
+  });
+
+  /// 确认上架：create 行新增商品，update 行改对到的商品，skip 不动。
+  /// 行不完整 → IMPORT_ROW_INCOMPLETE（error.rowNo 是第几行）
+  Future<ApplyImportResult> applyImport(String importId) async =>
+      ApplyImportResult.fromJson(await _rpcJson('apply_price_list_import', {'p_import_id': importId}));
+
+  // ---------------- 批发商：设定 ----------------
+
+  Future<WholesalerSettings> getWholesalerSettings(String wholesalerId) => _call(() async {
+    final row = await client
+        .from('wholesalers')
+        .select('id, name, phone, whatsapp_phone, notify_channel, whatsapp_opt_in_at')
+        .eq('id', wholesalerId)
+        .maybeSingle();
+    if (row == null) throw const AppError('WHOLESALER_NOT_FOUND');
+    return WholesalerSettings.fromJson(asJson(row));
+  });
+
+  /// 通知方式（只有批发商老板能改，员工会得到 NOT_ALLOWED）。选 WhatsApp 等于同意用 WhatsApp 收订单
+  Future<WholesalerSettings> setNotifyChannel(String wholesalerId, NotifyChannel channel) => _call(() async {
+    final rows = await client
+        .from('wholesalers')
+        .update({'notify_channel': channel.name})
+        .eq('id', wholesalerId)
+        .select('id');
+    if (rows.isEmpty) throw const AppError('NOT_ALLOWED');
+    if (channel == NotifyChannel.whatsapp) await setWhatsappOptIn(wholesalerId, true);
+    return getWholesalerSettings(wholesalerId);
+  });
+
+  /// 同意 / 不再同意用 WhatsApp 收订单（Meta 规定要先有同意才能发）。已经同意过的不会改时间
+  Future<void> setWhatsappOptIn(String wholesalerId, bool optIn) => _call(() async {
+    if (optIn) {
+      await client
+          .from('wholesalers')
+          .update({'whatsapp_opt_in_at': DateTime.now().toUtc().toIso8601String()})
+          .eq('id', wholesalerId)
+          .isFilter('whatsapp_opt_in_at', null);
+    } else {
+      final rows = await client
+          .from('wholesalers')
+          .update({'whatsapp_opt_in_at': null})
+          .eq('id', wholesalerId)
+          .select('id');
+      if (rows.isEmpty) throw const AppError('NOT_ALLOWED');
+    }
+  });
 }
+
+/// 'YYYY-MM-DD'（日期参数；DateTime 的年月日照原样，不换时区）
+String dateParam(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
