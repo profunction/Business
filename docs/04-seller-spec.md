@@ -24,9 +24,12 @@
 ### 2.1 结构变动
 
 - `notification_status` 加一个值 `sending`（发送中，被 dispatcher 领走了）。
-- `notifications` 加 `next_attempt_at timestamptz`（失败重试的时间）、`claimed_at timestamptz`。
+- `notifications` 加 `next_attempt_at timestamptz`（失败重试的时间）、`claimed_at timestamptz`、`wa_message_id text`（发出去的 WhatsApp 消息 id）。
 - `orders` 加 `unconfirmed_alert_at timestamptz`（提醒过客服的时间）。
-- 扩展 `pg_trgm`（商品名比对；装在 `extensions` schema，本机测试环境也要有）。
+- `device_tokens` 加 `kind text not null default 'token' check (kind in ('token','fid'))`：Firebase 2026 年开始改用 Firebase Installation ID（FID），旧的 registration token 还能用；两种都要能存。`register_device_token(p_token, p_platform)` 加第三个参数 `p_kind text default 'token'`（旧的两个参数版本要删掉，免得重载混乱）。
+- `wholesalers`、`shops` 加 `whatsapp_opt_in_at timestamptz`：Meta 规定要先取得对方同意才能发 WhatsApp。没有这个时间就**不发** WhatsApp（客服在第五步的后台登记；批发商自己在 App 设定里打开「用 WhatsApp 收订单」也会设）。
+- `whatsapp_messages` 加 `from_user_id text`（2026 年起 Meta 的用户 ID「BSUID」，有些用户没有电话号码只有这个）、`context_wa_message_id text`（按钮是按在哪一条消息上）、`error_code int`。`phone` 改成可以是空的。加索引 `(context_wa_message_id)`。
+- 扩展 `pg_trgm`（商品名比对；`create extension if not exists pg_trgm with schema extensions`，函数里用 `extensions.similarity(...)`）。
 
 ### 2.2 批发商读取（App 用，`authenticated`）
 
@@ -88,15 +91,17 @@ RLS 已经允许批发商改自己的商品（`wholesaler_id` 受保护不能改
 
 | 函数 | 说明 |
 |---|---|
-| `claim_notifications(p_limit int default 50)` | 领走 `status = 'queued'` 或（`failed` 且 `attempts < 5` 且 `next_attempt_at <= now()`）的通知，`for update skip locked`，设为 `sending`、`claimed_at = now()`。另外把 `sending` 超过 10 分钟的当成卡住，重新领。回传 jsonb array，每个：`{id, event_type, payload, locale, channel, push_tokens[], whatsapp_phone, details}`。`channel` 规则见下。`details`：订单类事件附上订单资料（见下） |
-| `complete_notification(p_id uuid, p_status notification_status, p_channel notification_channel, p_error text default null, p_wa_message_id text default null)` | `sent / failed / skipped`。`attempts + 1`；failed 时 `next_attempt_at = now() + (2^attempts) 分钟`；sent 时 `sent_at = now()`；WhatsApp 发出的写一行 `whatsapp_messages`（outbound、template、关联 order_id） |
-| `remove_device_tokens(p_tokens text[])` | 删除 FCM 说已失效的 token |
+| `claim_notifications(p_limit int default 50)` | 领走 `status = 'queued'` 或（`failed` 且 `attempts < 5` 且 `next_attempt_at <= now()`）的通知，`for update skip locked`，设为 `sending`、`claimed_at = now()`。另外把 `sending` 超过 10 分钟的当成卡住，重新领。**同一个 WhatsApp 号码一次只领一条**（Meta 对同一个收件人大约每 6 秒只能发 1 条），其他的留在 queued 下一轮再发。回传 jsonb array，每个：`{id, event_type, payload, locale, channel, push_targets: [{target, kind}], whatsapp_phone, details}`。`channel` 规则见下。`details`：订单类事件附上订单资料（见下） |
+| `complete_notification(p_id uuid, p_status notification_status, p_channel notification_channel, p_error text default null, p_wa_message_id text default null, p_retry boolean default true)` | `sent / failed / skipped`。`attempts + 1`；failed 且 `p_retry` 时 `next_attempt_at = now() + (2^attempts) 分钟`，`p_retry = false`（永久失败，例如号码不在 WhatsApp、模板没批准）就不再重试（attempts 设为 5）；sent 时 `sent_at = now()`、记下 `wa_message_id`；WhatsApp 发出的写一行 `whatsapp_messages`（outbound、template、关联 order_id、`wa_message_id`、收件 shop / wholesaler） |
+| `remove_device_tokens(p_tokens text[])` | 删除 FCM 说已失效的 token / FID |
 
 **选渠道（channel）**：收件人是批发商 / 店铺 / 用户：
 
-1. `notify_channel = 'whatsapp'` → WhatsApp（有号码才行）。
+「可以发 WhatsApp」= 有 `whatsapp_phone`（没有就用 `phone`）**而且** `whatsapp_opt_in_at` 不是空的。
+
+1. `notify_channel = 'whatsapp'` → WhatsApp（可以发才发，否则 skipped）。
 2. `notify_channel = 'push'` → 推送（没 token 就 skipped）。
-3. `auto`（默认）→ 有任何成员的 `device_tokens`（`last_seen_at` 60 天内）→ 推送；否则有 WhatsApp 号码 → WhatsApp；都没有 → `channel = null`，dispatcher 标 `skipped`。
+3. `auto`（默认）→ 有任何成员的 `device_tokens`（`last_seen_at` 60 天内）→ 推送；否则可以发 WhatsApp → WhatsApp；都没有 → `channel = null`，dispatcher 标 `skipped`。
 4. 用户（`user_id`，例如客服提醒）→ 只有推送。
 5. `daily_summary` 和 `order_unconfirmed` 不走 WhatsApp（避免按条收费；没装 App 的批发商每张单都已经收到 WhatsApp）。
 
@@ -109,9 +114,9 @@ RLS 已经允许批发商改自己的商品（`wholesaler_id` 受保护不能改
 
 | 函数 | 说明 |
 |---|---|
-| `handle_whatsapp_button(p_from text, p_payload text, p_wa_message_id text, p_raw jsonb default null)` | 先用 `wa_message_id` 写 `whatsapp_messages`（inbound，`button`）；重复的（同一个 id 已经有）直接回 `{"result":"duplicate"}`。`p_payload` 格式 `CONFIRM:<order_uuid>` 或 `OOS:<order_uuid>`，其他回 `invalid_payload`。找订单；**发信人号码（normalize 后）必须是这家批发商的 phone / whatsapp_phone 或其成员的 profile phone**，否则回 `not_authorized`（不改任何东西）。订单是 pending：CONFIRM → `confirm_order(order, '{}', 'whatsapp')`；OOS → `set_order_status(order, 'out_of_stock', null, 'whatsapp')`。不是 pending → `already_<status>`。回传 `{result: confirmed|out_of_stock|already_confirmed|..., order_no, status, locale}`，Edge Function 用它回一句确认文字 |
+| `handle_whatsapp_button(p_from text, p_from_user_id text, p_context_id text, p_payload text, p_wa_message_id text, p_raw jsonb default null)` | 先用 `wa_message_id` 写 `whatsapp_messages`（inbound，`button`）；重复的（同一个 id 已经有）直接回 `{"result":"duplicate"}`（Meta 会重送 webhook 长达 7 天）。`p_payload` 格式 `CONFIRM:<order_uuid>` 或 `OOS:<order_uuid>`，其他回 `invalid_payload`。找订单；**授权**：`p_from`（normalize 后）是这家批发商的 phone / whatsapp_phone 或其成员的 profile phone；或者 `p_from` 是空的（用户只有 BSUID），但 `p_context_id` 是我们发给**这家批发商、这张订单**的那条 outbound 消息。都不符合就回 `not_authorized`（不改任何东西）。订单是 pending：CONFIRM → `confirm_order(order, '{}', 'whatsapp')`；OOS → `set_order_status(order, 'out_of_stock', null, 'whatsapp')`。不是 pending → `already_<status>`。回传 `{result: confirmed|out_of_stock|already_confirmed|..., order_no, status, locale}`，Edge Function 用它回一句确认文字 |
 | `record_whatsapp_message(p_from text, p_type wa_message_type, p_body text, p_media_id text, p_wa_message_id text, p_raw jsonb)` | 其他进来的消息（文字、语音……）只记录，按号码对上 shop / wholesaler；重复 id 忽略。第六步再处理成订单草稿 |
-| `update_whatsapp_status(p_wa_message_id text, p_status text, p_error text default null)` | 更新 outbound 消息的 `delivery_status`（sent / delivered / read / failed） |
+| `update_whatsapp_status(p_wa_message_id text, p_status text, p_error_code int default null, p_error text default null)` | 更新 outbound 消息的 `delivery_status`（sent / delivered / read / failed / played）。状态可能乱序到达：不要把 read 改回 delivered（顺序 sent < delivered < read；failed 永远覆盖） |
 
 ### 2.8 定时任务（`pg_cron`，有才建）
 
@@ -121,7 +126,7 @@ RLS 已经允许批发商改自己的商品（`wholesaler_id` 受保护不能改
 | `unconfirmed-order-alerts` | `*/5 * * * *` | `enqueue_unconfirmed_alerts()`：pending 超过 `app_settings.order_confirm_alert_minutes` 且 `unconfirmed_alert_at is null` 的订单 → 给每个客服（role admin）插 `order_unconfirmed` 通知，设 `unconfirmed_alert_at` |
 | `dispatch-notifications` | `* * * * *` | 用 `pg_net` 叫 Edge Function `dispatch-notifications`（重试和补漏）。另外 `notifications` 新增时用 trigger 立刻叫一次（`pg_net` 是异步的，不会拖慢下单） |
 
-Edge Function 的网址和钥匙放在 Supabase Vault（名字 `project_url`、`dispatch_secret`），迁移里**不写死**；没有 Vault / pg_net 就跳过（本机测试环境）。
+Edge Function 的网址和钥匙放在 Supabase Vault（照官方「Scheduling Edge Functions」的名字：`project_url`、`secret_key`），迁移里**不写死**，部署时在 SQL editor 用 `vault.create_secret(...)` 建。调用：`net.http_post(url := <project_url> || '/functions/v1/dispatch-notifications', headers := jsonb_build_object('Content-Type','application/json','apikey', <secret_key>), body := '{}'::jsonb, timeout_milliseconds := 10000)`（**一定用具名参数**；新的 secret key 不是 JWT，要放 `apikey` 头，不是 Authorization）。没有 Vault / pg_net / 秘密还没建 → 跳过不报错（本机测试环境也是这样）。`create extension if not exists pg_net with schema extensions` 要放在检查可用之后。
 
 ### 2.9 Storage（有 `storage` schema 才建）
 
@@ -145,10 +150,12 @@ supabase/functions/
   tests/              deno test：纯逻辑都要有测试（签名验证、payload 解析、通知文字、价目表结果整理、Excel 转文字），外部 API 用假的 fetch
 ```
 
-- **dispatch-notifications**：只接受带正确 `x-dispatch-secret`（等于环境变量 `DISPATCH_SECRET`）的请求。`claim_notifications(50)` → 每条按 channel 发 → `complete_notification`。推送失效的 token 收集起来 `remove_device_tokens`。一次跑不完就循环到没得领或快超时。
+- **全部函数 `verify_jwt = false`**（`supabase/config.toml` 的 `[functions.<name>]`），在代码里自己检查身份：新的 secret / publishable key 不是 JWT，平台的 JWT 检查对它们不可靠。
+- 每个函数有自己的 `deno.json`（imports），入口 `index.ts` 用 `export default { fetch: handler }`（测试可以直接 import，不会开端口）。
+- **dispatch-notifications**：只接受 `apikey` 头等于 secret key（`JSON.parse(SUPABASE_SECRET_KEYS).default`，没有就退回旧的 `SUPABASE_SERVICE_ROLE_KEY`）的请求，比较要用固定时间比较。`claim_notifications(50)` → 每条按 channel 发 → `complete_notification`。推送失效的 token 收集起来 `remove_device_tokens`。一次跑不完就循环到没得领或快超时。
 - **whatsapp-webhook**：GET 做验证握手（`WHATSAPP_VERIFY_TOKEN`）；POST 先验 `X-Hub-Signature-256`（`WHATSAPP_APP_SECRET`，用原始 body），不对就 401。按钮 → `handle_whatsapp_button` → 成功就回一句文字（客户刚发消息，24 小时内免费回复）；其他消息 → `record_whatsapp_message`；状态 → `update_whatsapp_status`。永远尽快回 200（Meta 会重送）。
 - **parse-price-list**：用户的 JWT 叫（`supabase.functions.invoke`）。用用户身份读 import（RLS 保证是自己的），用 service 身份下载文件、写行。图片 / PDF → Claude（`claude-opus-5-5`，结构化输出）；Excel / CSV → 先转成文字表格再给 Claude 整理。写完叫 `suggest_import_matches`，status → `review`；出错 → `failed`。
-- 环境变量：`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY`（或新的 secret key）、`DISPATCH_SECRET`、`FCM_SERVICE_ACCOUNT_JSON`、`WHATSAPP_TOKEN`、`WHATSAPP_PHONE_NUMBER_ID`、`WHATSAPP_APP_SECRET`、`WHATSAPP_VERIFY_TOKEN`、`ANTHROPIC_API_KEY`。没设定的服务就跳过并在日志说明（例如没 WhatsApp 设定 → 那些通知标 failed + 原因）。
+- 环境变量：平台自动给 `SUPABASE_URL`、`SUPABASE_SECRET_KEYS`、`SUPABASE_PUBLISHABLE_KEYS`（JSON，取 `default`；旧项目退回 `SUPABASE_SERVICE_ROLE_KEY` / `SUPABASE_ANON_KEY`）。自己设：`FCM_SERVICE_ACCOUNT_JSON`、`WHATSAPP_TOKEN`（system user 永久 token）、`WHATSAPP_PHONE_NUMBER_ID`、`WHATSAPP_APP_SECRET`、`WHATSAPP_VERIFY_TOKEN`、`WHATSAPP_GRAPH_VERSION`（默认 `v27.0`）、`ANTHROPIC_API_KEY`。名字不能以 `SUPABASE_` 开头。没设定的服务就跳过并在日志说明（例如没 WhatsApp 设定 → 那些通知标 failed + 原因，`p_retry = false`）。
 
 ## 4. App（`apps/mobile`，批发商登录后）
 
