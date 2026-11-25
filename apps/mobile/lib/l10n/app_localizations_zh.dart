@@ -701,10 +701,10 @@ class L10nZh extends L10n {
   String get pushDenied => '通知没有打开。想打开的话，到手机的「设定」→「通知」。';
 
   @override
-  String get sellerErrUnsupportedFile => '这种档案看不懂。请拍照，或选 Excel、PDF、CSV 档案。';
+  String get sellerErrUnsupportedFile => '这种文件看不懂。请拍照，或选 Excel、PDF、CSV 文件。';
 
   @override
-  String get sellerErrFileTooLarge => '档案太大了（最多 10 MB）';
+  String get sellerErrFileTooLarge => '文件太大了（最多 10 MB）';
 
   @override
   String get sellerErrAiFailed => 'AI 读不懂这份价目表。请拍清楚一点再试一次。';
@@ -1184,7 +1184,7 @@ class L10nZh extends L10n {
   String get sellerErrNoPermission => '请到手机的「设定」，允许这个 App 用相机和照片';
 
   @override
-  String get sellerImportIntro => '拍价目表的照片，或选 Excel、PDF 档案。AI 会读成商品，你检查好了才上架。';
+  String get sellerImportIntro => '拍价目表的照片，或选 Excel、PDF 文件。AI 会读成商品，你检查好了才上架。';
 
   @override
   String get sellerImportCamera => '拍照';
@@ -1229,10 +1229,10 @@ class L10nZh extends L10n {
   String get sellerErrHeic => '这是 iPhone 的 HEIC 照片，AI 看不懂。请按「选照片」再选一次这张，App 会自动转成 JPG。';
 
   @override
-  String get sellerImportErrRefused => 'AI 不肯读这份档案。请确认是价目表，再试一次。';
+  String get sellerImportErrRefused => 'AI 不肯读这份文件。请确认是价目表，再试一次。';
 
   @override
-  String get sellerImportErrTruncated => '价目表太长，AI 读不完。请分成几张照片或几个档案，一份一份上传。';
+  String get sellerImportErrTruncated => '价目表太长，AI 读不完。请分成几张照片或几个文件，一份一份上传。';
 
   @override
   String get sellerReviewTitle => '检查价目表';
@@ -1280,7 +1280,7 @@ class L10nZh extends L10n {
   }
 
   @override
-  String get sellerReviewNoMatch => '你的商品里没有一样的，可以新增';
+  String get sellerReviewNoMatch => '你的商品里没有一样的，会新增。要改旧商品的价钱，按「更新」选是哪一样。';
 
   @override
   String get sellerReviewNoRows => 'AI 在这份价目表里找不到商品';
@@ -1340,4 +1340,68 @@ class L10nZh extends L10n {
 
   @override
   String get sellerReviewWait => '等 AI 读完';
+
+  @override
+  String get sellerImportUploadOther => '上传另一份';
+
+  @override
+  String get sellerImportCheckFailed => '查不到这份价目表读得怎样';
+
+  @override
+  String get sellerImportRecovered => '刚才选的价目表找回来了，正在上传';
+
+  @override
+  String get sellerImportErrService => 'AI 服务暂时有问题。请过几分钟再上传一次。';
+
+  @override
+  String get sellerImportErrFile => '这个文件打不开，或是空的。请重新存一次（Excel 存成 .xlsx），或拍照上传。';
+
+  @override
+  String get sellerImportErrTimeout => 'AI 读太久还没读完。价目表很长的话，请分成几份上传；不长的话，请过几分钟再试。';
+
+  @override
+  String get sellerErrPhotoTooLarge => '照片太大了（最多 7 MB）。请用「拍照」重新拍，或选小一点的照片。';
+
+  @override
+  String get sellerErrLoginExpired => '登录过期了。请到「设定」登出，再登录一次。';
+
+  @override
+  String get sellerReviewChooseProduct => '要更新哪一样商品？';
+
+  @override
+  String get sellerReviewChangeProduct => '换一样商品';
+
+  @override
+  String get sellerReviewClearMatch => '都不是（当新商品）';
+
+  @override
+  String sellerReviewUsedByRow(int row) {
+    return '第 $row 行已经对到这样';
+  }
+
+  @override
+  String sellerReviewWillRelist(String status) {
+    return '现在是「$status」，确认后会上架给买家看';
+  }
+
+  @override
+  String sellerReviewPackChange(String before, String after) {
+    return '包装会改：$before → $after';
+  }
+
+  @override
+  String sellerUnitPlural(String unit) {
+    String _temp0 = intl.Intl.selectLogic(unit, {
+      'carton': '箱',
+      'pack': '包',
+      'bag': '袋',
+      'roll': '卷',
+      'bundle': '扎',
+      'box': '盒',
+      'dozen': '打',
+      'kg': '公斤',
+      'other': '个',
+    });
+    return '$_temp0';
+  }
 }

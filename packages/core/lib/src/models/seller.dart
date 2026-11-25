@@ -556,6 +556,9 @@ class PriceListImport {
   final DateTime? updatedAt;
 
   bool get isDone => status != ImportStatus.processing;
+
+  /// parse-price-list 开始读的时间（ai_raw.claimed_at，函数占位时写的）。null = 还没有人开始读
+  DateTime? get claimedAt => asDateTimeOrNull(aiRaw?['claimed_at']);
 }
 
 /// price_list_import_rows 的一行：AI 读到的一样商品，批发商可以改

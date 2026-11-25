@@ -1028,7 +1028,7 @@ class L10nEn extends L10n {
   }
 
   @override
-  String get sellerSummaryGoConfirm => 'Confirm';
+  String get sellerSummaryGoConfirm => 'Go to confirm';
 
   @override
   String get sellerSummaryPicking => 'Picking list';
@@ -1268,7 +1268,8 @@ class L10nEn extends L10n {
 
   @override
   String sellerReviewSummary(int total, int create, int update, int skip) {
-    return '$total rows: $create new, $update update, $skip skip';
+    String _temp0 = intl.Intl.pluralLogic(total, locale: localeName, other: '$total rows', one: '1 row');
+    return '$_temp0: $create new, $update to update, $skip skipped';
   }
 
   @override
@@ -1315,7 +1316,8 @@ class L10nEn extends L10n {
   }
 
   @override
-  String get sellerReviewNoMatch => 'None of your products match. You can add it as new.';
+  String get sellerReviewNoMatch =>
+      'None of your products match, so it will be added as new. To change the price of one of your products, tap \"Update\" and choose it.';
 
   @override
   String get sellerReviewNoRows => 'The AI found no products in this price list';
@@ -1381,4 +1383,72 @@ class L10nEn extends L10n {
 
   @override
   String get sellerReviewWait => 'Wait for the AI';
+
+  @override
+  String get sellerImportUploadOther => 'Upload a different one';
+
+  @override
+  String get sellerImportCheckFailed => 'We couldn\'t check this price list';
+
+  @override
+  String get sellerImportRecovered => 'We found the price list you just picked. Uploading it now.';
+
+  @override
+  String get sellerImportErrService =>
+      'The AI service is having a problem right now. Please upload again in a few minutes.';
+
+  @override
+  String get sellerImportErrFile =>
+      'This file can\'t be opened, or it\'s empty. Please save it again (Excel as .xlsx), or take a photo instead.';
+
+  @override
+  String get sellerImportErrTimeout =>
+      'The AI took too long. If the price list is long, split it into a few parts. If not, please try again in a few minutes.';
+
+  @override
+  String get sellerErrPhotoTooLarge =>
+      'The photo is too big (7 MB max). Please take it again with \"Take a photo\", or choose a smaller photo.';
+
+  @override
+  String get sellerErrLoginExpired => 'Your login has expired. Please log out in Settings and log in again.';
+
+  @override
+  String get sellerReviewChooseProduct => 'Which product should this update?';
+
+  @override
+  String get sellerReviewChangeProduct => 'Choose another product';
+
+  @override
+  String get sellerReviewClearMatch => 'None of these (add as new)';
+
+  @override
+  String sellerReviewUsedByRow(int row) {
+    return 'Already matched to row $row';
+  }
+
+  @override
+  String sellerReviewWillRelist(String status) {
+    return 'Now \"$status\". It will go on sale to buyers.';
+  }
+
+  @override
+  String sellerReviewPackChange(String before, String after) {
+    return 'Packing will change: $before → $after';
+  }
+
+  @override
+  String sellerUnitPlural(String unit) {
+    String _temp0 = intl.Intl.selectLogic(unit, {
+      'carton': 'cartons',
+      'pack': 'packs',
+      'bag': 'bags',
+      'roll': 'rolls',
+      'bundle': 'bundles',
+      'box': 'boxes',
+      'dozen': 'dozen',
+      'kg': 'kg',
+      'other': 'pieces',
+    });
+    return '$_temp0';
+  }
 }

@@ -1,5 +1,6 @@
 import 'dart:typed_data';
 
+import 'package:flutter/widgets.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:wholesale_core/wholesale_core.dart';
 
@@ -68,6 +69,12 @@ final priceListImportProvider = FutureProvider.autoDispose.family<PriceListImpor
   (ref, id) => ref.watch(apiProvider).getImport(id),
 );
 
+/// 一份还在读的价目表：每 3 秒查一次（watchImport；卡住的会再叫一次 AI），读好了（review / failed）就结束。
+/// 首页用：老板离开了等的页面，首页一样会知道 AI 读好了
+final importProgressProvider = StreamProvider.autoDispose.family<PriceListImport, String>(
+  (ref, id) => ref.watch(apiProvider).watchImport(id),
+);
+
 /// 价目表导入的每一行（AI 读到的商品）
 final importRowsProvider = FutureProvider.autoDispose.family<List<PriceListImportRow>, String>(
   (ref, id) => ref.watch(apiProvider).listImportRows(id),
@@ -84,6 +91,8 @@ final pushPermissionProvider = FutureProvider.autoDispose<PushPermission>(
 );
 
 /// 批发商的订单一有变化（新订单、买家取消、WhatsApp 按了确认……）就刷新首页、列表和详情。
+/// App 从背景回来（例如去 WhatsApp 按了确认再回来、隔天早上打开）也全部重新读：App 在背景时 Realtime 断线，
+/// 中间的变化不会补发，「今天」也可能已经换成另一天了。
 /// 批发商的页面 watch 这个；没有页面在用时自动关掉（同一时间只有一个 Realtime channel）。
 final sellerRealtimeProvider = Provider.autoDispose<void>((ref) {
   final api = ref.watch(apiProvider);
@@ -91,15 +100,19 @@ final sellerRealtimeProvider = Provider.autoDispose<void>((ref) {
   final wid = ref.watch(sessionProvider.select((s) => s.wholesalerId));
   if (wid == null) return;
   var alive = true;
-  final channel = api.watchWholesalerOrders(wid, () {
+  void refresh() {
     if (!alive) return;
     ref.invalidate(sellerHomeProvider);
     ref.invalidate(sellerOrdersProvider);
     ref.invalidate(orderDetailProvider);
     ref.invalidate(deliverySummaryProvider);
-  });
+  }
+
+  final channel = api.watchWholesalerOrders(wid, refresh);
+  final lifecycle = AppLifecycleListener(onResume: refresh);
   ref.onDispose(() {
     alive = false;
+    lifecycle.dispose();
     api.stopWatching(channel);
   });
 });
@@ -159,7 +172,7 @@ class SellerActions {
     }
   }
 
-  /// 改价目表的一行（批发商改名字、价钱、新增 / 更新 / 跳过）
+  /// 改价目表的一行（批发商改名字、价钱、新增 / 更新 / 跳过、对到哪样商品）
   Future<PriceListImportRow> updateImportRow(PriceListImportRow row, Map<String, Object?> fields) async {
     try {
       return await _api.updateImportRow(row.id, fields);

@@ -1,0 +1,3 @@
+/* 系统问相机、照片权限时显示的说明（价目表和商品照片都会用到） */
+"NSCameraUsageDescription" = "Ambil gambar senarai harga atau barang anda. AI menukar senarai harga kepada barang dan harga, dan gambar barang ditunjukkan kepada pembeli.";
+"NSPhotoLibraryUsageDescription" = "Pilih gambar senarai harga atau barang anda. AI menukar senarai harga kepada barang dan harga, dan gambar barang ditunjukkan kepada pembeli.";

@@ -142,7 +142,7 @@ class _DeliverySummaryPageState extends ConsumerState<DeliverySummaryPage> {
             text: l.sellerSummaryPending(s.pendingCount),
             action: TextButton(
               onPressed: () => context.push('/seller/orders?tab=pending'),
-              child: Text(l.sellerSummaryGoConfirm),
+              child: Text(l.sellerSummaryGoConfirm, textAlign: TextAlign.center),
             ),
           ),
           const SizedBox(height: 12),

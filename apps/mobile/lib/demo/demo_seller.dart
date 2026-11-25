@@ -508,8 +508,30 @@ class DemoSeller {
   final List<Json> _rows = [];
   int _pollsUntilDone = 0;
 
+  /// 叫了 AI 之后，查几次就读好（测试可以改长一点，看「还在读」的画面）
+  int pollsToFinish = 2;
+
   /// 下一次导入 AI 读失败（测试失败画面）：例如 'AI_REFUSED'、'UNSUPPORTED_FILE'
   String? nextImportError;
+
+  /// 下一次叫 parse-price-list 失败（测试叫不到 AI）：例如 'NETWORK'、'AUTH'、'CONFIG_MISSING'
+  String? nextStartError;
+
+  /// 叫了几次 parse-price-list（包括卡住之后再叫的）
+  int startParseCount = 0;
+
+  /// 现在这一份导入（测试用）
+  PriceListImport get currentImport => PriceListImport.fromJson(_import);
+
+  /// 测试用：这一份导入（和 AI 开始读的时间）提早 [by]，假装已经等很久了
+  void backdateImport(Duration by) {
+    String earlier(Object? t) => DateTime.parse(t! as String).subtract(by).toUtc().toIso8601String();
+    _import['created_at'] = earlier(_import['created_at']);
+    final raw = asJsonOrNull(_import['ai_raw']);
+    if (raw != null && raw['claimed_at'] != null) {
+      _import['ai_raw'] = {...raw, 'claimed_at': earlier(raw['claimed_at'])};
+    }
+  }
 
   void _resetImport(Json import) {
     _import = import;
@@ -536,11 +558,26 @@ class DemoSeller {
     return PriceListImport.fromJson(_import);
   }
 
-  /// parse-price-list：示范模式查两次之后就读好了
+  /// parse-price-list：跟函数一样先「占位」（ai_raw.claimed_at）；同一份已经有人在读（不到 10 分钟）→
+  /// IMPORT_ALREADY_RUNNING。示范模式查 [pollsToFinish] 次之后就读好了
   void startParse(String importId) {
+    startParseCount++;
+    final error = nextStartError;
+    nextStartError = null;
+    if (error != null) throw AppError(error);
     _checkImport(importId);
     if (_import['status'] != 'processing') throw const AppError('IMPORT_NOT_PROCESSING');
-    _pollsUntilDone = 2;
+    final claimed = PriceListImport.fromJson(_import).claimedAt;
+    if (claimed != null && DateTime.now().difference(claimed) < const Duration(minutes: 10)) {
+      throw const AppError('IMPORT_ALREADY_RUNNING');
+    }
+    _import['ai_raw'] = {
+      'version': 1,
+      'state': 'running',
+      'run_id': newUuidV4(),
+      'claimed_at': DateTime.now().toUtc().toIso8601String(),
+    };
+    _pollsUntilDone = pollsToFinish;
   }
 
   void _checkImport(String importId) {

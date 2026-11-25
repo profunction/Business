@@ -90,7 +90,8 @@ extension L10nText on L10n {
     final code = e is AppError ? e.code : 'UNKNOWN';
     return switch (code) {
       'NETWORK' => errNetwork,
-      'AUTH' => errAuth,
+      // 登录过期（Edge Function 说 UNAUTHORIZED、refresh 失败）不是验证码打错
+      'AUTH' => e is AppError && e.detail == AppError.sessionExpired ? sellerErrLoginExpired : errAuth,
       'NOT_ALLOWED' || 'NOT_LOGGED_IN' || 'COLUMN_PROTECTED' || 'ROLE_MISMATCH' => errNotAllowed,
       'PRICE_CHANGED' => errPriceChanged,
       'CART_HAS_PROBLEMS' => errCartHasProblems,
@@ -105,9 +106,13 @@ extension L10nText on L10n {
       'ITEM_NOT_IN_ORDER' => sellerErrItemNotInOrder,
       // iPhone 的 HEIC 照片：告诉老板怎么办（用「选照片」会自动转成 JPEG）
       'UNSUPPORTED_FILE' => e is AppError && e.detail == 'heic' ? sellerErrHeic : sellerErrUnsupportedFile,
-      'FILE_TOO_LARGE' => sellerErrFileTooLarge,
+      // 照片超过 7 MB（AI 收不了），其他档案超过 10 MB
+      'FILE_TOO_LARGE' => e is AppError && e.detail == 'image' ? sellerErrPhotoTooLarge : sellerErrFileTooLarge,
       'NO_PERMISSION' => sellerErrNoPermission,
       'IMPORT_TIMEOUT' => sellerErrImportTimeout,
+      'IMPORT_ALREADY_RUNNING' => sellerImportStillReading,
+      // parse-price-list 自己出错（没设定好、数据库出错）
+      'CONFIG_MISSING' || 'DB_ERROR' || 'INTERNAL_ERROR' => sellerImportErrService,
       'IMPORT_NOT_IN_REVIEW' || 'IMPORT_NOT_PROCESSING' || 'IMPORT_ALREADY_APPLIED' => sellerErrImportDone,
       'IMPORT_ROW_INCOMPLETE' => sellerErrRowIncomplete(_row(e)),
       'IMPORT_ROW_INVALID_PRODUCT' => sellerErrRowInvalidProduct(_row(e)),
@@ -133,14 +138,37 @@ extension L10nText on L10n {
     NotifyChannel.whatsapp => sellerNotifyWhatsapp,
   };
 
-  /// 价目表 AI 读失败的原因（price_list_imports.error_message，parse-price-list 写的英文代码）
-  String importFailure(String? code) => switch (code) {
+  /// 价目表 AI 读失败的原因（price_list_imports.error_message）。代码见 supabase/functions/parse-price-list/index.ts
+  /// 开头的三类：档案问题 / AI 读不到 / 网络、服务；另外 App 自己写的 START_FAILED、NETWORK、AUTH（叫不到 AI）。
+  /// [fileType] 是导入的种类（照片太大跟档案太大的上限不一样）
+  String importFailure(String? code, {ImportFileType? fileType}) => switch (code) {
+    // 档案问题
     'UNSUPPORTED_FILE' => sellerErrUnsupportedFile,
-    'FILE_TOO_LARGE' => sellerErrFileTooLarge,
+    'FILE_TOO_LARGE' => fileType == ImportFileType.image ? sellerErrPhotoTooLarge : sellerErrFileTooLarge,
+    'EMPTY_FILE' ||
+    'FILE_NOT_FOUND' ||
+    'INVALID_FILE_PATH' ||
+    'SPREADSHEET_UNREADABLE' ||
+    'EMPTY_SPREADSHEET' => sellerImportErrFile,
+    // 太长：分成几份
+    'TOO_MANY_ROWS' || 'AI_TRUNCATED' => sellerImportErrTruncated,
+    'AI_TIMEOUT' => sellerImportErrTimeout,
+    // AI 读不到
     'AI_REFUSED' => sellerImportErrRefused,
-    'AI_TRUNCATED' => sellerImportErrTruncated,
-    'START_FAILED' || 'NETWORK' => errNetwork,
-    _ => sellerErrAiFailed, // 其他（看不清楚、服务器出错……）
+    // 网络、服务（不是照片的问题，过一会儿再试）
+    'AI_BUSY' ||
+    'AI_UNAVAILABLE' ||
+    'AI_FAILED' ||
+    'AI_AUTH_FAILED' ||
+    'AI_REQUEST_REJECTED' ||
+    'AI_NOT_CONFIGURED' ||
+    'DOWNLOAD_FAILED' ||
+    'DB_ERROR' ||
+    'INTERNAL_ERROR' ||
+    'START_FAILED' => sellerImportErrService,
+    'NETWORK' => errNetwork,
+    'AUTH' => sellerErrLoginExpired,
+    _ => sellerErrAiFailed, // AI_INVALID_OUTPUT、NO_PRODUCTS_FOUND、不认识的：请拍清楚一点
   };
 
   /// 库存：有货 / 快卖完 / 缺货
@@ -157,8 +185,11 @@ extension L10nText on L10n {
     ImportRowAction.skip => sellerActionSkip,
   };
 
-  /// 3 箱
-  String qtyUnit(int qty, SellUnit u) => sellerSummaryQty(qty, unit(u));
+  /// 3 箱 / 3 cartons / 1 carton
+  String qtyUnit(int qty, SellUnit u) => sellerSummaryQty(qty, qty == 1 ? unit(u) : unitPlural(u));
+
+  /// 单位的复数（英文 cartons；中文、马来文跟单数一样）
+  String unitPlural(SellUnit u) => sellerUnitPlural(sellUnitCode(u));
 
   // ---------- 日期（全部按马来西亚时间显示） ----------
 

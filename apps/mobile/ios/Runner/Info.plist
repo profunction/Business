@@ -6,6 +6,13 @@
 	<true/>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
+	<!-- App 的三种语言：系统的权限对话框照手机语言用 en / ms / zh-Hans.lproj/InfoPlist.strings 的文字 -->
+	<key>CFBundleLocalizations</key>
+	<array>
+		<string>en</string>
+		<string>ms</string>
+		<string>zh-Hans</string>
+	</array>
 	<key>CFBundleDisplayName</key>
 	<string>新山批发</string>
 	<key>NSAppTransportSecurity</key>
@@ -18,11 +25,12 @@
 	<array>
 		<string>tel</string>
 	</array>
-	<!-- 价目表：拍照 / 从相册选照片（image_picker）。中文 + 英文，马来文用户看得懂英文 -->
+	<!-- 价目表和商品照片：拍照 / 从相册选照片（image_picker）。这里是英文（预设）；中文、马来文在
+	     en.lproj / ms.lproj / zh-Hans.lproj 的 InfoPlist.strings（照手机的语言显示） -->
 	<key>NSCameraUsageDescription</key>
-	<string>拍价目表的照片，让 AI 转成商品和价钱 / Take a photo of your price list so it can be turned into products and prices</string>
+	<string>Take photos of your price list or your products. The AI turns a price list into products and prices, and product photos are shown to buyers.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>从相册选价目表的照片，让 AI 转成商品和价钱 / Choose a price list photo so it can be turned into products and prices</string>
+	<string>Choose photos of your price list or your products. The AI turns a price list into products and prices, and product photos are shown to buyers.</string>
 	<!-- 推送（FCM）：用 Firebase Installation ID 登记（firebase_messaging 17 的 register / onRegistered） -->
 	<key>FirebaseMessagingInstallationIdEnabled</key>
 	<true/>

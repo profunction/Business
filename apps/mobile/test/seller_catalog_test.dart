@@ -1,5 +1,6 @@
 // 批发商端的商品、送货单、价目表导入：用示范模式把整个流程点一遍（手机宽度 400，撑爆就失败）。
 // 拍照、选文件、分享、打印都换成假的（FakeDevice），不会碰到 platform channel。
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -104,13 +105,73 @@ void main() {
       }
     });
 
-    test('AI 读失败的原因（error_message）', () {
+    test('AI 读失败的原因（error_message）：照 parse-price-list 开头写的三类代码，每一个都对到合适的说明', () {
+      // 代码表在 Edge Function 的开头（档案问题 / AI 读不到 / 网络、服务），App 要照这个分三种说
+      final header = File('../../supabase/functions/parse-price-list/index.ts').readAsLinesSync().take(40).join('\n');
+      List<String> codes(String group) {
+        final m = RegExp('$group：([A-Z_、\\s/]+?)(?=\\n//\\s+[^\\n：]+：|\\n\\n|\$)').firstMatch(header);
+        expect(m, isNotNull, reason: '找不到「$group」那一类');
+        return RegExp(r'[A-Z][A-Z_]+').allMatches(m!.group(1)!).map((m) => m.group(0)!).toList();
+      }
+
+      final fileCodes = codes('档案问题'), aiCodes = codes('AI 读不到'), serviceCodes = codes('网络 / 服务');
+      expect(fileCodes, containsAll(['UNSUPPORTED_FILE', 'SPREADSHEET_UNREADABLE', 'TOO_MANY_ROWS']));
+      expect(aiCodes, containsAll(['AI_REFUSED', 'NO_PRODUCTS_FOUND']));
+      expect(serviceCodes, containsAll(['AI_BUSY', 'AI_TIMEOUT', 'INTERNAL_ERROR']));
+
+      for (final lang in ['zh', 'en', 'ms']) {
+        final l = lookupL10n(Locale(lang));
+        final photoAdvice = l.sellerErrAiFailed; // 「请拍清楚一点」
+        for (final c in fileCodes) {
+          expect(l.importFailure(c), isNot(photoAdvice), reason: '$lang $c：档案的问题，拍清楚也没用');
+          expect(
+            [l.sellerErrUnsupportedFile, l.sellerErrFileTooLarge, l.sellerImportErrFile, l.sellerImportErrTruncated],
+            contains(l.importFailure(c)),
+            reason: '$lang $c',
+          );
+        }
+        for (final c in serviceCodes) {
+          expect(
+            [l.sellerImportErrService, l.sellerImportErrTimeout],
+            contains(l.importFailure(c)),
+            reason: '$lang $c',
+          );
+        }
+        for (final c in aiCodes) {
+          expect(
+            [l.sellerImportErrRefused, l.sellerImportErrTruncated, photoAdvice],
+            contains(l.importFailure(c)),
+            reason: '$lang $c',
+          );
+        }
+        expect(l.importFailure('TOO_MANY_ROWS'), l.sellerImportErrTruncated, reason: '太长：分成几份');
+        expect(l.importFailure('SPREADSHEET_UNREADABLE'), l.sellerImportErrFile);
+        expect(l.importFailure('AI_BUSY'), l.sellerImportErrService);
+        expect(l.importFailure('AI_TIMEOUT'), l.sellerImportErrTimeout);
+        expect(l.importFailure('NO_PRODUCTS_FOUND'), photoAdvice);
+        // App 自己写的：叫不到 AI 的原因
+        expect(l.importFailure('NETWORK'), l.errNetwork);
+        expect(l.importFailure('START_FAILED'), l.sellerImportErrService, reason: '不一定是没网络');
+        expect(l.importFailure('AUTH'), l.sellerErrLoginExpired);
+        // 照片超过 7 MB 跟档案超过 10 MB 说法不一样
+        expect(l.importFailure('FILE_TOO_LARGE', fileType: ImportFileType.image), l.sellerErrPhotoTooLarge);
+        expect(l.importFailure('FILE_TOO_LARGE', fileType: ImportFileType.pdf), l.sellerErrFileTooLarge);
+        expect(l.importFailure(null), photoAdvice);
+      }
+    });
+
+    test('照片超过 7 MB（AI 收不了）：上传前就说，不用等上传完', () async {
       final l = lookupL10n(const Locale('zh'));
-      expect(l.importFailure('UNSUPPORTED_FILE'), l.sellerErrUnsupportedFile);
-      expect(l.importFailure('AI_REFUSED'), l.sellerImportErrRefused);
-      expect(l.importFailure('AI_TRUNCATED'), l.sellerImportErrTruncated);
-      expect(l.importFailure('AI_BAD_JSON'), l.sellerErrAiFailed);
-      expect(l.importFailure(null), l.sellerErrAiFailed);
+      final png = Uint8List(priceListMaxImageBytes + 1)..setAll(0, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+      Object? error;
+      try {
+        await readPriceListFile(PickedFile.memory(png, name: 'Screenshot.png'));
+      } catch (e) {
+        error = e;
+      }
+      expect(error, isA<AppError>().having((e) => e.detail, 'detail', 'image'));
+      expect(l.error(error!), l.sellerErrPhotoTooLarge);
+      expect(l.sellerErrPhotoTooLarge, contains('7 MB'));
     });
   });
 
@@ -321,7 +382,7 @@ void main() {
       routerOf(tester).push('/seller/products/$lid95');
       await tester.pumpAndSettle();
       await tapKey(tester, 'photo-gallery');
-      expect(device.calls, ['pickImage gallery 1600 85']);
+      expect(device.calls, ['pickImage gallery productPhoto 1600 85']);
       expect(find.byKey(const Key('product-photo')), findsOneWidget);
 
       await tapAndSettle(tester, find.byKey(const Key('product-save')));
@@ -352,7 +413,7 @@ void main() {
       expect(find.text('上传价目表'), findsOneWidget);
       await tapAndSettle(tester, find.byKey(const Key('import-gallery')));
 
-      expect(device.calls, ['pickImage gallery 2576 85']);
+      expect(device.calls, ['pickImage gallery priceList 2576 85']);
       expect(api.calls, containsAllInOrder(['upload jpg image/jpeg', 'createImport image', 'startParse']));
       expect(routerOf(tester).state.uri.path, startsWith('/seller/import/'));
       expect(find.text('检查价目表'), findsOneWidget);
@@ -371,7 +432,9 @@ void main() {
       // 先按确认上架：服务器说第 5 行不完整 → 跳到那一行，框红色
       await tapAndSettle(tester, find.byKey(const Key('review-apply')));
       expect(find.text('第 5 行还缺名字、单位、包装数量或价钱'), findsOneWidget);
-      expect(api.calls.where((c) => c.startsWith('applyImport')), isEmpty);
+      expect(api.applyAttempts, 1, reason: '按了，服务器说不行');
+      expect(api.sellerData.currentImport.status, ImportStatus.review, reason: '什么都没上架');
+      expect(api.sellerData.product(cup16).priceSen, 8500);
       final row5 = tester.widget<Container>(find.byKey(const Key('import-row-5')));
       expect(((row5.decoration! as BoxDecoration).border! as Border).top.color, AppTheme.problem);
       expect(tester.getRect(find.byKey(const Key('import-row-5'))).top, lessThan(860), reason: '跳到看得见');
@@ -398,13 +461,15 @@ void main() {
       expect(api.sellerData.product(cup16).priceSen, 8600, reason: '第 1 行更新了价钱');
     });
 
-    testWidgets('跳过：不会上架；更新只能选有对到商品的行', (tester) async {
+    testWidgets('跳过：不会上架；没对到商品的行按「更新」先选是哪一样（取消就不改）', (tester) async {
       final api = await startSeller(tester);
       // 首页：AI 读好了 → 直接到确认页
       await tapAndSettle(tester, find.byKey(const Key('seller-import')));
       expect(find.text('检查价目表'), findsOneWidget);
-      final update3 = tester.widget<OutlinedButton>(find.byKey(const Key('row-3-update')));
-      expect(update3.onPressed, isNull, reason: '第 3 行没有对到商品');
+      await tapKey(tester, 'row-3-update');
+      expect(find.text('要更新哪一样商品？'), findsOneWidget, reason: '第 3 行没有对到商品：先选');
+      await tapAndSettle(tester, find.byKey(const Key('choose-cancel')));
+      expect(api.calls.where((c) => c.startsWith('updateRow')), isEmpty);
       await tapKey(tester, 'row-1-skip');
       await settle(tester);
       expect(find.text('确认上架（3 样）'), findsOneWidget);
@@ -414,7 +479,7 @@ void main() {
       expect(api.sellerData.product(cup16).priceSen, 8500, reason: '跳过的不改');
     });
 
-    testWidgets('HEIC 档案、太大的档案：不上传，说清楚原因', (tester) async {
+    testWidgets('HEIC 文件、太大的文件：不上传，说清楚原因', (tester) async {
       final device = FakeDevice()..nextFile = PickedFile.memory(heic, name: 'IMG_0002.HEIC');
       final api = await startSeller(tester, device: device);
       await openImport(tester);
@@ -424,7 +489,7 @@ void main() {
 
       device.nextFile = PickedFile(name: 'big.pdf', size: priceListMaxBytes + 1, read: () async => Uint8List(0));
       await tapAndSettle(tester, find.byKey(const Key('import-file')));
-      expect(find.text('档案太大了（最多 10 MB）'), findsOneWidget);
+      expect(find.text('文件太大了（最多 10 MB）'), findsOneWidget);
       expect(api.calls.where((c) => c.startsWith('upload')), isEmpty);
       expect(find.byKey(const Key('import-camera')), findsOneWidget, reason: '还在选的画面');
 
@@ -434,14 +499,18 @@ void main() {
       expect(find.text('请到手机的「设定」，允许这个 App 用相机和照片'), findsOneWidget);
     });
 
-    testWidgets('AI 读不到：按原因说明（太长 / 不肯读 / 其他），可以再上传一次', (tester) async {
+    testWidgets('AI 读不到：按原因说明（太长 / 不肯读 / 文件打不开 / 服务出问题 / 其他），可以再上传一次', (tester) async {
       final device = FakeDevice()..nextImage = PickedFile.memory(jpeg);
       final api = await startSeller(tester, device: device);
       await openImport(tester);
       for (final (code, text) in [
-        ('AI_TRUNCATED', '价目表太长，AI 读不完。请分成几张照片或几个档案，一份一份上传。'),
-        ('AI_REFUSED', 'AI 不肯读这份档案。请确认是价目表，再试一次。'),
-        ('UNSUPPORTED_FILE', '这种档案看不懂。请拍照，或选 Excel、PDF、CSV 档案。'),
+        ('AI_TRUNCATED', '价目表太长，AI 读不完。请分成几张照片或几个文件，一份一份上传。'),
+        ('TOO_MANY_ROWS', '价目表太长，AI 读不完。请分成几张照片或几个文件，一份一份上传。'),
+        ('AI_REFUSED', 'AI 不肯读这份文件。请确认是价目表，再试一次。'),
+        ('UNSUPPORTED_FILE', '这种文件看不懂。请拍照，或选 Excel、PDF、CSV 文件。'),
+        ('SPREADSHEET_UNREADABLE', '这个文件打不开，或是空的。请重新存一次（Excel 存成 .xlsx），或拍照上传。'),
+        ('AI_BUSY', 'AI 服务暂时有问题。请过几分钟再上传一次。'),
+        ('FILE_TOO_LARGE', '照片太大了（最多 7 MB）。请用「拍照」重新拍，或选小一点的照片。'),
         ('SOMETHING_ELSE', 'AI 读不懂这份价目表。请拍清楚一点再试一次。'),
       ]) {
         api.sellerData.nextImportError = code;
@@ -454,9 +523,10 @@ void main() {
       }
     });
 
-    testWidgets('等的时候先回首页；首页显示「AI 在读」，按了回去等那一份', (tester) async {
+    testWidgets('等的时候先回首页；首页显示「AI 在读」，读好了首页自己变成「去确认」（不用拉下来刷新）', (tester) async {
       final device = FakeDevice()..nextImage = PickedFile.memory(jpeg);
-      await startSeller(tester, device: device);
+      final api = await startSeller(tester, device: device);
+      api.sellerData.pollsToFinish = 8; // 读久一点：回到首页的时候还在读
       await openImport(tester);
       await tester.tap(find.byKey(const Key('import-camera')));
       await pumpUntil(tester, find.byKey(const Key('import-leave')));
@@ -466,6 +536,9 @@ void main() {
       await settle(tester);
       expect(find.text('AI 正在读你的价目表…'), findsOneWidget, reason: '首页的「上传价目表」');
 
+      // 老板就停在首页：AI 读好了，首页自己会说
+      await pumpUntil(tester, find.text('AI 读好了，去确认上架'), max: 80);
+      expect(find.text('AI 正在读你的价目表…'), findsNothing);
       await tester.tap(find.byKey(const Key('seller-import')));
       await tester.pumpAndSettle();
       await settle(tester);

@@ -10,6 +10,61 @@ Uint8List bytes(List<int> head, [int padTo = 64]) =>
 
 Uint8List text(String s, {Encoding encoding = utf8}) => Uint8List.fromList(encoding.encode(s));
 
+/// 做一个真的 ZIP（不压缩）：本地档头 + 资料、中央目录、End of Central Directory
+Uint8List zip(Map<String, List<int>> entries) {
+  final out = BytesBuilder();
+  final central = BytesBuilder();
+  void u16(BytesBuilder b, int v) => b.add([v & 0xFF, v >> 8 & 0xFF]);
+  void u32(BytesBuilder b, int v) => b.add([v & 0xFF, v >> 8 & 0xFF, v >> 16 & 0xFF, v >> 24 & 0xFF]);
+  for (final e in entries.entries) {
+    final name = ascii.encode(e.key);
+    final offset = out.length;
+    out.add(const [0x50, 0x4B, 0x03, 0x04]);
+    u16(out, 20); // version
+    u16(out, 0); // flags
+    u16(out, 0); // stored
+    u32(out, 0); // time / date
+    u32(out, 0); // crc（这里不检查）
+    u32(out, e.value.length);
+    u32(out, e.value.length);
+    u16(out, name.length);
+    u16(out, 0);
+    out
+      ..add(name)
+      ..add(e.value);
+    central.add(const [0x50, 0x4B, 0x01, 0x02]);
+    u16(central, 20);
+    u16(central, 20);
+    u16(central, 0);
+    u16(central, 0);
+    u32(central, 0);
+    u32(central, 0);
+    u32(central, e.value.length);
+    u32(central, e.value.length);
+    u16(central, name.length);
+    u16(central, 0); // extra
+    u16(central, 0); // comment
+    u16(central, 0); // disk
+    u16(central, 0); // internal attrs
+    u32(central, 0); // external attrs
+    u32(central, offset);
+    central.add(name);
+  }
+  final cdOffset = out.length;
+  final cd = central.takeBytes();
+  out
+    ..add(cd)
+    ..add(const [0x50, 0x4B, 0x05, 0x06]);
+  u16(out, 0);
+  u16(out, 0);
+  u16(out, entries.length);
+  u16(out, entries.length);
+  u32(out, cd.length);
+  u32(out, cdOffset);
+  u16(out, 0);
+  return out.takeBytes();
+}
+
 List<int> utf16le(String s) => [
   for (final c in s.codeUnits) ...[c & 0xFF, c >> 8],
 ];
@@ -47,20 +102,39 @@ void main() {
     expect(FileKind.pdf.importType, ImportFileType.pdf);
   });
 
-  test('xlsx：ZIP 里有 xl/；docx 不算', () {
-    final xlsx = bytes([
-      0x50,
-      0x4B,
-      0x03,
-      0x04,
-      ...List.filled(26, 0),
-      ...ascii.encode('[Content_Types].xml'),
-      ...ascii.encode('xl/workbook.xml'),
-    ], 200);
+  test('xlsx：ZIP 里有 xl/ 的档案；docx 不算', () {
+    final xlsx = zip({
+      '[Content_Types].xml': ascii.encode('<Types/>'),
+      '_rels/.rels': ascii.encode('<Relationships/>'),
+      'xl/workbook.xml': ascii.encode('<workbook/>'),
+      'xl/worksheets/sheet1.xml': ascii.encode('<worksheet/>'),
+    });
     expect(sniffFileType(xlsx, fileName: 'price.xlsx'), FileKind.xlsx);
     expect(FileKind.xlsx.importType, ImportFileType.excel);
-    final docx = bytes([0x50, 0x4B, 0x03, 0x04, ...List.filled(26, 0), ...ascii.encode('word/document.xml')], 200);
+    final docx = zip({'[Content_Types].xml': ascii.encode('<Types/>'), 'word/document.xml': ascii.encode('<w/>')});
     expect(sniffFileType(docx, fileName: 'price.xlsx'), FileKind.unknown, reason: '档名是 .xlsx 也不信');
+  });
+
+  test('大的 Word 档：压缩过的资料、照片里刚好有 xl/ 这三个字节，也不会被当成 Excel', () {
+    // 压缩过的资料看起来像乱码，随便都会出现 'xl/'（5 MB 大约有 1/4 的机会）
+    final noise = Uint8List.fromList(List.generate(300000, (i) => (i * 7919 + (i >> 3)) & 0xFF));
+    final payload = [
+      ...noise.sublist(0, 1000),
+      ...ascii.encode('xl/'),
+      ...noise.sublist(1000),
+      ...ascii.encode('xl/xl/'),
+    ];
+    final docx = zip({
+      '[Content_Types].xml': ascii.encode('<Types/>'),
+      'word/document.xml': ascii.encode('<w/>'),
+      'word/media/image1.jpeg': payload,
+    });
+    expect(sniffFileType(docx), FileKind.unknown);
+    // 被截掉（没有最后面的中央目录）：一个一个读本地档头的档名，一样分得出来
+    final cut = Uint8List.sublistView(docx, 0, docx.length - 200);
+    expect(sniffFileType(cut), FileKind.unknown);
+    final xlsx = zip({'[Content_Types].xml': ascii.encode('<Types/>'), 'xl/workbook.xml': payload});
+    expect(sniffFileType(Uint8List.sublistView(xlsx, 0, xlsx.length - 100)), FileKind.xlsx);
   });
 
   test('xls：OLE2 里有 Workbook 资料流', () {

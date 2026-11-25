@@ -9,13 +9,16 @@ import '../../app/seller_providers.dart';
 import '../../app/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/common.dart';
+import 'products_page.dart';
 import 'seller_widgets.dart';
 
 /// 这几个错误的 detail 是第几行：跳到那一行、框红色
 const _rowErrors = {'IMPORT_ROW_INCOMPLETE', 'IMPORT_ROW_INVALID_PRODUCT', 'IMPORT_DUPLICATE_PRODUCT'};
 
 /// 确认价目表：AI 读到的每一行（名字、单位、包装数量、价钱、AI 有多肯定、原文），
-/// 每行选「新增 / 更新（对到哪样商品）/ 跳过」，不对的按「改」。底下「确认上架（N 样）」
+/// 每行选「新增 / 更新（对到哪样商品，可以自己选、换、清掉）/ 跳过」，不对的按「改」。
+/// 「更新」会把下架的商品重新上架、改包装：那一行会写出来。底下「确认上架（N 样）」；
+/// 这一份不要了（拍错、全部跳过）可以「上传另一份」，不会被困在这一页
 class ImportReviewPage extends ConsumerStatefulWidget {
   const ImportReviewPage({super.key, required this.importId});
 
@@ -37,6 +40,8 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
 
   GlobalKey _keyFor(int rowNo) => _rowKeys.putIfAbsent(rowNo, GlobalKey.new);
 
+  /// 改一行。存好、而且列表也重新读好之前，这一行和「确认上架」都按不了：
+  /// 不然服务器上架时可能还是旧的价钱，或上架了刚按「跳过」的那一行
   Future<void> _update(PriceListImportRow row, Map<String, Object?> fields) async {
     final l = context.l10n;
     setState(() {
@@ -48,8 +53,41 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
     } catch (e) {
       if (mounted) showMessage(context, l.error(e), error: true);
     } finally {
+      if (mounted) {
+        try {
+          await ref.read(importRowsProvider(_id).future);
+        } catch (_) {
+          // 读不到的话页面会显示错误，可以再试
+        }
+      }
       if (mounted) setState(() => _busyRows.remove(row.id));
     }
+  }
+
+  /// 选「更新」要改哪一样商品（也可以清掉：当新商品）
+  Future<void> _chooseProduct(PriceListImportRow row, List<PriceListImportRow> rows) async {
+    final products = ref.read(sellerProductsProvider).value ?? const <SellerProduct>[];
+    final usedBy = <String, int>{
+      for (final r in rows)
+        if (r.id != row.id && r.action == ImportRowAction.update && r.matchedProductId != null)
+          r.matchedProductId!: r.rowNo,
+    };
+    final chosen = await showModalBottomSheet<_Chosen>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (_) => _ProductChooser(row: row, products: products, usedBy: usedBy),
+    );
+    if (chosen == null || !mounted) return;
+    final p = chosen.product;
+    await _update(
+      row,
+      p == null
+          // 都不是：不对到任何商品，当新商品（没有名字的话先跳过）
+          ? {'matched_product_id': null, 'action': (row.hasName ? ImportRowAction.create : ImportRowAction.skip).name}
+          : {'matched_product_id': p.id, 'action': ImportRowAction.update.name},
+    );
   }
 
   Future<void> _edit(PriceListImportRow row) async {
@@ -71,6 +109,7 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
 
   Future<void> _apply() async {
     final l = context.l10n;
+    if (_busyRows.isNotEmpty) return;
     setState(() => _applying = true);
     try {
       final r = await ref.read(sellerActionsProvider).applyImport(_id);
@@ -127,17 +166,29 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
             icon: Icons.hourglass_top,
             text: l.sellerImportProcessing,
             detail: l.sellerImportWaitHint,
-            action: FilledButton(
-              key: const Key('review-wait'),
-              onPressed: () => context.pushReplacement('/seller/import?id=$_id'),
-              child: Text(l.sellerReviewWait),
+            action: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                FilledButton(
+                  key: const Key('review-wait'),
+                  onPressed: () => context.pushReplacement('/seller/import?id=$_id'),
+                  child: Text(l.sellerReviewWait),
+                ),
+                const SizedBox(height: 10),
+                // 卡住了、传错了：不等这一份，上传另一份
+                OutlinedButton(
+                  key: const Key('review-upload-other'),
+                  onPressed: () => context.pushReplacement('/seller/import'),
+                  child: Text(l.sellerImportUploadOther, textAlign: TextAlign.center),
+                ),
+              ],
             ),
           ),
           ImportStatus.failed => CenterMessage(
             icon: Icons.error_outline,
             iconColor: AppTheme.problem,
             text: l.sellerImportFailedTitle,
-            detail: l.importFailure(i.errorMessage),
+            detail: l.importFailure(i.errorMessage, fileType: i.fileType),
             action: FilledButton(
               key: const Key('review-upload-again'),
               onPressed: () => context.pushReplacement('/seller/import'),
@@ -163,13 +214,25 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
   Widget _bottom(List<PriceListImportRow> rows) {
     final l = context.l10n;
     final count = rows.where((r) => r.action != ImportRowAction.skip).length;
+    // 还在存某一行（改价钱、跳过）：等存好才可以上架
+    final saving = _busyRows.isNotEmpty;
     return BottomAction(
+      // 这一份不要了（拍错了、全部都跳过）：上传另一份，首页就不会一直回到这一页
+      above: Padding(
+        padding: const EdgeInsets.only(bottom: 6),
+        child: TextButton.icon(
+          key: const Key('review-upload-other'),
+          icon: const Icon(Icons.upload_file),
+          onPressed: _applying ? null : () => context.pushReplacement('/seller/import'),
+          label: Text(l.sellerImportUploadOther, textAlign: TextAlign.center),
+        ),
+      ),
       child: BusyButton(
         key: const Key('review-apply'),
         icon: Icons.check,
         label: l.sellerApply(count),
-        busy: _applying,
-        onPressed: _applying || count == 0 ? null : _apply,
+        busy: _applying || saving,
+        onPressed: _applying || saving || count == 0 ? null : _apply,
       ),
     );
   }
@@ -234,6 +297,7 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
                 highlighted: _highlight == r.rowNo,
                 busy: _busyRows.contains(r.id),
                 onAction: (a) => _update(r, {'action': a.name}),
+                onChooseProduct: () => _chooseProduct(r, rows),
                 onEdit: () => _edit(r),
               ),
             ],
@@ -267,6 +331,7 @@ class _RowCard extends StatelessWidget {
     required this.highlighted,
     required this.busy,
     required this.onAction,
+    required this.onChooseProduct,
     required this.onEdit,
   });
 
@@ -277,6 +342,9 @@ class _RowCard extends StatelessWidget {
   final bool highlighted;
   final bool busy;
   final ValueChanged<ImportRowAction> onAction;
+
+  /// 选 / 换要更新的商品
+  final VoidCallback onChooseProduct;
   final VoidCallback onEdit;
 
   @override
@@ -333,12 +401,31 @@ class _RowCard extends StatelessWidget {
               ].join(' · '),
               style: t.bodyLarge?.copyWith(color: Colors.black54),
             ),
-          if (r.action == ImportRowAction.update && product != null)
+          if (r.action == ImportRowAction.update && product != null) ...[
             InfoLine(
               icon: Icons.sync,
               text: '${l.sellerReviewMatched(product!.name)} · ${l.sellerReviewPriceNow(formatRm(product!.priceSen))}',
               color: const Color(0xFF1565C0),
             ),
+            // 上架时服务器会把对到的商品改成「上架」，单位、包装数量也照这一行改：先讲清楚
+            if (product!.status != ProductStatus.active)
+              InfoLine(
+                icon: Icons.visibility,
+                text: l.sellerReviewWillRelist(
+                  product!.status == ProductStatus.draft ? l.sellerStatusDraft : l.sellerStatusArchived,
+                ),
+                color: _warning,
+              ),
+            if (_packChanges(product!))
+              InfoLine(
+                icon: Icons.inventory_2,
+                text: l.sellerReviewPackChange(
+                  l.packQty(l.unit(product!.unit), product!.packQty),
+                  l.packQty(l.unit(r.unit ?? product!.unit), r.packQty ?? product!.packQty),
+                ),
+                color: _warning,
+              ),
+          ],
           if (r.action == ImportRowAction.create && r.matchedProductId == null && r.hasName)
             InfoLine(icon: Icons.add_circle_outline, text: l.sellerReviewNoMatch),
           if (missing.isNotEmpty)
@@ -350,7 +437,12 @@ class _RowCard extends StatelessWidget {
           if (r.rawText != null && r.rawText!.trim().isNotEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 4),
-              child: Text(l.sellerReviewRaw(r.rawText!.trim()), style: t.bodySmall?.copyWith(color: Colors.black54)),
+              // 原文是用来对照 AI 读得对不对的：跟其他字一样大（最小 18）
+              child: Text(
+                l.sellerReviewRaw(r.rawText!.trim()),
+                key: Key('row-${r.rowNo}-raw'),
+                style: t.bodyMedium?.copyWith(color: Colors.black54),
+              ),
             ),
           const SizedBox(height: 12),
           ChoiceButtons<ImportRowAction>(
@@ -375,14 +467,27 @@ class _RowCard extends StatelessWidget {
               ),
             ],
             selected: r.action,
-            // 没有对到商品就不能「更新」
-            enabled: (a) => a != ImportRowAction.update || r.matchedProductId != null,
             onSelected: busy
                 ? null
                 : (a) {
-                    if (a != r.action) onAction(a);
+                    if (a == r.action) return;
+                    // 「更新」还没有对到商品：先选是哪一样
+                    if (a == ImportRowAction.update && r.matchedProductId == null) {
+                      onChooseProduct();
+                    } else {
+                      onAction(a);
+                    }
                   },
           ),
+          if (r.action == ImportRowAction.update) ...[
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              key: Key('row-${r.rowNo}-choose'),
+              onPressed: busy ? null : onChooseProduct,
+              icon: const Icon(Icons.swap_horiz),
+              label: Text(l.sellerReviewChangeProduct, textAlign: TextAlign.center),
+            ),
+          ],
           const SizedBox(height: 8),
           OutlinedButton.icon(
             key: Key('row-${r.rowNo}-edit'),
@@ -391,6 +496,135 @@ class _RowCard extends StatelessWidget {
             label: Text(l.sellerReviewEdit),
           ),
         ],
+      ),
+    );
+  }
+
+  static const _warning = Color(0xFF8A6100);
+
+  /// 这一行会改掉商品的单位或包装数量
+  bool _packChanges(SellerProduct p) =>
+      (row.unit != null && row.unit != p.unit) || (row.packQty != null && row.packQty != p.packQty);
+}
+
+/// 选商品的结果：product == null = 都不是（不对到任何商品）
+typedef _Chosen = ({SellerProduct? product});
+
+/// 选「更新」要改哪一样商品：自己的全部商品（可以搜；下架、草稿的也在），已经被别行对到的会写出来。
+/// 已经对到商品的行可以按「都不是」清掉。关掉回传 null
+class _ProductChooser extends StatefulWidget {
+  const _ProductChooser({required this.row, required this.products, required this.usedBy});
+
+  final PriceListImportRow row;
+  final List<SellerProduct> products;
+
+  /// 商品 id → 已经对到它的那一行（不算这一行）
+  final Map<String, int> usedBy;
+
+  @override
+  State<_ProductChooser> createState() => _ProductChooserState();
+}
+
+class _ProductChooserState extends State<_ProductChooser> {
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    final t = Theme.of(context).textTheme;
+    final r = widget.row;
+    final q = _search.text.trim().toLowerCase();
+    final shown = widget.products.where((p) => q.isEmpty || p.name.toLowerCase().contains(q)).toList();
+    final rowText = r.hasName ? r.name!.trim() : r.rawText?.trim();
+    return Padding(
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: LayoutBuilder(
+        builder: (context, constraints) => ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: (constraints.hasBoundedHeight ? constraints.maxHeight : MediaQuery.sizeOf(context).height) * 0.9,
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      Text(l.sellerReviewChooseProduct, style: t.headlineSmall),
+                      Text(l.sellerReviewRow(r.rowNo), style: t.bodyLarge?.copyWith(color: Colors.black54)),
+                      if (rowText != null && rowText.isNotEmpty) Text(rowText, style: t.titleMedium),
+                      const SizedBox(height: 10),
+                      TextField(
+                        key: const Key('choose-search'),
+                        controller: _search,
+                        onChanged: (_) => setState(() {}),
+                        textInputAction: TextInputAction.search,
+                        decoration: InputDecoration(
+                          hintText: l.sellerProductsSearch,
+                          prefixIcon: const Icon(Icons.search, size: 28),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: shown.isEmpty
+                      ? Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: Text(l.sellerProductsNoMatch, textAlign: TextAlign.center, style: t.titleMedium),
+                        )
+                      : ListView.separated(
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
+                          itemCount: shown.length,
+                          separatorBuilder: (_, _) => const SizedBox(height: 10),
+                          itemBuilder: (_, i) {
+                            final p = shown[i];
+                            final used = widget.usedBy[p.id];
+                            return ProductCard(
+                              product: p,
+                              keyPrefix: 'choose-product',
+                              note: used == null ? null : l.sellerReviewUsedByRow(used),
+                              onTap: () => Navigator.pop(context, (product: p)),
+                            );
+                          },
+                        ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (r.matchedProductId != null) ...[
+                        OutlinedButton(
+                          key: const Key('choose-none'),
+                          onPressed: () => Navigator.pop(context, (product: null)),
+                          child: Text(l.sellerReviewClearMatch, textAlign: TextAlign.center),
+                        ),
+                        const SizedBox(height: 4),
+                      ],
+                      TextButton(
+                        key: const Key('choose-cancel'),
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(l.cancel),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

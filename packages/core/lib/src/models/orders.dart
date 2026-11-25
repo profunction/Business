@@ -383,6 +383,8 @@ class OrderDetail {
       paymentTerms: asStringList(w['payment_terms']),
       shopName: asStringOrNull(s['name']) ?? '',
       shopAddress: asStringOrNull(s['address']),
+      // get_order 的 shop 现在只回传 phone（没有 whatsapp_phone，也没有像 get_delivery_summary 那样
+      // coalesce(phone, whatsapp_phone)）：只有 WhatsApp 号码的店这里会是 null。要后端改 get_order，这一行先留着
       shopPhone: asStringOrNull(s['phone']) ?? asStringOrNull(s['whatsapp_phone']),
       shopContactName: asStringOrNull(s['contact_name']),
       shopZoneName: s['zone_name'] is Map ? LocalizedName.fromJson(s['zone_name']) : null,

@@ -57,6 +57,10 @@ class FileKind {
 /// 价目表档案的大小上限（跟 Storage bucket 一样：10 MB）
 const priceListMaxBytes = 10 * 1024 * 1024;
 
+/// 价目表照片的大小上限：parse-price-list 收的照片最多 7,000,000 字节（Claude 一张图 base64 之后最多 10 MB），
+/// 比 bucket 的 10 MB 小。上传前就挡下来，不用等上传完、AI 读失败才说
+const priceListMaxImageBytes = 7000000;
+
 /// 看档案开头判断格式。[fileName] 只用来帮忙认 CSV（纯文字没有魔术字节）和分不清的旧版 Office 档。
 FileKind sniffFileType(Uint8List bytes, {String? fileName}) {
   if (bytes.isEmpty) return FileKind.unknown;
@@ -74,9 +78,10 @@ FileKind sniffFileType(Uint8List bytes, {String? fileName}) {
     if (_heicBrands.contains(brand)) return FileKind.heic;
     return FileKind.unknown; // avif、mp4、mov……
   }
-  // ZIP：xlsx 里一定有 xl/ 文件夹（中央目录的档名不压缩，整个档案搜得到）
+  // ZIP：xlsx 里一定有 xl/ 文件夹的档案（xl/workbook.xml……）。只看 ZIP 里的档名，
+  // 不在整个档案里搜 'xl/'（压缩过的资料、照片里随便都可能出现这三个字节，大的 Word 档会被当成 Excel）
   if (_startsWith(bytes, const [0x50, 0x4B, 0x03, 0x04])) {
-    if (_indexOf(bytes, ascii.encode('xl/')) >= 0) return FileKind.xlsx;
+    if (_zipEntryNames(bytes).any((n) => n.startsWith('xl/'))) return FileKind.xlsx;
     return FileKind.unknown; // docx、普通 zip……
   }
   // 旧版 Office（OLE2）：Excel 的资料流叫 Workbook（或更旧的 Book），档名是 UTF-16LE
@@ -119,6 +124,58 @@ bool _looksLikeCsv(Uint8List bytes, String? ext) {
   return newlines > 0 && separators >= newlines;
 }
 
+/// ZIP 里的档名：先看最后面的中央目录（End of Central Directory → 每一个档案的记录）；
+/// 找不到（档案被截掉、ZIP64）就从头一个一个读本地档头（档名就在档头后面，不压缩）
+Iterable<String> _zipEntryNames(Uint8List bytes) sync* {
+  final data = ByteData.sublistView(bytes);
+  int u16(int at) => data.getUint16(at, Endian.little);
+  int u32(int at) => data.getUint32(at, Endian.little);
+  String name(int at, int length) => latin1.decode(bytes.sublist(at, at + length));
+
+  // End of Central Directory：最后 22 字节起（后面可能有最多 65535 字节的注解），签名 PK\x05\x06
+  final eocd = _lastIndexOf(
+    bytes,
+    const [0x50, 0x4B, 0x05, 0x06],
+    from: bytes.length - 22,
+    min: bytes.length - 22 - 0xFFFF,
+  );
+  if (eocd >= 0) {
+    final count = u16(eocd + 10);
+    var at = u32(eocd + 16);
+    final names = <String>[];
+    var ok = at < bytes.length;
+    for (var i = 0; ok && i < count; i++) {
+      // 中央目录的一笔：签名 PK\x01\x02，档名长度在 +28，额外资料 +30，注解 +32，档名从 +46 开始
+      if (at + 46 > bytes.length || !_matchesAt(bytes, at, const [0x50, 0x4B, 0x01, 0x02])) {
+        ok = false;
+        break;
+      }
+      final n = u16(at + 28), extra = u16(at + 30), comment = u16(at + 32);
+      if (at + 46 + n > bytes.length) {
+        ok = false;
+        break;
+      }
+      names.add(name(at + 46, n));
+      at += 46 + n + extra + comment;
+    }
+    if (ok) {
+      yield* names;
+      return;
+    }
+  }
+  // 本地档头：签名 PK\x03\x04，档名长度在 +26，档名从 +30 开始。压缩后的大小可能是 0（后面才写），
+  // 所以不跳过资料，只往后找下一个签名，而且档名要像档名（印得出来的字）
+  var at = 0;
+  while (at >= 0 && at + 30 <= bytes.length) {
+    final n = u16(at + 26);
+    if (n > 0 && n <= 512 && at + 30 + n <= bytes.length) {
+      final raw = bytes.sublist(at + 30, at + 30 + n);
+      if (raw.every((b) => b >= 0x20 && b < 0x7F)) yield ascii.decode(raw);
+    }
+    at = _indexOf(bytes, const [0x50, 0x4B, 0x03, 0x04], start: at + 4);
+  }
+}
+
 List<int> _utf16le(String s) => [
   for (final c in s.codeUnits) ...[c & 0xFF, c >> 8],
 ];
@@ -133,10 +190,23 @@ bool _matchesAt(Uint8List bytes, int offset, List<int> pattern) {
   return true;
 }
 
-int _indexOf(Uint8List bytes, List<int> pattern, {int? end}) {
+int _indexOf(Uint8List bytes, List<int> pattern, {int? end, int start = 0}) {
   final last = (end == null ? bytes.length : (end < bytes.length ? end : bytes.length)) - pattern.length;
   outer:
-  for (var i = 0; i <= last; i++) {
+  for (var i = start < 0 ? 0 : start; i <= last; i++) {
+    for (var j = 0; j < pattern.length; j++) {
+      if (bytes[i + j] != pattern[j]) continue outer;
+    }
+    return i;
+  }
+  return -1;
+}
+
+/// 从 [from] 往前找到 [min]（都包括）
+int _lastIndexOf(Uint8List bytes, List<int> pattern, {required int from, int min = 0}) {
+  outer:
+  for (var i = from; i >= (min < 0 ? 0 : min); i--) {
+    if (i + pattern.length > bytes.length) continue;
     for (var j = 0; j < pattern.length; j++) {
       if (bytes[i + j] != pattern[j]) continue outer;
     }

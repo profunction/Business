@@ -247,8 +247,15 @@ class DemoApi extends WholesaleApi {
 
   // ---------------- 批发商端 ----------------
 
+  /// 测试用：首页读不到（例如没网络），清掉就好了
+  AppError? sellerHomeError;
+
   @override
-  Future<SellerHome> getSellerHome(String wholesalerId) => _later(sellerData.home);
+  Future<SellerHome> getSellerHome(String wholesalerId) => _later(() {
+    final e = sellerHomeError;
+    if (e != null) throw e;
+    return sellerData.home();
+  });
 
   @override
   Future<List<SellerOrderSummary>> listSellerOrders(
@@ -351,6 +358,12 @@ class DemoApi extends WholesaleApi {
   @override
   Duration get importPollInterval => const Duration(milliseconds: 200);
 
+  /// 等 AI 最多等多久（测试「等太久」可以改短）
+  Duration pollTimeout = const Duration(minutes: 5);
+
+  @override
+  Duration get importPollTimeout => pollTimeout;
+
   @override
   Future<String> uploadPriceList(String wholesalerId, Uint8List bytes, String ext, String contentType) => _later(() {
     calls.add('upload $ext $contentType');
@@ -391,8 +404,12 @@ class DemoApi extends WholesaleApi {
     return sellerData.updateRow(rowId, fields);
   });
 
+  /// 按了几次「确认上架」（包括服务器说不行的）
+  int applyAttempts = 0;
+
   @override
   Future<ApplyImportResult> applyImport(String importId) => _later(() {
+    applyAttempts++;
     final r = sellerData.apply(importId);
     calls.add('applyImport ${r.created} ${r.updated} ${r.skipped}');
     return r;

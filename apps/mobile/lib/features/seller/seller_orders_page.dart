@@ -73,7 +73,11 @@ class _SellerOrdersPageState extends ConsumerState<SellerOrdersPage> {
           Expanded(
             child: AsyncView(
               value: orders,
-              onRetry: () => ref.invalidate(sellerOrdersProvider(_tab)),
+              // 「今天要送」要先有首页（日期）：首页读失败的话也要重读，不然一直按都一样失败
+              onRetry: () {
+                ref.invalidate(sellerHomeProvider);
+                ref.invalidate(sellerOrdersProvider(_tab));
+              },
               builder: (list) => RefreshIndicator(onRefresh: _refresh, child: _list(context, list)),
             ),
           ),

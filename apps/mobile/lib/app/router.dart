@@ -23,6 +23,7 @@ import '../features/seller/import_page.dart';
 import '../features/seller/import_review_page.dart';
 import '../features/seller/product_edit_page.dart';
 import '../features/seller/products_page.dart';
+import '../features/seller/seller_device.dart';
 import '../features/seller/seller_home_page.dart';
 import '../features/seller/seller_order_detail_page.dart';
 import '../features/seller/seller_orders_page.dart';
@@ -120,8 +121,11 @@ GoRouter buildRouter(SessionController session) {
           ),
           GoRoute(
             path: 'import',
-            // ?id= 等那一份读完（从首页回来看「AI 在读」的那一份）
-            builder: (_, s) => ImportPage(importId: s.uri.queryParameters['id']),
+            // ?id= 等那一份读完（从首页回来看「AI 在读」的那一份）；extra = Android 把 App 关掉前选到的价目表
+            builder: (_, s) => ImportPage(
+              importId: s.uri.queryParameters['id'],
+              recovered: s.extra is PickedFile ? s.extra! as PickedFile : null,
+            ),
             routes: [
               GoRoute(
                 path: ':id',

@@ -23,14 +23,30 @@ class FakeDevice implements SellerDevice {
   PickedFile? nextImage;
   PickedFile? nextFile;
   Object? pickError;
+
+  /// Android 把 App 关掉前选到的价目表（App 一打开，首页会拿回来）
+  PickedFile? lostPriceList;
   final shared = <String>[];
   final printed = <Uint8List>[];
 
   @override
-  Future<PickedFile?> pickImage(PickSource source, {double maxWidth = 2576, int imageQuality = 85}) async {
-    calls.add('pickImage ${source.name} ${maxWidth.round()} $imageQuality');
+  Future<PickedFile?> pickImage(
+    PickSource source, {
+    required PickPurpose purpose,
+    double maxSide = 2576,
+    int imageQuality = 85,
+  }) async {
+    calls.add('pickImage ${source.name} ${purpose.name} ${maxSide.round()} $imageQuality');
     if (pickError != null) throw pickError!;
     return nextImage;
+  }
+
+  @override
+  Future<PickedFile?> recoverLostPriceList() async {
+    final lost = lostPriceList;
+    lostPriceList = null;
+    if (lost != null) calls.add('recoverLostPriceList');
+    return lost;
   }
 
   @override

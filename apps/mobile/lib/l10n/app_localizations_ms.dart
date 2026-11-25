@@ -732,12 +732,12 @@ class L10nMs extends L10n {
 
   @override
   String sellerErrRowInvalidProduct(int row) {
-    return 'Baris $row dipadankan dengan produk yang salah. Sila pilih semula.';
+    return 'Baris $row dipadankan dengan barang yang salah. Sila pilih semula.';
   }
 
   @override
   String sellerErrDuplicateProduct(int row) {
-    return 'Baris $row mengemas kini produk yang sama dengan baris lain. Sila tukar salah satu.';
+    return 'Baris $row mengemas kini barang yang sama dengan baris lain. Sila tukar salah satu.';
   }
 
   @override
@@ -793,7 +793,7 @@ class L10nMs extends L10n {
   String get sellerNothingToday => 'Tiada penghantaran hari ini';
 
   @override
-  String get sellerHomeProducts => 'Produk & harga';
+  String get sellerHomeProducts => 'Barang & harga';
 
   @override
   String sellerProductsActive(int count) {
@@ -819,7 +819,7 @@ class L10nMs extends L10n {
   String get sellerHomeImport => 'Muat naik senarai harga';
 
   @override
-  String get sellerImportNone => 'Ambil gambar atau pilih fail Excel. AI sediakan senarai produk anda.';
+  String get sellerImportNone => 'Ambil gambar atau pilih fail Excel. AI sediakan senarai barang anda.';
 
   @override
   String get sellerImportProcessing => 'AI sedang membaca senarai harga anda…';
@@ -837,7 +837,7 @@ class L10nMs extends L10n {
 
   @override
   String get sellerPendingBanner =>
-      'Kami sedang menyemak maklumat anda. Pembeli belum nampak anda, tetapi anda boleh mula masukkan produk dan harga.';
+      'Kami sedang menyemak maklumat anda. Pembeli belum nampak anda, tetapi anda boleh mula masukkan barang dan harga.';
 
   @override
   String get sellerSuspendedBanner =>
@@ -1019,7 +1019,7 @@ class L10nMs extends L10n {
   }
 
   @override
-  String get sellerSummaryGoConfirm => 'Sahkan';
+  String get sellerSummaryGoConfirm => 'Pergi sahkan';
 
   @override
   String get sellerSummaryPicking => 'Senarai ambil barang';
@@ -1300,7 +1300,8 @@ class L10nMs extends L10n {
   }
 
   @override
-  String get sellerReviewNoMatch => 'Tiada barang anda yang sepadan. Boleh tambah sebagai baharu.';
+  String get sellerReviewNoMatch =>
+      'Tiada barang anda yang sepadan, jadi ia akan ditambah sebagai baharu. Untuk tukar harga barang anda, tekan \"Kemas kini\" dan pilih barang itu.';
 
   @override
   String get sellerReviewNoRows => 'AI tidak jumpa barang dalam senarai harga ini';
@@ -1360,4 +1361,73 @@ class L10nMs extends L10n {
 
   @override
   String get sellerReviewWait => 'Tunggu AI';
+
+  @override
+  String get sellerImportUploadOther => 'Muat naik yang lain';
+
+  @override
+  String get sellerImportCheckFailed => 'Kami tidak dapat menyemak senarai harga ini';
+
+  @override
+  String get sellerImportRecovered => 'Senarai harga yang anda pilih tadi dijumpai. Sedang dimuat naik.';
+
+  @override
+  String get sellerImportErrService =>
+      'Perkhidmatan AI sedang ada masalah. Sila muat naik semula dalam beberapa minit.';
+
+  @override
+  String get sellerImportErrFile =>
+      'Fail ini tidak dapat dibuka, atau kosong. Sila simpan semula (Excel sebagai .xlsx), atau ambil gambar.';
+
+  @override
+  String get sellerImportErrTimeout =>
+      'AI ambil masa terlalu lama. Jika senarai harga panjang, bahagikan kepada beberapa bahagian. Jika tidak, sila cuba lagi dalam beberapa minit.';
+
+  @override
+  String get sellerErrPhotoTooLarge =>
+      'Gambar terlalu besar (maksimum 7 MB). Sila ambil semula dengan \"Ambil gambar\", atau pilih gambar yang lebih kecil.';
+
+  @override
+  String get sellerErrLoginExpired =>
+      'Log masuk anda sudah tamat tempoh. Sila log keluar di Tetapan dan log masuk semula.';
+
+  @override
+  String get sellerReviewChooseProduct => 'Barang mana yang hendak dikemas kini?';
+
+  @override
+  String get sellerReviewChangeProduct => 'Pilih barang lain';
+
+  @override
+  String get sellerReviewClearMatch => 'Bukan semua ini (tambah sebagai baharu)';
+
+  @override
+  String sellerReviewUsedByRow(int row) {
+    return 'Sudah dipadankan dengan baris $row';
+  }
+
+  @override
+  String sellerReviewWillRelist(String status) {
+    return 'Kini \"$status\". Ia akan dijual kepada pembeli.';
+  }
+
+  @override
+  String sellerReviewPackChange(String before, String after) {
+    return 'Pembungkusan akan bertukar: $before → $after';
+  }
+
+  @override
+  String sellerUnitPlural(String unit) {
+    String _temp0 = intl.Intl.selectLogic(unit, {
+      'carton': 'karton',
+      'pack': 'paket',
+      'bag': 'beg',
+      'roll': 'gulung',
+      'bundle': 'ikat',
+      'box': 'kotak',
+      'dozen': 'dozen',
+      'kg': 'kg',
+      'other': 'biji',
+    });
+    return '$_temp0';
+  }
 }

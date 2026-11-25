@@ -1308,13 +1308,13 @@ abstract class L10n {
   /// No description provided for @sellerErrUnsupportedFile.
   ///
   /// In zh, this message translates to:
-  /// **'这种档案看不懂。请拍照，或选 Excel、PDF、CSV 档案。'**
+  /// **'这种文件看不懂。请拍照，或选 Excel、PDF、CSV 文件。'**
   String get sellerErrUnsupportedFile;
 
   /// No description provided for @sellerErrFileTooLarge.
   ///
   /// In zh, this message translates to:
-  /// **'档案太大了（最多 10 MB）'**
+  /// **'文件太大了（最多 10 MB）'**
   String get sellerErrFileTooLarge;
 
   /// No description provided for @sellerErrAiFailed.
@@ -2142,7 +2142,7 @@ abstract class L10n {
   /// No description provided for @sellerImportIntro.
   ///
   /// In zh, this message translates to:
-  /// **'拍价目表的照片，或选 Excel、PDF 档案。AI 会读成商品，你检查好了才上架。'**
+  /// **'拍价目表的照片，或选 Excel、PDF 文件。AI 会读成商品，你检查好了才上架。'**
   String get sellerImportIntro;
 
   /// No description provided for @sellerImportCamera.
@@ -2232,13 +2232,13 @@ abstract class L10n {
   /// No description provided for @sellerImportErrRefused.
   ///
   /// In zh, this message translates to:
-  /// **'AI 不肯读这份档案。请确认是价目表，再试一次。'**
+  /// **'AI 不肯读这份文件。请确认是价目表，再试一次。'**
   String get sellerImportErrRefused;
 
   /// No description provided for @sellerImportErrTruncated.
   ///
   /// In zh, this message translates to:
-  /// **'价目表太长，AI 读不完。请分成几张照片或几个档案，一份一份上传。'**
+  /// **'价目表太长，AI 读不完。请分成几张照片或几个文件，一份一份上传。'**
   String get sellerImportErrTruncated;
 
   /// No description provided for @sellerReviewTitle.
@@ -2310,7 +2310,7 @@ abstract class L10n {
   /// No description provided for @sellerReviewNoMatch.
   ///
   /// In zh, this message translates to:
-  /// **'你的商品里没有一样的，可以新增'**
+  /// **'你的商品里没有一样的，会新增。要改旧商品的价钱，按「更新」选是哪一样。'**
   String get sellerReviewNoMatch;
 
   /// No description provided for @sellerReviewNoRows.
@@ -2414,6 +2414,96 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'等 AI 读完'**
   String get sellerReviewWait;
+
+  /// No description provided for @sellerImportUploadOther.
+  ///
+  /// In zh, this message translates to:
+  /// **'上传另一份'**
+  String get sellerImportUploadOther;
+
+  /// No description provided for @sellerImportCheckFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'查不到这份价目表读得怎样'**
+  String get sellerImportCheckFailed;
+
+  /// No description provided for @sellerImportRecovered.
+  ///
+  /// In zh, this message translates to:
+  /// **'刚才选的价目表找回来了，正在上传'**
+  String get sellerImportRecovered;
+
+  /// No description provided for @sellerImportErrService.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 服务暂时有问题。请过几分钟再上传一次。'**
+  String get sellerImportErrService;
+
+  /// No description provided for @sellerImportErrFile.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个文件打不开，或是空的。请重新存一次（Excel 存成 .xlsx），或拍照上传。'**
+  String get sellerImportErrFile;
+
+  /// No description provided for @sellerImportErrTimeout.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 读太久还没读完。价目表很长的话，请分成几份上传；不长的话，请过几分钟再试。'**
+  String get sellerImportErrTimeout;
+
+  /// No description provided for @sellerErrPhotoTooLarge.
+  ///
+  /// In zh, this message translates to:
+  /// **'照片太大了（最多 7 MB）。请用「拍照」重新拍，或选小一点的照片。'**
+  String get sellerErrPhotoTooLarge;
+
+  /// No description provided for @sellerErrLoginExpired.
+  ///
+  /// In zh, this message translates to:
+  /// **'登录过期了。请到「设定」登出，再登录一次。'**
+  String get sellerErrLoginExpired;
+
+  /// No description provided for @sellerReviewChooseProduct.
+  ///
+  /// In zh, this message translates to:
+  /// **'要更新哪一样商品？'**
+  String get sellerReviewChooseProduct;
+
+  /// No description provided for @sellerReviewChangeProduct.
+  ///
+  /// In zh, this message translates to:
+  /// **'换一样商品'**
+  String get sellerReviewChangeProduct;
+
+  /// No description provided for @sellerReviewClearMatch.
+  ///
+  /// In zh, this message translates to:
+  /// **'都不是（当新商品）'**
+  String get sellerReviewClearMatch;
+
+  /// No description provided for @sellerReviewUsedByRow.
+  ///
+  /// In zh, this message translates to:
+  /// **'第 {row} 行已经对到这样'**
+  String sellerReviewUsedByRow(int row);
+
+  /// No description provided for @sellerReviewWillRelist.
+  ///
+  /// In zh, this message translates to:
+  /// **'现在是「{status}」，确认后会上架给买家看'**
+  String sellerReviewWillRelist(String status);
+
+  /// No description provided for @sellerReviewPackChange.
+  ///
+  /// In zh, this message translates to:
+  /// **'包装会改：{before} → {after}'**
+  String sellerReviewPackChange(String before, String after);
+
+  /// No description provided for @sellerUnitPlural.
+  ///
+  /// In zh, this message translates to:
+  /// **'{unit, select, carton{箱} pack{包} bag{袋} roll{卷} bundle{扎} box{盒} dozen{打} kg{公斤} other{个}}'**
+  String sellerUnitPlural(String unit);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

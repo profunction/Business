@@ -97,7 +97,9 @@ class _ProductFormState extends ConsumerState<_ProductForm> {
   Future<void> _pickPhoto(PickSource source) async {
     final l = context.l10n;
     try {
-      final file = await ref.read(sellerDeviceProvider).pickImage(source, maxWidth: 1600, imageQuality: 85);
+      final file = await ref
+          .read(sellerDeviceProvider)
+          .pickImage(source, purpose: PickPurpose.productPhoto, maxSide: 1600, imageQuality: 85);
       if (file == null) return;
       final bytes = await file.readAsBytes();
       checkProductPhoto(bytes);

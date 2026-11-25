@@ -143,11 +143,19 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
   }
 }
 
-/// 一样商品：名字、价钱 / 单位、一箱几个、起订量；库存和上架状态（颜色 + 文字）
+/// 一样商品：名字、价钱 / 单位、一箱几个、起订量；库存和上架状态（颜色 + 文字）。
+/// 按了打开改商品页；[onTap] 有给的话改成做那件事（价目表确认页选「更新哪一样」）
 class ProductCard extends StatelessWidget {
-  const ProductCard({super.key, required this.product});
+  const ProductCard({super.key, required this.product, this.onTap, this.keyPrefix = 'product', this.note});
 
   final SellerProduct product;
+  final VoidCallback? onTap;
+
+  /// 按的地方的 key：`'$keyPrefix-$id'`（例如 product-…、choose-product-…）
+  final String keyPrefix;
+
+  /// 最底下多一行字（例如「第 2 行已经对到这样」）
+  final String? note;
 
   @override
   Widget build(BuildContext context) {
@@ -158,9 +166,9 @@ class ProductCard extends StatelessWidget {
     final hidden = p.status != ProductStatus.active;
     return Card(
       child: InkWell(
-        key: Key('product-${p.id}'),
+        key: Key('$keyPrefix-${p.id}'),
         borderRadius: BorderRadius.circular(18),
-        onTap: () => context.push('/seller/products/${p.id}'),
+        onTap: onTap ?? () => context.push('/seller/products/${p.id}'),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
@@ -185,6 +193,10 @@ class ProductCard extends StatelessWidget {
                     LabelChip(text: l.sellerStatusArchived, color: const Color(0xFF616161), icon: Icons.visibility_off),
                 ],
               ),
+              if (note != null) ...[
+                const SizedBox(height: 6),
+                Text(note!, style: t.bodyLarge?.copyWith(color: const Color(0xFF8A6100))),
+              ],
             ],
           ),
         ),

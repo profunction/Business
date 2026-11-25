@@ -1,0 +1,3 @@
+/* 系统问相机、照片权限时显示的说明（价目表和商品照片都会用到） */
+"NSCameraUsageDescription" = "拍价目表或商品的照片。AI 会把价目表转成商品和价钱，商品照片会给买家看。";
+"NSPhotoLibraryUsageDescription" = "从相册选价目表或商品的照片。AI 会把价目表转成商品和价钱，商品照片会给买家看。";

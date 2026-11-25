@@ -1,0 +1,3 @@
+/* 系统问相机、照片权限时显示的说明（价目表和商品照片都会用到） */
+"NSCameraUsageDescription" = "Take photos of your price list or your products. The AI turns a price list into products and prices, and product photos are shown to buyers.";
+"NSPhotoLibraryUsageDescription" = "Choose photos of your price list or your products. The AI turns a price list into products and prices, and product photos are shown to buyers.";

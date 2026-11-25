@@ -170,13 +170,20 @@ class NoticeBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
       decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(16)),
-      child: Row(
-        children: [
-          Icon(icon, size: 30),
-          const SizedBox(width: 12),
-          Expanded(child: Text(text, style: textStyle ?? Theme.of(context).textTheme.titleMedium)),
-          ?action,
-        ],
+      // 右边的按钮最多占四成宽（大字、马来文的时候按钮的字换行，不会把提示挤到看不见或撑爆）
+      child: LayoutBuilder(
+        builder: (context, constraints) => Row(
+          children: [
+            Icon(icon, size: 30),
+            const SizedBox(width: 12),
+            Expanded(child: Text(text, style: textStyle ?? Theme.of(context).textTheme.titleMedium)),
+            if (action != null)
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: constraints.maxWidth * 0.4),
+                child: action,
+              ),
+          ],
+        ),
       ),
     );
   }

@@ -10,9 +10,11 @@ import '../../app/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../push/push_prompt.dart';
 import '../../widgets/common.dart';
+import 'seller_device.dart';
 
 /// 批发商首页：四个大按钮（新订单、今天要送、商品和价钱、上传价目表）。
-/// 新订单一进来（Realtime）数字就自己更新。第一次打开时问要不要打开通知
+/// 新订单一进来（Realtime）、App 回到前台，数字就自己更新；价目表还在读的话首页自己等，读好了马上显示。
+/// 第一次打开时问要不要打开通知
 class SellerHomePage extends ConsumerStatefulWidget {
   const SellerHomePage({super.key});
 
@@ -24,17 +26,53 @@ class _SellerHomePageState extends ConsumerState<SellerHomePage> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+      // Android 在选价目表的时候把 App 关掉了：拿回选到的，直接上传（不然老板以为传了）
+      if (await _recoverLostPriceList()) return;
       if (mounted) askForPushOnce(context, ref, seller: true);
+    });
+  }
+
+  Future<bool> _recoverLostPriceList() async {
+    PickedFile? lost;
+    try {
+      lost = await ref.read(sellerDeviceProvider).recoverLostPriceList();
+    } catch (e) {
+      if (mounted) showMessage(context, context.l10n.error(e), error: true);
+      return false;
+    }
+    if (lost == null || !mounted) return false;
+    context.push('/seller/import', extra: lost);
+    return true;
+  }
+
+  /// 价目表还在读：首页自己每 3 秒查一次（老板离开了等的页面也一样），读好了就重新读首页
+  void _watchImport(String importId) {
+    ref.listen(importProgressProvider(importId), (_, next) {
+      if (next.isLoading) return;
+      if (next.value?.isDone ?? false) {
+        ref.invalidate(sellerHomeProvider);
+      } else if (next.hasError) {
+        final e = next.error;
+        // 等了 5 分钟还在读：再等一轮。其他错误（例如那一份被删了）：重新读首页
+        if (e is AppError && e.code == 'IMPORT_TIMEOUT') {
+          ref.invalidate(importProgressProvider(importId));
+        } else {
+          ref.invalidate(sellerHomeProvider);
+        }
+      }
     });
   }
 
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
-    // 订单一有变化（新订单、WhatsApp 按了确认、买家取消）就刷新首页
+    // 订单一有变化（新订单、WhatsApp 按了确认、买家取消）、App 回到前台就刷新首页
     ref.watch(sellerRealtimeProvider);
     final home = ref.watch(sellerHomeProvider);
+    final reading = home.value?.latestImport;
+    if (reading != null && reading.status == ImportStatus.processing) _watchImport(reading.id);
     final sessionName = ref.watch(sessionProvider.select((s) => s.wholesaler?.name));
     return Scaffold(
       appBar: AppBar(

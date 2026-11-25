@@ -43,7 +43,9 @@ class AppError implements Exception {
   factory AppError.fromFunction(FunctionException e, {Map<int, String> byStatus = const {}}) {
     if (e is FunctionsFetchException) {
       // 登录过期（refresh 失败）也会被包成 FunctionsFetchException
-      return AppError(e.details is AuthException ? 'AUTH' : 'NETWORK', message: e.details?.toString());
+      return e.details is AuthException
+          ? AppError('AUTH', detail: sessionExpired, message: e.details?.toString())
+          : AppError('NETWORK', message: e.details?.toString());
     }
     if (e is FunctionsRelayException) return AppError('UNKNOWN', detail: '${e.status}', message: e.reasonPhrase);
     var details = e.details;
@@ -63,8 +65,15 @@ class AppError implements Exception {
                 413 => 'FILE_TOO_LARGE',
                 _ => 'UNKNOWN',
               };
+    // 函数自己验 JWT：{"error":"UNAUTHORIZED"}（401）= 登录过期 / 被登出，跟没有代码的 401 一样当 AUTH
+    if (code == 'UNAUTHORIZED' || code == 'AUTH') {
+      return AppError('AUTH', detail: sessionExpired, message: e.reasonPhrase);
+    }
     return AppError(code, detail: '${e.status}', message: e.reasonPhrase);
   }
+
+  /// AUTH 的 detail：登录过期（不是验证码打错）
+  static const sessionExpired = 'session';
 
   final String code;
   final String? detail;
@@ -357,7 +366,8 @@ class WholesaleApi {
     ),
   );
 
-  /// 批发商的订单一有变化就叫 onChange（新订单、买家取消……）。用完记得 stopWatching
+  /// 批发商的订单一有变化就叫 onChange（新订单、买家取消……）。用完记得 stopWatching。
+  /// 断线（App 到背景）再连上时，中间的变化 Realtime 不会补发：重新连上（第二次以后的 SUBSCRIBED）也叫 onChange
   RealtimeChannel watchWholesalerOrders(String wholesalerId, void Function() onChange) {
     return client
         .channel('wholesaler-orders-$wholesalerId')
@@ -368,7 +378,7 @@ class WholesaleApi {
           filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'wholesaler_id', value: wholesalerId),
           callback: (_) => onChange(),
         )
-        .subscribe();
+        .subscribe(onRejoined(onChange));
   }
 
   // ---------------- 批发商：商品（直接读写 products 表，RLS 只给自己的） ----------------
@@ -460,7 +470,8 @@ class WholesaleApi {
   });
 
   /// 叫 Edge Function parse-price-list 在背景读价目表（马上回 202）。之后用 [watchImport] 等结果。
-  /// 404 = 读不到这份导入；409 = 已经不是 processing
+  /// 404 = 读不到这份导入；409 IMPORT_NOT_PROCESSING = 已经不是 processing；
+  /// 409 IMPORT_ALREADY_RUNNING = 已经有人叫了、正在读（不算失败）
   Future<void> startParse(String importId) => _call(() async {
     try {
       await client.functions.invoke('parse-price-list', body: {'import_id': importId});
@@ -477,9 +488,13 @@ class WholesaleApi {
     final import = await createImport(wholesalerId: wholesalerId, filePath: path, fileType: kind.importType!);
     try {
       await startParse(import.id);
-    } catch (_) {
-      // 叫不到 AI：标成失败，免得首页一直显示「AI 在读」。批发商重新上传就好
-      await markImportFailed(import.id, 'START_FAILED').catchError((_) {});
+    } on AppError catch (e) {
+      // 已经有人叫了（另一部手机、等的页面再叫一次）：一样在读，不算失败
+      if (e.code == 'IMPORT_ALREADY_RUNNING') return import;
+      // 叫不到 AI：标成失败（记下真正的原因：没网络 / 登录过期 / 其他），免得首页一直显示「AI 在读」。
+      // 批发商重新上传就好。标不了（例如一样没网络）也没关系：之后等的时候 [watchImport] 会再叫一次 AI
+      final reason = e.code == 'NETWORK' || e.code == 'AUTH' ? e.code : 'START_FAILED';
+      await markImportFailed(import.id, reason).catchError((_) {});
       rethrow;
     }
     return import;
@@ -512,23 +527,127 @@ class WholesaleApi {
   });
 
   /// 每 [importPollInterval] 查一次导入，每次都回传；不是 processing（review / failed / applied）就结束。
-  /// 超过 [importPollTimeout] → AppError('IMPORT_TIMEOUT')。中间没网络不算失败，下一次再查。
-  /// 不想等了就 cancel 这个 stream
-  Stream<PriceListImport> watchImport(String importId) async* {
-    final deadline = DateTime.now().add(importPollTimeout);
-    while (true) {
-      PriceListImport? current;
+  /// 超过 [importPollTimeout] → AppError('IMPORT_TIMEOUT')。中间没网络、服务器暂时出错（502……）不算失败，下一次再查；
+  /// 只有读不到这份（IMPORT_NOT_FOUND）、没权限、登录过期才丢出来。
+  ///
+  /// 卡住的导入（[importNeedsRestart]：从来没开始读，或「在跑」太久、worker 死掉了）会再叫一次 parse-price-list
+  /// （函数自己会判断能不能重跑，同时只会跑一份）；等到最后还是没人在读的，也再叫一次。
+  /// 叫不动（登录过期、函数没设定好）而且从来没开始读的，标成失败，首页才会让老板重新上传。
+  ///
+  /// 不想等了就 cancel 这个 stream；暂停（pause）的时候不查
+  Stream<PriceListImport> watchImport(String importId) {
+    late final StreamController<PriceListImport> out;
+    Timer? timer;
+    // 期限用 Timer 算（不用 DateTime.now()）：测试的假时间也会到
+    Timer? deadline;
+    var timedOut = false;
+    var polling = false;
+    var cancelled = false;
+    DateTime? kickedAt;
+
+    void stop([Object? error]) {
+      timer?.cancel();
+      timer = null;
+      deadline?.cancel();
+      if (out.isClosed) return;
+      if (error != null) out.addError(error);
+      out.close();
+    }
+
+    late final Future<void> Function() poll;
+
+    void schedule({bool now = false}) {
+      if (cancelled || out.isClosed || out.isPaused || polling || timer != null) return;
+      timer = Timer(now ? Duration.zero : importPollInterval, () {
+        timer = null;
+        poll();
+      });
+    }
+
+    poll = () async {
+      if (cancelled || out.isClosed || polling) return;
+      polling = true;
+      var again = false;
       try {
-        current = await getImport(importId);
-      } on AppError catch (e) {
-        if (e.code != 'NETWORK') rethrow;
+        PriceListImport? current;
+        try {
+          current = await getImport(importId);
+        } on AppError catch (e) {
+          if (_importWatchFatal.contains(e.code)) {
+            stop(e);
+            return;
+          }
+          // 没网络、网关 502、暂时出错：下一次再查
+        }
+        if (cancelled || out.isClosed) return;
+        final now = DateTime.now();
+        if (current != null) {
+          out.add(current);
+          if (current.isDone) {
+            stop();
+            return;
+          }
+          final stuck = importNeedsRestart(current, now: now) || (timedOut && current.claimedAt == null);
+          if (stuck && (kickedAt == null || now.difference(kickedAt!) >= importRestartInterval)) {
+            kickedAt = now;
+            // 刚好读完了、或标成失败了：马上再查一次，把结果交出去
+            again = await _restartParse(current);
+          }
+        }
+        if (cancelled || out.isClosed) return;
+        if (!again && timedOut) stop(const AppError('IMPORT_TIMEOUT'));
+      } finally {
+        polling = false;
       }
-      if (current != null) {
-        yield current;
-        if (current.isDone) return;
+      schedule(now: again);
+    };
+
+    out = StreamController<PriceListImport>(
+      onListen: () {
+        deadline = Timer(importPollTimeout, () => timedOut = true);
+        poll();
+      },
+      onPause: () {
+        timer?.cancel();
+        timer = null;
+      },
+      onResume: schedule,
+      onCancel: () {
+        cancelled = true;
+        timer?.cancel();
+        timer = null;
+        deadline?.cancel();
+      },
+    );
+    return out.stream;
+  }
+
+  /// 等导入的时候遇到这些错误就不再等（其他的当成暂时的，下一次再查）
+  static const _importWatchFatal = {'IMPORT_NOT_FOUND', 'NOT_ALLOWED', 'AUTH', 'NOT_LOGGED_IN'};
+
+  /// 再叫 parse-price-list 都没用的错误：登录过期、函数没设定好、参数不对
+  static const _parseCannotStart = {'AUTH', 'NOT_ALLOWED', 'CONFIG_MISSING', 'INVALID_IMPORT_ID'};
+
+  /// 卡住的导入再叫一次 parse-price-list。回传 true = 状态可能变了（读完了 / 标成失败了），马上再查一次
+  Future<bool> _restartParse(PriceListImport imp) async {
+    try {
+      await startParse(imp.id);
+      return false;
+    } on AppError catch (e) {
+      switch (e.code) {
+        case 'IMPORT_ALREADY_RUNNING':
+          return false; // 有人在读
+        case 'IMPORT_NOT_PROCESSING' || 'IMPORT_NOT_FOUND':
+          return true;
       }
-      if (!DateTime.now().isBefore(deadline)) throw const AppError('IMPORT_TIMEOUT');
-      await Future<void>.delayed(importPollInterval);
+      // 从来没开始读、又叫不动：标成失败（首页会让老板重新上传）。没网络、函数暂时出错：等下一次
+      if (imp.claimedAt != null || !_parseCannotStart.contains(e.code)) return false;
+      try {
+        await markImportFailed(imp.id, e.code == 'AUTH' ? 'AUTH' : 'START_FAILED');
+        return true;
+      } on AppError {
+        return false;
+      }
     }
   }
 
@@ -621,13 +740,36 @@ class WholesaleApi {
   });
 }
 
-/// 上传价目表之前检查（不用等上传完才知道）：超过 10 MB → FILE_TOO_LARGE；
-/// HEIC、Word、看不懂的 → UNSUPPORTED_FILE（detail 是认出来的格式，例如 'heic'）。回传真正的格式
+/// 上传价目表之前检查（不用等上传完才知道）：超过 10 MB → FILE_TOO_LARGE；照片超过 7 MB（AI 收不了）→
+/// FILE_TOO_LARGE（detail 'image'）；HEIC、Word、看不懂的 → UNSUPPORTED_FILE（detail 是认出来的格式，例如 'heic'）。
+/// 回传真正的格式
 FileKind checkPriceListFile(Uint8List bytes, {String? fileName}) {
   if (bytes.length > priceListMaxBytes) throw const AppError('FILE_TOO_LARGE');
   final kind = sniffFileType(bytes, fileName: fileName);
   if (!kind.isPriceList) throw AppError('UNSUPPORTED_FILE', detail: kind.type.name);
+  if (kind.importType == ImportFileType.image && bytes.length > priceListMaxImageBytes) {
+    throw const AppError('FILE_TOO_LARGE', detail: 'image');
+  }
   return kind;
+}
+
+/// 「从来没开始读」等多久才算卡住（建好导入到叫 AI 之间只有一下子）
+const importStartGrace = Duration(seconds: 30);
+
+/// parse-price-list「在跑」超过 10 分钟就当成死掉、可以重跑（函数的 STALE_CLAIM_MS）。多等一点，手机的时间可能不准
+const importStaleClaim = Duration(minutes: 10, seconds: 15);
+
+/// 同一次等待里，再叫 AI 的间隔
+const importRestartInterval = Duration(seconds: 30);
+
+/// 还在 processing 的导入是不是卡住了、要再叫一次 parse-price-list（跟函数的规则一样）：
+/// 从来没人开始读（ai_raw 是空的：App 叫 AI 的时候断线、被关掉），或「在跑」太久（读的 worker 死掉了）
+bool importNeedsRestart(PriceListImport imp, {DateTime? now}) {
+  if (imp.status != ImportStatus.processing) return false;
+  final t = now ?? DateTime.now();
+  final claimed = imp.claimedAt;
+  if (claimed == null) return t.difference(imp.createdAt) >= importStartGrace;
+  return t.difference(claimed) >= importStaleClaim;
 }
 
 /// 商品照片的大小上限（跟 Storage bucket product-photos 一样：5 MB）
@@ -641,6 +783,17 @@ FileKind checkProductPhoto(Uint8List bytes) {
     throw AppError('UNSUPPORTED_FILE', detail: kind.type.name);
   }
   return kind;
+}
+
+/// Realtime channel.subscribe() 的 callback：第一次 SUBSCRIBED 不用做什么；之后每一次 SUBSCRIBED
+/// （断线、App 回到前台重新连上）叫 [onRejoin]，把断线时漏掉的变化补回来
+void Function(RealtimeSubscribeStatus status, Object? error) onRejoined(void Function() onRejoin) {
+  var joined = false;
+  return (status, _) {
+    if (status != RealtimeSubscribeStatus.subscribed) return;
+    if (joined) onRejoin();
+    joined = true;
+  };
 }
 
 /// 'YYYY-MM-DD'（日期参数；DateTime 的年月日照原样，不换时区）
