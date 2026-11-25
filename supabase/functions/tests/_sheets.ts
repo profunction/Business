@@ -156,3 +156,63 @@ export async function bombEntries(mb: number, usz?: number): Promise<ZipEntry[]>
   };
   return entries;
 }
+
+/**
+ * 一串「空的 dynamic Huffman block」（每个 92 bit、没有输出，最后一个是 final）：
+ * 符合 deflate 规格，但每个 block 解码器都要重建三个 Huffman 表。正常的编码器不会这样写。
+ */
+export function emptyDynamicBlocks(n: number): Uint8Array {
+  const out = new Uint8Array(Math.ceil((n * 92) / 8) + 1);
+  let bit = 0;
+  const put = (v: number, len: number) => { // 数值：低位先写
+    for (let i = 0; i < len; i++, bit++) if ((v >> i) & 1) out[bit >> 3] |= 1 << (bit & 7);
+  };
+  const code = (c: number, len: number) => { // Huffman 码：高位先写
+    for (let i = len - 1; i >= 0; i--, bit++) if ((c >> i) & 1) out[bit >> 3] |= 1 << (bit & 7);
+  };
+  // 码长的码：18 → 1 bit「0」，0 → 「10」，1 → 「11」；照 CLEN_ORDER 写 18 个（HCLEN = 14）
+  const clen: Record<number, number> = { 18: 1, 0: 2, 1: 2 };
+  const order = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1];
+  for (let k = 0; k < n; k++) {
+    put(k === n - 1 ? 1 : 0, 1); // BFINAL
+    put(2, 2); // BTYPE = dynamic
+    put(0, 5); // HLIT = 257
+    put(0, 5); // HDIST = 1
+    put(14, 4); // HCLEN = 18
+    for (const s of order) put(clen[s] ?? 0, 3);
+    code(0, 1), put(127, 7); // 18：138 个 0
+    code(0, 1), put(107, 7); // 18：118 个 0（字面 0..255 都没有码）
+    code(3, 2); // 1：符号 256（block 结束）码长 1
+    code(2, 2); // 0：距离码都没有
+    code(0, 1); // 马上 block 结束
+  }
+  return out.subarray(0, Math.ceil(bit / 8));
+}
+
+/** 小的 xls（SheetJS 写的），在最后一张表结束（EOF）之前塞进 n 笔 BIFF 记录（make(i) 回传一笔：type、内容） */
+export function xlsWithRecords(n: number, make: (i: number) => [number, number[]]): Uint8Array {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Item", "Price"], ["cup", 1]]), "S");
+  const cfb = XLSX.CFB.read(new Uint8Array(XLSX.write(wb, { type: "array", bookType: "biff8" }) as ArrayBuffer), {
+    type: "array",
+  });
+  const entry = XLSX.CFB.find(cfb, "/Workbook")!;
+  const c = Uint8Array.from(entry.content as ArrayLike<number>);
+  let lastEof = -1;
+  for (let i = 0; i + 4 <= c.length;) {
+    if ((c[i] | (c[i + 1] << 8)) === 0x000a) lastEof = i;
+    i += 4 + (c[i + 2] | (c[i + 3] << 8));
+  }
+  const recs: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const [type, body] = make(i);
+    recs.push(type & 0xff, type >>> 8, body.length & 0xff, body.length >>> 8, ...body);
+  }
+  const out = new Uint8Array(c.length + recs.length);
+  out.set(c.subarray(0, lastEof));
+  out.set(recs, lastEof);
+  out.set(c.subarray(lastEof), lastEof + recs.length);
+  entry.content = out;
+  entry.size = out.length;
+  return new Uint8Array(XLSX.CFB.write(cfb, { type: "array" }) as ArrayLike<number>);
+}

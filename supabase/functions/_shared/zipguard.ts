@@ -5,6 +5,13 @@
 // 这里照 SheetJS 0.20.3 读 zip 的方式（parse_zip / parse_local_file）走一次中央目录，用自己写的 deflate 扫描器
 // 算出每个 entry 真正解压后的大小（只数，不产生资料；超过上限马上停），确认每段 deflate 资料在档案里正常结束。
 // 超过预算 → FILE_TOO_LARGE；格式不对（SheetJS 可能当掉或跑不完）→ SPREADSHEET_UNREADABLE。
+//
+// 检查本身也不能被拖慢：只看输出大小的话，一堆「空的 dynamic block」（一个十几个字、没有输出，每个都要重建
+// 三个 Huffman 表）加上很多笔中央目录指同一份资料，2 MB 的档案就能让这里跑几百秒。所以：
+//   * 每个 entry 的压缩资料范围 [data, data + 用掉的字数) 不能跟别的 entry 重叠、也不能指同一个 local header
+//     （每个字最多扫一次）；
+//   * deflate block 的数目跟输出大小成比例（正常的编码器一个 block 至少一万多字），整份也有上限；
+//   * 最后一道：整个检查超过 MAX_SCAN_MS 毫秒 → FILE_TOO_LARGE。
 
 /** 全部 entry 解压后（SheetJS 会放进记忆体的）合计上限（图片也算） */
 export const MAX_XLSX_UNCOMPRESSED = 32 * 1024 * 1024;
@@ -18,8 +25,19 @@ export const MAX_XLSX_RATIO = 100;
 const RATIO_MIN_BYTES = 1024 * 1024;
 /** 正常的 xlsx 几十个 entry */
 export const MAX_XLSX_ENTRIES = 1000;
-/** SheetJS 解压每个 entry 前会复制「从这里到档尾」：合计上限（不然几千个 entry 指同一个位置就是几十 GB 的复制） */
-const MAX_COPY_BYTES = 400 * 1024 * 1024;
+/** SheetJS 解压每个 entry 前会复制「从这里到档尾」：合计上限（不然几千个 entry 都在档头就是几十 GB 的复制） */
+export const MAX_COPY_BYTES = 400 * 1024 * 1024;
+/**
+ * 一个 entry 最多几个 deflate block：BLOCK_SLACK + 解压后大小 / BYTES_PER_BLOCK。
+ * zlib（Excel、LibreOffice、Python、Java、pako 都是）一个 block 放 16383 个符号，每个符号至少 1 个字；
+ * 结尾的 flush 最多多一两个空 block。
+ */
+export const BLOCK_SLACK = 32;
+export const BYTES_PER_BLOCK = 4096;
+/** 整份 xlsx 最多几个 deflate block（32 MB 用 zlib 压也不到 2100 个） */
+export const MAX_DEFLATE_BLOCKS = 16_384;
+/** 整个检查最多跑多久（毫秒）：worker 只有 2 秒 CPU，后面 SheetJS 还要用 */
+export const MAX_SCAN_MS = 500;
 
 export class ZipGuardError extends Error {
   constructor(public readonly code: "FILE_TOO_LARGE" | "SPREADSHEET_UNREADABLE", public readonly detail: string) {
@@ -69,11 +87,17 @@ export interface ZipEntryInfo {
   compressed: number;
 }
 
+export interface InspectOptions {
+  /** 整个检查最多跑多久（默认 MAX_SCAN_MS；测试用） */
+  timeMs?: number;
+}
+
 /**
  * 检查一个 xlsx 交给 SheetJS 安不安全。合格 → 回传每个 entry 的大小；不合格 → 丢 ZipGuardError。
  * 跟 SheetJS 一样：从档尾往前找中央目录结尾（PK\x05\x06），中央目录每一笔都去读它的 local header。
  */
-export function inspectXlsxZip(b: Uint8Array): ZipEntryInfo[] {
+export function inspectXlsxZip(b: Uint8Array, opts: InspectOptions = {}): ZipEntryInfo[] {
+  const deadline = performance.now() + (opts.timeMs ?? MAX_SCAN_MS);
   let eocd = b.length - 4;
   while (eocd >= 0 && !(b[eocd] === 0x50 && b[eocd + 1] === 0x4b && b[eocd + 2] === 0x05 && b[eocd + 3] === 0x06)) {
     eocd--;
@@ -88,6 +112,10 @@ export function inspectXlsxZip(b: Uint8Array): ZipEntryInfo[] {
   let total = 0;
   let parsed = 0;
   let copied = 0;
+  let blocks = 0;
+  /** 已经算过的 entry 资料范围 [start, end)（不能重叠：每个字最多扫一次） */
+  const ranges: [number, number][] = [];
+  const headers = new Set<number>();
   for (let n = 0; n < count; n++) {
     if (p + 46 > b.length) throw unreadable("central directory out of range");
     let usz = u32(b, p + 24);
@@ -100,6 +128,9 @@ export function inspectXlsxZip(b: Uint8Array): ZipEntryInfo[] {
     if (cd64.usz) usz = cd64.usz;
     p = cdExtra + extraLen + commentLen;
 
+    // 很多笔指同一个 local header（正常的 zip 不会）：SheetJS 每笔都会再解压一次，这里也会再扫一次
+    if (headers.has(offset)) throw unreadable("entries share a local header");
+    headers.add(offset);
     // local header（SheetJS 不看签名，直接跳过 4 个字）
     const h = offset + 4;
     if (h + 26 > b.length) throw unreadable("local header out of range");
@@ -121,6 +152,12 @@ export function inspectXlsxZip(b: Uint8Array): ZipEntryInfo[] {
     if (flags & 0x2041) throw unreadable(`${name}: encrypted`);
     if (data > b.length) throw unreadable(`${name}: data out of range`);
     if (Math.max(usz, lusz) > MAX_XLSX_UNCOMPRESSED) throw tooLarge(`${name}: declared ${Math.max(usz, lusz)} bytes`);
+    // 资料开头在别的 entry 的资料里面 → 重叠；往后扫最多扫到下一个已经扫过的范围开头
+    let limit = b.length;
+    for (const [s, e] of ranges) {
+      if (data >= s && data < e) throw unreadable(`${name}: data overlaps another entry`);
+      if (s >= data && s < limit) limit = s;
+    }
 
     let bytes: number;
     let compressed: number;
@@ -134,13 +171,21 @@ export function inspectXlsxZip(b: Uint8Array): ZipEntryInfo[] {
         b,
         data,
         Math.min(MAX_XLSX_UNCOMPRESSED - total, isBinaryPart(name) ? Infinity : MAX_XLSX_PARSED - parsed),
+        { end: limit, maxBlocks: MAX_DEFLATE_BLOCKS - blocks, deadline },
       );
+      blocks += scan.blocks;
       // SheetJS：有写大小就先开那么大的 buffer（写不下的丢掉），没写就边解边加大
       bytes = Math.max(scan.size, lusz);
       compressed = scan.consumed;
     } else {
       throw unreadable(`${name}: compression method ${method}`);
     }
+    if (compressed > 0) {
+      const end = data + compressed;
+      if (ranges.some(([s, e]) => s < end && data < e)) throw unreadable(`${name}: data overlaps another entry`);
+      ranges.push([data, end]);
+    }
+    if (performance.now() > deadline) throw tooLarge("zip check over time budget");
     total += bytes;
     if (total > MAX_XLSX_UNCOMPRESSED) throw tooLarge(`uncompressed total over ${MAX_XLSX_UNCOMPRESSED}`);
     if (!isBinaryPart(name)) {
@@ -177,6 +222,7 @@ const DIST_BASE = [1, 2, 3, 4, 5, 7, 9, 13, 17, 25, 33, 49, 65, 97, 129, 193, 25
 // deno-fmt-ignore
 const DIST_EXTRA = [0, 0, 0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7, 8, 8, 9, 9, 10, 10, 11, 11, 12, 12, 13, 13];
 const CLEN_ORDER = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+const TIME_CHECK_SYMBOLS = 1 << 16;
 
 /** 标准 Huffman 码；allowIncomplete：zlib 只接受「只有一个长度 1 的码」这种不完整（或完全没有码） */
 function buildHuffman(lengths: ArrayLike<number>, n: number, allowIncomplete: boolean): Huffman {
@@ -208,19 +254,46 @@ const FIXED_LIT = (() => {
 })();
 const FIXED_DIST = buildHuffman(new Uint8Array(32).fill(5), 32, false); // 30、31 不能用（下面会挡）
 
+export interface ScanOptions {
+  /** 最多读到这里（不含）；默认档尾。inspectXlsxZip 用来挡「扫进别的 entry 的资料」 */
+  end?: number;
+  /** 这一段最多几个 block（默认 MAX_DEFLATE_BLOCKS） */
+  maxBlocks?: number;
+  /** performance.now() 超过就停（FILE_TOO_LARGE） */
+  deadline?: number;
+}
+
+export interface ScanResult {
+  size: number;
+  consumed: number;
+  blocks: number;
+}
+
 /**
- * 从 start 开始扫一段 raw deflate：回传解压后多少字、用了多少字的压缩资料。
- * 输出超过 cap → FILE_TOO_LARGE；资料不对或档案先结束 → SPREADSHEET_UNREADABLE。
+ * 从 start 开始扫一段 raw deflate：回传解压后多少字、用了多少字的压缩资料、几个 block。
+ * 输出超过 cap、超过时间 → FILE_TOO_LARGE；资料不对、档案（或 end）先结束、
+ * block 太多（正常的编码器不会这样切）→ SPREADSHEET_UNREADABLE。
  */
-export function scanDeflate(b: Uint8Array, start: number, cap: number): { size: number; consumed: number } {
+export function scanDeflate(b: Uint8Array, start: number, cap: number, opts: ScanOptions = {}): ScanResult {
+  const end = Math.min(b.length, opts.end ?? b.length);
+  const maxBlocks = opts.maxBlocks ?? MAX_DEFLATE_BLOCKS;
+  const deadline = opts.deadline ?? Infinity;
   let pos = start; // 下一个还没读进 bitbuf 的字
   let bitbuf = 0;
   let bitcnt = 0;
   let size = 0;
+  let blocks = 0;
+  /** 解到第几个符号时看一次时间（每个符号都看太慢） */
+  let symbols = 0;
+  let nextClock = TIME_CHECK_SYMBOLS;
+
+  const checkClock = () => {
+    if (performance.now() > deadline) throw tooLarge("zip check over time budget");
+  };
 
   const bits = (need: number): number => {
     while (bitcnt < need) {
-      if (pos >= b.length) throw new DeflateError("unexpected end of data");
+      if (pos >= end) throw new DeflateError("unexpected end of data");
       bitbuf |= b[pos++] << bitcnt;
       bitcnt += 8;
     }
@@ -234,7 +307,7 @@ export function scanDeflate(b: Uint8Array, start: number, cap: number): { size: 
     let code = 0, first = 0, index = 0;
     for (let len = 1; len <= 15; len++) {
       if (bitcnt === 0) {
-        if (pos >= b.length) throw new DeflateError("unexpected end of data");
+        if (pos >= end) throw new DeflateError("unexpected end of data");
         bitbuf = b[pos++];
         bitcnt = 8;
       }
@@ -253,17 +326,21 @@ export function scanDeflate(b: Uint8Array, start: number, cap: number): { size: 
   try {
     let last = 0;
     while (!last) {
+      // block 的数目要跟输出成比例：空的 / 很小的 block 一个就要重建 Huffman 表，却不会碰到大小上限
+      if (++blocks > maxBlocks) throw new DeflateError("too many blocks");
+      if (blocks > BLOCK_SLACK + size / BYTES_PER_BLOCK) throw new DeflateError("too many blocks for its output");
+      if ((blocks & 0xff) === 0) checkClock();
       last = bits(1);
       const type = bits(2);
       if (type === 0) {
         bitbuf = 0; // 跳到下一个字
         bitcnt = 0;
-        if (pos + 4 > b.length) throw new DeflateError("unexpected end of data");
+        if (pos + 4 > end) throw new DeflateError("unexpected end of data");
         const len = b[pos] | (b[pos + 1] << 8);
         const nlen = b[pos + 2] | (b[pos + 3] << 8);
         if ((len ^ 0xffff) !== nlen) throw new DeflateError("stored block length mismatch");
         pos += 4;
-        if (pos + len > b.length) throw new DeflateError("unexpected end of data");
+        if (pos + len > end) throw new DeflateError("unexpected end of data");
         pos += len;
         size += len;
         if (size > cap) throw tooLarge("uncompressed size over budget");
@@ -308,6 +385,10 @@ export function scanDeflate(b: Uint8Array, start: number, cap: number): { size: 
         throw new DeflateError("invalid block type");
       }
       for (;;) {
+        if (++symbols >= nextClock) {
+          checkClock();
+          nextClock += TIME_CHECK_SYMBOLS;
+        }
         const sym = decode(lit);
         if (sym < 256) {
           size++;
@@ -330,5 +411,5 @@ export function scanDeflate(b: Uint8Array, start: number, cap: number): { size: 
     if (e instanceof DeflateError) throw unreadable(`deflate: ${e.message}`);
     throw e;
   }
-  return { size, consumed: pos - start };
+  return { size, consumed: pos - start, blocks };
 }

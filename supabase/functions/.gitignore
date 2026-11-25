@@ -2,3 +2,6 @@
 .env
 .env.*
 !.env.example
+
+# deno task bundle 的输出（部署前现打包，不进 git）
+_dist/

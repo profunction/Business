@@ -1,5 +1,11 @@
 import { assert, assertEquals, assertStringIncludes } from "@std/assert";
-import fn, { BUDGET_EXCEEDED, DISPATCH_TIMING, processItem } from "../dispatch-notifications/index.ts";
+import fn, {
+  BUDGET_EXCEEDED,
+  DISPATCH_TIMING,
+  dispatchDeadline,
+  processItem,
+  worker,
+} from "../dispatch-notifications/index.ts";
 import { requestTimeoutMs } from "../_shared/http.ts";
 import { clearFcmTokenCache } from "../_shared/fcm.ts";
 import {
@@ -120,6 +126,8 @@ async function setup(extra: Record<string, string | undefined> = {}) {
   clearFcmTokenCache();
   // complete 重试的间隔缩短（测试不用真的等 0.5 / 2 / 5 秒）
   Object.assign(DISPATCH_TIMING, { ...structuredClone(TIMING_DEFAULT), retryMs: [20, 50], sentRetryMs: [20, 50, 100] });
+  const workerBefore = { ...worker };
+  Object.assign(worker, { startedAt: Date.now(), stopping: false }); // 新的 worker
   const { json, publicKey } = await testServiceAccount();
   const restoreEnv = setEnv({
     ...SUPABASE_ENV,
@@ -138,6 +146,7 @@ async function setup(extra: Record<string, string | undefined> = {}) {
       net.restore();
       restoreEnv();
       Object.assign(DISPATCH_TIMING, structuredClone(TIMING_DEFAULT));
+      Object.assign(worker, workerBefore);
     },
   };
 }
@@ -508,4 +517,112 @@ Deno.test("dispatch：某一条发的时候丢错（程式错误）→ 那条 fa
     { fcm: JSON.parse(broken), whatsapp: null },
   );
   assertEquals([o.status, o.retry], ["failed", true]);
+});
+
+/** 假的时钟：Meta 每个请求要 10 秒；回传每个请求开始时（离 t0）的时间 */
+function fakeClock() {
+  const realNow = Date.now;
+  const t0 = realNow();
+  let now = t0;
+  Date.now = () => now;
+  const inner = globalThis.fetch;
+  const starts: number[] = [];
+  globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).includes("graph.facebook.com")) {
+      starts.push(now - t0);
+      now += 10_000;
+    }
+    return await inner(input, init);
+  }) as typeof fetch;
+  return {
+    t0,
+    starts,
+    restore: () => {
+      Date.now = realNow;
+      globalThis.fetch = inner;
+    },
+  };
+}
+
+Deno.test("dispatch 的期限也不能超过 worker 的总时间（一个 worker 接很多个请求）：晚进来的请求少发一点，不会发到一半被平台杀掉", async () => {
+  // 免费方案（默认 WORKER_WALL_CLOCK_MS = 150 秒）：worker 已经跑了 60 秒 → 只剩 150 - 60 - 10（写结果）- 5 = 75 秒
+  for (
+    const [env, age, lastStart] of [[undefined, 60_000, 75_000], [
+      "400000",
+      60_000,
+      100_000,
+    ]] as const
+  ) {
+    const t = await setup({ WORKER_WALL_CLOCK_MS: env });
+    t.b.batches.push(
+      Array.from(
+        { length: 50 },
+        (_, i) => claimed(600 + i, { channel: "whatsapp", whatsapp_phone: "60111" }),
+      ),
+    );
+    const clock = fakeClock();
+    worker.startedAt = clock.t0 - age;
+    try {
+      const s = await (await fn.fetch(post())).json();
+      assert(s.deferred > 0 && s.sent > 0, JSON.stringify(s));
+      // 每个请求开始的时候，离 worker 被杀掉都还有 15 秒以上，写结果的宽限也在 worker 的时间里面
+      assert(
+        Math.max(...clock.starts) <= lastStart - DISPATCH_TIMING.itemMinMs,
+        clock.starts.join(","),
+      );
+      assert(
+        Math.max(...clock.starts) >
+          lastStart - DISPATCH_TIMING.itemMinMs - 10_000,
+        clock.starts.join(","),
+      );
+      assertEquals(Object.keys(t.b.completes).length, 50);
+    } finally {
+      clock.restore();
+      t.restore();
+    }
+  }
+  // worker 已经跑了 140 秒：根本不领（领到了也发不完）
+  const t = await setup();
+  t.b.batches.push([
+    claimed(700, { channel: "whatsapp", whatsapp_phone: "60111" }),
+  ]);
+  worker.startedAt = Date.now() - 140_000;
+  try {
+    const s = await (await fn.fetch(post())).json();
+    assertEquals([s.ok, s.rounds, s.claimed], [true, 0, 0]);
+    assertEquals(t.b.batches.length, 1);
+  } finally {
+    t.restore();
+  }
+  assertEquals(
+    dispatchDeadline(1_000_000, 100_000, 150_000, 1_000_000),
+    1_100_000,
+  );
+  assertEquals(
+    dispatchDeadline(1_100_000, 100_000, 150_000, 1_000_000),
+    1_135_000,
+  );
+  assertEquals(
+    dispatchDeadline(1_100_000, 100_000, 400_000, 1_000_000),
+    1_200_000,
+  );
+});
+
+Deno.test("worker 要被关掉（beforeunload）→ 不再领、不再开始发", async () => {
+  const t = await setup();
+  t.b.batches.push([
+    claimed(800, { channel: "whatsapp", whatsapp_phone: "60111" }),
+  ]);
+  try {
+    globalThis.dispatchEvent(
+      new CustomEvent("beforeunload", { detail: { reason: "WallClockTime" } }),
+    );
+    assert(worker.stopping);
+    const s = await (await fn.fetch(post())).json();
+    assertEquals([s.claimed, t.b.templates.length], [0, 0]);
+    assertEquals(t.b.batches.length, 1);
+  } finally {
+    t.restore();
+  }
+  assertEquals(worker.stopping, false);
 });

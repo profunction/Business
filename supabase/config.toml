@@ -297,22 +297,27 @@ deno_version = 1
 
 # 第四步的 Edge Functions：全部关掉平台的 JWT 检查，在代码里自己验身份
 # （新的 sb_secret_ / sb_publishable_ 钥匙不是 JWT，平台检查对它们不可靠）。
-# 每个函数用自己目录的 deno.json（import map），不用另外设定 import_map。
+# 部署的是 `deno task bundle`（在 supabase/functions 里）照 deno.lock 打包好的单一档案 _dist/<函数>/index.js：
+# 间接用到的 npm 套件版本、SheetJS 的 hash 都在本机锁住，部署时不会重新解析（部署用 `deno task deploy`）。
+# 本机 `supabase functions serve` 之前也要先 `deno task bundle`。
 
 # pg_cron / trigger 用 pg_net 叫：代码检查 apikey 头 = secret key（固定时间比较）
 [functions.dispatch-notifications]
 enabled = true
 verify_jwt = false
+entrypoint = "./functions/_dist/dispatch-notifications/index.js"
 
 # Meta 叫：GET 验 hub.verify_token；POST 验 X-Hub-Signature-256（App Secret，原始 body）
 [functions.whatsapp-webhook]
 enabled = true
 verify_jwt = false
+entrypoint = "./functions/_dist/whatsapp-webhook/index.js"
 
 # App 用 functions.invoke 叫：代码用 auth.getUser(jwt) 验用户，再用用户身份（RLS）读 import
 [functions.parse-price-list]
 enabled = true
 verify_jwt = false
+entrypoint = "./functions/_dist/parse-price-list/index.js"
 
 [analytics]
 enabled = true

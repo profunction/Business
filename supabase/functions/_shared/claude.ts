@@ -282,9 +282,21 @@ function firstValid(candidates: string[]): { data: Extraction; output: unknown }
 // 调用
 // ---------------------------------------------------------------------------
 
+/** PDF 的一段页面（第 from 页到第 to 页；to = null 到最后一页） */
+export interface PdfPages {
+  from: number;
+  to: number | null;
+  index: number;
+  total: number;
+}
+
 export type ExtractInput =
   | { kind: "image"; mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif"; base64: string }
-  | { kind: "pdf"; base64: string }
+  /**
+   * pages：只读这几页（同一份 PDF 分段读）。这时 document block 加 cache_control、tag 要每段都一样，
+   * 前面（系统提示词 + 开头标签 + PDF）才会一模一样、读快取。
+   */
+  | { kind: "pdf"; base64: string; pages?: PdfPages; tag?: string }
   | { kind: "text"; text: string; part: { index: number; total: number } };
 
 export interface CallMeta {
@@ -314,14 +326,30 @@ export interface ExtractOptions {
   maxRetries?: number;
   /** 别段已经失败时用来中止 */
   signal?: AbortSignal;
+  /** 回应开始（收到第一个 streaming 事件：输入已经处理完、快取已经写好）时叫一次 */
+  onStart?: () => void;
 }
 
-function randomTag(): string {
+export function randomTag(): string {
   const b = crypto.getRandomValues(new Uint8Array(4));
   return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
 
 const IMAGE_INSTRUCTION = "Extract every product row from the attached price list into the JSON format.";
+
+function pagesInstruction(p: PdfPages): string {
+  const pages = p.to == null
+    ? `from page ${p.from} to the last page`
+    : p.to === p.from
+    ? `on page ${p.from}`
+    : `on pages ${p.from} to ${p.to}`;
+  return [
+    `Extract only the product rows printed ${pages} of the attached PDF (page 1 is the first page of the file) into the JSON format.`,
+    `This is part ${p.index} of ${p.total} of one file; other pages are handled separately, so ignore their rows`,
+    "(you may still use them to understand column headings or section titles).",
+    "Use the real page number in source_ref (p<page> line <n>). If none of those pages exist, return empty rows.",
+  ].join(" ");
+}
 
 function textInstruction(part: { index: number; total: number }): string {
   return [
@@ -334,7 +362,7 @@ function textInstruction(part: { index: number; total: number }): string {
 }
 
 export function buildContent(input: ExtractInput): Anthropic.Beta.Messages.BetaContentBlockParam[] {
-  const tag = randomTag();
+  const tag = (input.kind === "pdf" && input.tag) || randomTag();
   const open = `<pasted_content id="${tag}">`;
   const close = `</pasted_content id="${tag}">`;
   if (input.kind === "text") {
@@ -343,13 +371,21 @@ export function buildContent(input: ExtractInput): Anthropic.Beta.Messages.BetaC
       { type: "text", text: textInstruction(input.part) },
     ];
   }
-  const media: Anthropic.Beta.Messages.BetaContentBlockParam = input.kind === "image"
-    ? { type: "image", source: { type: "base64", media_type: input.mediaType, data: input.base64 } }
-    : { type: "document", source: { type: "base64", media_type: "application/pdf", data: input.base64 } };
+  if (input.kind === "image") {
+    return [
+      { type: "text", text: open },
+      { type: "image", source: { type: "base64", media_type: input.mediaType, data: input.base64 } },
+      { type: "text", text: `${close}\n${IMAGE_INSTRUCTION}` },
+    ];
+  }
   return [
     { type: "text", text: open },
-    media,
-    { type: "text", text: `${close}\n${IMAGE_INSTRUCTION}` },
+    {
+      type: "document",
+      source: { type: "base64", media_type: "application/pdf", data: input.base64 },
+      ...(input.pages ? { cache_control: { type: "ephemeral" as const } } : {}),
+    },
+    { type: "text", text: `${close}\n${input.pages ? pagesInstruction(input.pages) : IMAGE_INSTRUCTION}` },
   ];
 }
 
@@ -362,7 +398,7 @@ export async function extractPriceList(input: ExtractInput, opts: ExtractOptions
     timeout: Math.max(1000, opts.timeoutMs),
     fetch: (url, init) => globalThis.fetch(url, init),
   });
-  const msg = await client.beta.messages.stream({
+  const stream = client.beta.messages.stream({
     model: PRICE_LIST_MODEL,
     max_tokens: MAX_TOKENS, // thinking + JSON；用 streaming 才不会遇到 HTTP 超时
     betas: [FALLBACK_BETA],
@@ -371,7 +407,12 @@ export async function extractPriceList(input: ExtractInput, opts: ExtractOptions
     system: [{ type: "text", text: SYSTEM_PROMPT, cache_control: { type: "ephemeral" } }],
     messages: [{ role: "user", content: buildContent(input) }],
     // 不送：temperature / top_p / top_k（2026-10-21 版会 400）、thinking disabled（400）、强制 tool_choice（400）
-  }, opts.signal ? { signal: opts.signal } : undefined).finalMessage();
+  }, opts.signal ? { signal: opts.signal } : undefined);
+  if (opts.onStart) {
+    const onStart = opts.onStart;
+    stream.once("streamEvent", () => onStart());
+  }
+  const msg = await stream.finalMessage();
 
   const content = msg.content as unknown as ContentBlock[];
   const iterations = (msg.usage as { iterations?: { type?: string }[] | null }).iterations ?? [];

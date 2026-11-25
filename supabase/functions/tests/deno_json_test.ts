@@ -1,6 +1,8 @@
-// 部署时每个函数用自己目录的 deno.json：检查它有用到的套件都有写、版本跟根目录（本机测试用）的一样。
+// 部署：每个函数用 deno task bundle 照 deno.lock 打包好的 _dist/<函数>/index.js（config.toml 的 entrypoint），
+// 部署工具不会再解析套件版本。各函数目录的 deno.json 也检查：用到的套件都有写、版本跟根目录的一样。
 
 import { assert, assertEquals } from "@std/assert";
+import { bundleArgs, DIST, FUNCTIONS, unpinnedImports } from "../bundle.ts";
 
 const root = new URL("../", import.meta.url);
 
@@ -82,5 +84,61 @@ Deno.test("deno.lock：frozen；直接用到的套件、间接用到的 npm 套�
       exists = false;
     }
     assert(!exists, `${fn}/deno.lock must not exist`);
+  }
+});
+
+Deno.test("部署的是照 frozen lock 打包好的单一档案：config.toml 的 entrypoint 指到 _dist、打包用根目录的 deno.json + --frozen-lockfile", async () => {
+  const toml = await Deno.readTextFile(new URL("../config.toml", root));
+  for (const fn of FUNCTIONS) {
+    const section = toml.split(`[functions.${fn}]`)[1]?.split(/\n\[/)[0] ?? "";
+    assert(section.includes("verify_jwt = false"), `${fn}: verify_jwt`);
+    assert(
+      section.includes(`entrypoint = "./functions/${DIST}/${fn}/index.js"`),
+      `${fn}: entrypoint must be the bundle`,
+    );
+    const args = bundleArgs(fn);
+    assert(args.includes("--frozen-lockfile"), "bundle must use the frozen lock");
+    assertEquals(args[args.indexOf("--config") + 1], "deno.json");
+    assertEquals(args.slice(-3), ["-o", `${DIST}/${fn}/index.js`, `${fn}/index.ts`]);
+  }
+  const cfg = JSON.parse(await Deno.readTextFile(new URL("deno.json", root)));
+  assert(String(cfg.tasks.bundle).includes("bundle.ts"));
+  assert(String(cfg.tasks.deploy).startsWith("deno task bundle && "), "deploy must bundle first");
+  for (const fn of FUNCTIONS) assert(String(cfg.tasks.deploy).includes(fn), `deploy ${fn}`);
+  assert((cfg.exclude ?? []).includes(`${DIST}/`), "bundles are not linted / formatted");
+  assert((await Deno.readTextFile(new URL(".gitignore", root))).includes(`${DIST}/`), "bundles are not committed");
+});
+
+Deno.test("打包的档案只能 import node: 内建模组（其他的部署时会重新解析）", async () => {
+  assertEquals(
+    unpinnedImports([
+      'import * as fs from "node:fs";',
+      'import { once } from "node:events";',
+      'export * from "node:path";',
+      'const x = await import("node:fs/promises");',
+      ' * import AsyncStorage from "@react-native-async-storage/async-storage";', // 注解
+      'import Anthropic from "npm:@anthropic-ai/sdk@1.13.0";',
+      'import "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs";',
+      'export { a } from "jsr:@std/encoding@1.0.11";',
+      'const y = await import("xlsx");',
+      'import { b } from "./chunk-1.js";',
+    ].join("\n")),
+    [
+      "npm:@anthropic-ai/sdk@1.13.0",
+      "https://cdn.sheetjs.com/xlsx-0.20.3/package/xlsx.mjs",
+      "./chunk-1.js",
+      "jsr:@std/encoding@1.0.11",
+      "xlsx",
+    ],
+  );
+  // 本机打包过的话也检查打包出来的档案
+  for (const fn of FUNCTIONS) {
+    let src: string;
+    try {
+      src = await Deno.readTextFile(new URL(`${DIST}/${fn}/index.js`, root));
+    } catch {
+      continue;
+    }
+    assertEquals(unpinnedImports(src), [], `${DIST}/${fn}/index.js`);
   }
 });

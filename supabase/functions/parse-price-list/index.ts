@@ -3,8 +3,9 @@
 // config.toml 里 verify_jwt = false；这里自己验：auth.getUser(jwt)，再用用户身份读 import（RLS 保证是自己的）。
 //
 //   回应：202 {import_id, status}（之后 App 每 3 秒查 price_list_imports.status）
-//         401 UNAUTHORIZED、400 INVALID_IMPORT_ID、404 IMPORT_NOT_FOUND、
-//         409 IMPORT_NOT_PROCESSING（status 不是 processing）/ IMPORT_ALREADY_RUNNING（已经在跑）
+//         401 UNAUTHORIZED、400 INVALID_IMPORT_ID、404 IMPORT_NOT_FOUND、403 WHOLESALER_SUSPENDED、
+//         409 IMPORT_NOT_PROCESSING（status 不是 processing）/ IMPORT_ALREADY_RUNNING（已经在跑）、
+//         429 TOO_MANY_IMPORTS（retry_after 秒、Retry-After 头）、503 QUOTA_UNAVAILABLE
 //   背景（EdgeRuntime.waitUntil；Opus 读一份价目表可能超过 150 秒）：
 //     下载（服务器身份，最多 10 MB）→ 魔术字节判断格式 → 图片 / PDF 直接给 Claude；
 //     Excel / CSV → 带行号文字 → 分段给 Claude → 写 price_list_import_rows（row_no 从 1）→
@@ -12,6 +13,10 @@
 //   时间：平台的总时间是按 worker 算的（一个 worker 会接很多个请求），所以期限 = 这个 worker 开始的时间 + 预算，
 //         不是请求进来的时间 + 预算。worker 要被关掉时（beforeunload：总时间到、CPU / 记忆体超过）
 //         先中止正在跑的工作、马上把 import 标成 failed，不会一直卡在 processing。
+//         Excel 每段 50 行、PDF 每段 4 页，最多同时 8 段；开始叫 Claude 之前先估计跑得完跑不完
+//         （一段估 90 秒）：整个预算都不够 → TOO_MANY_ROWS，这个 worker 剩下的不够 → AI_TIMEOUT，不白花钱。
+//         失败时写数据库暂时失败 → 隔 0.5 / 2 / 5 秒再试（不然会一直卡在 processing）。
+//   用量：每家批发商 10 分钟 / 1 小时 / 1 天最多跑几次（quota.ts；还没审核的更少），超过 → 429；停权 → 403。
 //
 // error_message 代码（App 按这个显示三语原因）：
 //   档案问题：UNSUPPORTED_FILE、FILE_TOO_LARGE、EMPTY_FILE、FILE_NOT_FOUND、INVALID_FILE_PATH、
@@ -35,6 +40,8 @@ import {
 } from "../_shared/http.ts";
 import { adminClient, DbError, rpc, unwrap, userClient } from "../_shared/supabase.ts";
 import { type FileKind, IMAGE_MEDIA_TYPES, isImage, isSpreadsheet, sniffFileType } from "../_shared/filetype.ts";
+import { type PageRange, pageRanges, pdfPageCount, splitRange } from "../_shared/pdf.ts";
+import { QUOTA, releaseRun, reserveRun } from "./quota.ts";
 import {
   type Chunk,
   chunkLines,
@@ -54,6 +61,7 @@ import {
   type ExtractOutcome,
   extractPriceList,
   PRICE_LIST_MODEL,
+  randomTag,
   type UnreadableRow,
 } from "../_shared/claude.ts";
 
@@ -61,7 +69,8 @@ export const BUCKET = "price-lists";
 export const MAX_FILE_BYTES = 10 * 1024 * 1024;
 /** Claude：一张图 base64 之后最多 10 MB（原始大约 7.5 MB） */
 const MAX_IMAGE_BYTES = 7_000_000;
-const CHUNK_CONCURRENCY = 3;
+/** PDF 超过这么多页就分段读（每段这么多页） */
+export const PDF_PAGES_PER_CALL = 4;
 /** 「在跑」超过 10 分钟当成已经死掉（付费方案总时间 400 秒），可以重新跑 */
 const STALE_CLAIM_MS = 10 * 60_000;
 const INSERT_BATCH = 500;
@@ -71,6 +80,14 @@ export const TIMING = {
   reserveMs: 15_000,
   /** 剩下不到这么多时间就不再叫 Claude */
   minCallMs: 20_000,
+  /** 同时叫几个 Claude（一份 Excel / PDF 的几段） */
+  concurrency: 8,
+  /** 估计一段（50 行 / 4 页）Claude 要读多久：Opus medium 读 100-150 行可能超过 150 秒（verifications.json） */
+  partEstimateMs: 90_000,
+  /** 失败时写数据库暂时失败：隔多久再试（不超过期限） */
+  failRetryMs: [500, 2_000, 5_000],
+  /** PDF 分段：第一段开始回应（快取写好）之前，别段最多等多久 */
+  cacheWarmMs: 30_000,
 };
 
 /** 这个 worker（isolate）什么时候开始的：Supabase 的总时间（免费 150 秒、付费 400 秒）从这里算 */
@@ -114,6 +131,8 @@ interface Job {
   runId: string;
   claimedAt: string;
   deadline: number;
+  /** 设定的时间预算（PRICE_LIST_TIME_BUDGET_MS）：估计跑不跑得完用 */
+  budgetMs: number;
   apiKey: string | null;
   abort: AbortController;
   calls: CallLog[];
@@ -173,6 +192,7 @@ async function callClaude(
   input: ExtractInput,
   effort: "low" | "medium",
   part: string,
+  onStart?: () => void,
 ): Promise<ExtractOutcome> {
   if (job.abort.signal.aborted) throw abortError(job);
   if (!job.apiKey) throw new JobError("AI_NOT_CONFIGURED");
@@ -188,6 +208,7 @@ async function callClaude(
       effort,
       maxRetries: 1,
       signal: AbortSignal.any([job.abort.signal, timeout]),
+      onStart,
     });
   } catch (e) {
     if (job.abort.signal.aborted) throw abortError(job);
@@ -215,15 +236,109 @@ function toPiece(out: ExtractOutcome, baseOrder: number): Piece {
   throw new JobError("AI_INVALID_OUTPUT");
 }
 
-/** 照片 / PDF：一次读完。max_tokens → 用 low effort 再试一次（少想一点，多留位置给 JSON）；格式不对 → 再试一次 */
-async function extractDocument(job: Job, input: ExtractInput): Promise<Piece[]> {
+/**
+ * 开始叫 Claude 之前：照「几段、同时几段、一段估计多久」算要几轮，跑不完就不要开始（不然花了钱最后还是 AI_TIMEOUT）。
+ * 整个预算都不够（换新的 worker 也一样）→ TOO_MANY_ROWS（请批发商把档案分开）；这个 worker 剩下的不够 → AI_TIMEOUT。
+ */
+export function checkPlan(job: Pick<Job, "deadline" | "budgetMs">, parts: number, now = Date.now()): void {
+  const rounds = Math.ceil(parts / TIMING.concurrency);
+  const need = rounds * TIMING.partEstimateMs;
+  if (need > job.budgetMs - TIMING.reserveMs) {
+    throw new JobError("TOO_MANY_ROWS", `${parts} parts need ${rounds} rounds of Claude calls`);
+  }
+  if (need > job.deadline - now - TIMING.reserveMs) {
+    throw new JobError("AI_TIMEOUT", `${parts} parts need ${rounds} rounds; not enough time left in this worker`);
+  }
+}
+
+/** 照片：一次读完。max_tokens → 用 low effort 再试一次（少想一点，多留位置给 JSON）；格式不对 → 再试一次 */
+async function extractImage(job: Job, input: ExtractInput): Promise<Piece[]> {
   let out = await callClaude(job, input, "medium", "document");
   if (!out.ok && out.reason === "max_tokens") out = await callClaude(job, input, "low", "document-retry");
   else if (!out.ok && out.reason === "invalid_output") out = await callClaude(job, input, "medium", "document-retry");
   return [toPiece(out, 0)];
 }
 
-/** Excel / CSV 的一段。max_tokens → 切成两半各试一次；格式不对 → 再试一次 */
+interface PdfJob {
+  base64: string;
+  /** 每段都一样（开头标签 + PDF 一模一样才读得到快取） */
+  tag: string;
+  total: number;
+}
+
+/**
+ * PDF 的一段页面（range = null：整份一次读，页数少或数不出来）。格式不对 → 再试一次。
+ * max_tokens → 页面切两半、同时读（只切一次）；只有一页或不知道几页 → low effort 再试一次。
+ */
+async function extractPdfPart(
+  job: Job,
+  pdf: PdfJob,
+  range: PageRange | null,
+  index: number,
+  pages: number | null,
+  canSplit: boolean,
+  onStart?: () => void,
+): Promise<Piece[]> {
+  const input: ExtractInput = range
+    ? {
+      kind: "pdf",
+      base64: pdf.base64,
+      tag: pdf.tag,
+      pages: { from: range.from, to: range.to, index, total: pdf.total },
+    }
+    : { kind: "pdf", base64: pdf.base64 };
+  const label = range ? `pages ${range.from}-${range.to ?? "end"}${canSplit ? "" : " (half)"}` : "document";
+  let out = await callClaude(job, input, "medium", label, onStart);
+  if (!out.ok && out.reason === "invalid_output") out = await callClaude(job, input, "medium", `${label} retry`);
+  if (!out.ok && out.reason === "max_tokens") {
+    const whole = range ?? (pages && pages > 1 ? { from: 1, to: null, last: pages } : null);
+    const halves = canSplit && whole ? splitRange(whole) : null;
+    if (halves) {
+      const total = range ? pdf.total : 2;
+      const parts = await Promise.all(
+        halves.map((h, i) => extractPdfPart(job, { ...pdf, total }, h, range ? index : i + 1, pages, false)),
+      );
+      return parts.flat();
+    }
+    // 只有一页（或不知道几页）：少想一点再试一次
+    if (canSplit) out = await callClaude(job, input, "low", `${label} low`);
+  }
+  return [toPiece(out, (range?.from ?? 0) * 1_000_000)];
+}
+
+/** PDF：超过 PDF_PAGES_PER_CALL 页就分段（每段同一个 document block + cache_control，只读那几页） */
+async function extractPdf(job: Job, base64: string, pages: number | null): Promise<Piece[]> {
+  const ranges = pageRanges(pages, PDF_PAGES_PER_CALL);
+  const pdf: PdfJob = { base64, tag: randomTag(), total: ranges?.length ?? 1 };
+  if (!ranges) return await extractPdfPart(job, pdf, null, 1, pages, true);
+  checkPlan(job, ranges.length);
+  // 第一段先送：PDF 写进快取（回应开始）之后别段再送，不然同时送的每段都要付整份 PDF 的钱
+  let warmUp: () => void = () => {};
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const warm = new Promise<void>((resolve) => {
+    warmUp = resolve;
+    timer = setTimeout(resolve, TIMING.cacheWarmMs);
+  });
+  try {
+    const results = await mapLimit(ranges, TIMING.concurrency, async (r, i) => {
+      try {
+        if (i > 0) await warm;
+        if (job.abort.signal.aborted) throw abortError(job);
+        return await extractPdfPart(job, pdf, r, i + 1, pages, true, i === 0 ? warmUp : undefined);
+      } catch (e) {
+        job.abort.abort(); // 一段失败整份就失败：别的段不用再叫
+        throw e;
+      } finally {
+        if (i === 0) warmUp();
+      }
+    });
+    return results.flat();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** Excel / CSV 的一段。max_tokens → 切成两半同时各试一次；格式不对 → 再试一次 */
 async function extractChunk(
   job: Job,
   c: Chunk,
@@ -239,9 +354,9 @@ async function extractChunk(
   if (!out.ok && out.reason === "max_tokens" && canSplit) {
     const halves = splitChunk(c);
     if (halves) {
-      const a = await extractChunk(job, halves[0], index, total, order, false);
-      const b = await extractChunk(job, halves[1], index, total, order, false);
-      return [...a, ...b];
+      // 同时读两半：一个接一个的话，max_tokens 之后剩下的时间通常不够
+      const parts = await Promise.all(halves.map((h) => extractChunk(job, h, index, total, order, false)));
+      return parts.flat();
     }
   }
   const first = c.lines.find((l) => !l.header);
@@ -249,7 +364,8 @@ async function extractChunk(
 }
 
 async function extractSheet(job: Job, chunks: Chunk[], order: Map<string, number>): Promise<Piece[]> {
-  const results = await mapLimit(chunks, CHUNK_CONCURRENCY, async (c, i) => {
+  checkPlan(job, chunks.length);
+  const results = await mapLimit(chunks, TIMING.concurrency, async (c, i) => {
     try {
       return await extractChunk(job, c, i + 1, chunks.length, order, true);
     } catch (e) {
@@ -441,6 +557,25 @@ export async function handleShutdown(reason: string): Promise<void> {
   handleShutdown(String(detail?.reason ?? "unknown")).catch(() => {});
 });
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** 写数据库；暂时失败（网络、5xx……）→ 隔 TIMING.failRetryMs 再试，不超过期限、worker 要关掉就不再试 */
+async function retryDb(job: Job, what: string, op: () => Promise<unknown>): Promise<void> {
+  for (let attempt = 0;; attempt++) {
+    try {
+      await op();
+      return;
+    } catch (e) {
+      const transient = e instanceof DbError ? e.transient : true;
+      const wait = TIMING.failRetryMs[attempt];
+      const shuttingDown = job.abort.signal.reason instanceof JobError;
+      if (!transient || wait === undefined || shuttingDown || Date.now() + wait > job.deadline) throw e;
+      log("warn", "price_list_write_retry", { import_id: job.imp.id, what, attempt, error: errorMessage(e) });
+      await sleep(wait);
+    }
+  }
+}
+
 export async function processImport(job: Job): Promise<"review" | "failed"> {
   RUNNING.add(job);
   try {
@@ -461,13 +596,15 @@ async function runImport(job: Job): Promise<"review" | "failed"> {
     let lines: SheetLine[] | null = null;
     if (isImage(kind)) {
       if (bytes.length > MAX_IMAGE_BYTES) throw new JobError("FILE_TOO_LARGE");
-      pieces = await extractDocument(job, {
+      pieces = await extractImage(job, {
         kind: "image",
         mediaType: IMAGE_MEDIA_TYPES[kind],
         base64: encodeBase64(bytes),
       });
     } else if (kind === "pdf") {
-      pieces = await extractDocument(job, { kind: "pdf", base64: encodeBase64(bytes) });
+      const pages = await pdfPageCount(bytes);
+      job.file = { ...job.file, pages };
+      pieces = await extractPdf(job, encodeBase64(bytes), pages);
     } else if (isSpreadsheet(kind)) {
       lines = workbookLines(readWorkbook(bytes, kind));
       const chunks = chunkLines(lines);
@@ -531,33 +668,40 @@ async function runImport(job: Job): Promise<"review" | "failed"> {
       code,
       detail: e instanceof JobError ? e.detail : errorMessage(e),
     });
+    // 先把状态改成 failed（最要紧：不然 App 一直显示「AI 在读」），再删行（下次重跑也会先删）。
+    // 数据库暂时连不上的话隔一下再试（同一个问题常常让上面的错误跟这两个写入一起失败）
     try {
-      unwrap("delete rows", await admin.from("price_list_import_rows").delete().eq("import_id", imp.id));
-    } catch (e2) {
-      log("error", "price_list_cleanup_failed", { import_id: imp.id, error: errorMessage(e2) });
-    }
-    try {
-      unwrap(
-        "update import",
-        await admin.from("price_list_imports")
-          .update({
-            status: "failed",
-            error_message: code,
-            ai_raw: {
-              version: 1,
-              state: "failed",
-              error: code,
-              run_id: job.runId,
-              claimed_at: job.claimedAt,
-              finished_at: new Date().toISOString(),
-              file: job.file,
-              calls: job.calls,
-            },
-          })
-          .eq("id", imp.id).eq("ai_raw->>run_id", job.runId),
-      );
+      await retryDb(job, "mark failed", async () =>
+        unwrap(
+          "update import",
+          await admin.from("price_list_imports")
+            .update({
+              status: "failed",
+              error_message: code,
+              ai_raw: {
+                version: 1,
+                state: "failed",
+                error: code,
+                run_id: job.runId,
+                claimed_at: job.claimedAt,
+                finished_at: new Date().toISOString(),
+                file: job.file,
+                calls: job.calls,
+              },
+            })
+            .eq("id", imp.id).eq("ai_raw->>run_id", job.runId),
+        ));
     } catch (e2) {
       log("error", "price_list_mark_failed_failed", { import_id: imp.id, error: errorMessage(e2) });
+    }
+    try {
+      await retryDb(
+        job,
+        "cleanup",
+        async () => unwrap("delete rows", await admin.from("price_list_import_rows").delete().eq("import_id", imp.id)),
+      );
+    } catch (e2) {
+      log("error", "price_list_cleanup_failed", { import_id: imp.id, error: errorMessage(e2) });
     }
     return "failed";
   }
@@ -609,8 +753,42 @@ export async function handler(req: Request): Promise<Response> {
     if (!imp) return withCors(json({ error: "IMPORT_NOT_FOUND" }, 404));
     if (imp.status !== "processing") return withCors(json({ error: "IMPORT_NOT_PROCESSING", status: imp.status }, 409));
 
-    // 4. 占位（同一份 import 只跑一次；「在跑」超过 10 分钟的当成死掉，可以重跑）
+    // 4. 批发商的状态（批发商自己改不了）：停权的不能跑；还没审核的用量限制比较紧
+    const w = await admin.from("wholesalers").select("status").eq("id", imp.wholesaler_id).maybeSingle();
+    if (w.error) throw new DbError("read wholesaler", w.error.message, w.error.code ?? "", w.status);
+    const wstatus = (w.data as { status?: string } | null)?.status;
+    if (!wstatus) return withCors(json({ error: "IMPORT_NOT_FOUND" }, 404));
+    if (wstatus === "suspended") return withCors(json({ error: "WHOLESALER_SUSPENDED" }, 403));
+
+    // 5. 用量：每跑一次都记在批发商碰不到的地方（price_list_imports 批发商自己可以改，不能拿来算）
     const runId = crypto.randomUUID();
+    let quota;
+    try {
+      quota = await reserveRun(
+        admin,
+        BUCKET,
+        imp.wholesaler_id,
+        wstatus === "active" ? QUOTA.active : QUOTA.pending,
+        { runId, userId: auth.user.id, importId: imp.id },
+      );
+    } catch (e) {
+      log("error", "price_list_quota_failed", { import_id: imp.id, error: errorMessage(e) });
+      return withCors(json({ error: "QUOTA_UNAVAILABLE" }, 503));
+    }
+    if (!quota.ok) {
+      log("warn", "price_list_quota_exceeded", {
+        import_id: imp.id,
+        wholesaler_id: imp.wholesaler_id,
+        window: quota.window,
+      });
+      return withCors(
+        json({ error: "TOO_MANY_IMPORTS", retry_after: quota.retryAfterSec }, 429, {
+          "Retry-After": String(quota.retryAfterSec),
+        }),
+      );
+    }
+
+    // 6. 占位（同一份 import 只跑一次；「在跑」超过 10 分钟的当成死掉，可以重跑）
     const claimedAt = new Date().toISOString();
     const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
     const claimed = unwrap(
@@ -624,15 +802,20 @@ export async function handler(req: Request): Promise<Response> {
         .or(`ai_raw.is.null,ai_raw->>claimed_at.lt."${staleBefore}"`)
         .select("id"),
     ) as unknown[] | null;
-    if (!claimed || claimed.length === 0) return withCors(json({ error: "IMPORT_ALREADY_RUNNING" }, 409));
+    if (!claimed || claimed.length === 0) {
+      await releaseRun(admin, BUCKET, quota.path); // 没有真的跑：不算次数
+      return withCors(json({ error: "IMPORT_ALREADY_RUNNING" }, 409));
+    }
 
-    // 5. 背景处理，先回 202
+    // 7. 背景处理，先回 202
+    const budgetMs = intEnv("PRICE_LIST_TIME_BUDGET_MS", 380_000, 30_000, 900_000);
     const job: Job = {
       admin,
       imp,
       runId,
       claimedAt,
-      deadline: jobDeadline(Date.now(), intEnv("PRICE_LIST_TIME_BUDGET_MS", 380_000, 30_000, 900_000)),
+      deadline: jobDeadline(Date.now(), budgetMs),
+      budgetMs,
       apiKey: anthropicApiKey(),
       abort: new AbortController(),
       calls: [],

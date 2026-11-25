@@ -8,6 +8,10 @@
 // 时间预算每条开始之前都看：剩下不到 15 秒（一个请求最多等的时间）就不再开始发，领到但还没发的标 failed + 重试
 // （2 分钟后再发；不标的话会卡在「发送中」10 分钟）；每个请求最多等到预算用完为止。回传 JSON 统计。
 // complete_notification 暂时失败 → 隔 0.5 / 2（已经发出去的再加 5）秒再试：没记到「已发」的话 10 分钟后会重发一次。
+// 平台的总时间（免费 150 秒、付费 400 秒，WORKER_WALL_CLOCK_MS）是按 worker 算的，一个 worker 会接很多个请求
+// （每分钟的 cron、每个 trigger）：期限也不能超过「worker 开始 + 总时间 - 写结果的宽限」，不然晚进来的请求
+// 会在发到一半时被平台杀掉（Meta 已经收下、还没记「已发」的，10 分钟后会再发一次）。
+// worker 要被关掉（beforeunload）→ 不再领、不再开始发。
 
 import {
   type FcmServiceAccount,
@@ -45,7 +49,32 @@ export const DISPATCH_TIMING = {
   sentRetryMs: [500, 2_000, 5_000],
   /** 预算用完之后最多再等多久把结果记进数据库 */
   completeGraceMs: 10_000,
+  /** worker 的总时间到之前，写完结果之后再留的余裕 */
+  workerMarginMs: 5_000,
 };
+
+/** 这个 worker（isolate）什么时候开始的；stopping = 平台要关掉它了（beforeunload） */
+export const worker = { startedAt: Date.now(), stopping: false };
+
+/**
+ * 这次 dispatch 的期限：请求进来 + 预算，也不能超过 worker 开始 + 平台总时间 - 写结果的宽限 - 余裕
+ * （期限之后最多再花 completeGraceMs 写结果，全部要在平台杀掉 worker 之前做完）。
+ */
+export function dispatchDeadline(
+  started: number,
+  budgetMs: number,
+  wallClockMs: number,
+  workerStartedAt = worker.startedAt,
+): number {
+  const workerEnd = workerStartedAt + wallClockMs - DISPATCH_TIMING.completeGraceMs - DISPATCH_TIMING.workerMarginMs;
+  return Math.min(started + budgetMs, workerEnd);
+}
+
+(globalThis as { addEventListener?: typeof addEventListener }).addEventListener?.("beforeunload", (ev: Event) => {
+  worker.stopping = true;
+  const detail = (ev as CustomEvent<{ reason?: unknown } | undefined>).detail;
+  log("warn", "dispatch_worker_shutdown", { reason: String(detail?.reason ?? "unknown") });
+});
 
 /** 时间不够、没开始发的那条：标 failed + 重试（2 分钟后再领） */
 export const BUDGET_EXCEEDED = "DISPATCH_TIME_BUDGET";
@@ -241,9 +270,10 @@ async function complete(admin: SupabaseClient, id: string, o: Outcome, stopAt: n
 export async function dispatch(): Promise<Summary> {
   const started = Date.now();
   const budgetMs = intEnv("DISPATCH_TIME_BUDGET_MS", 100_000, 1_000, 380_000);
-  const deadline = started + budgetMs;
+  const deadline = dispatchDeadline(started, budgetMs, intEnv("WORKER_WALL_CLOCK_MS", 150_000, 60_000, 400_000));
   const stopAt = deadline + DISPATCH_TIMING.completeGraceMs;
-  const timeLeft = () => deadline - Date.now();
+  // worker 要被关掉了：当作时间用完（不再领、不再开始发；已经发的照样记结果）
+  const timeLeft = () => (worker.stopping ? -Infinity : deadline - Date.now());
   const s: Summary = {
     ok: true,
     rounds: 0,

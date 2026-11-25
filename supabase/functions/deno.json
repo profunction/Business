@@ -1,5 +1,5 @@
 {
-  "// 说明": "只给本机开发 / 测试用（在 supabase/functions 里跑 deno task ...）。部署时每个函数用自己目录的 deno.json；版本要跟这里一样（tests/deno_json_test.ts 会检查）。直接用到的套件版本钉死在 imports；间接用到的（例如 SDK 依赖的 @opentelemetry/api、standardwebhooks）和 SheetJS 档案的 hash 记在 deno.lock（frozen：对不上就不跑，要更新套件时用 deno install --frozen=false 重写）。deno.lock 只放在这一层：各函数的目录没有 lock 档，部署工具（edge-runtime 只读得懂 v4 以前的格式）不会读到它。",
+  "// 说明": "本机开发 / 测试 / 打包用（在 supabase/functions 里跑 deno task ...）。直接用到的套件版本钉死在 imports；间接用到的（例如 SDK 依赖的 @opentelemetry/api、standardwebhooks）和 SheetJS 档案的 hash 记在 deno.lock（frozen：对不上就不跑，要更新套件时用 deno install --frozen=false 重写）。部署的是 deno task bundle 照这份 lock 打包好的 _dist/<函数>/index.js（config.toml 的 entrypoint），部署工具不会再解析套件版本。各函数目录的 deno.json 版本要跟这里一样（tests/deno_json_test.ts 会检查），各函数目录不放 lock 档。",
   "lock": {
     "path": "./deno.lock",
     "frozen": true
@@ -13,10 +13,15 @@
   },
   "tasks": {
     "test": "deno test --allow-env --allow-read --allow-import=cdn.sheetjs.com,jsr.io,registry.npmjs.org tests/",
-    "check": "deno check --allow-import=cdn.sheetjs.com,jsr.io,registry.npmjs.org _shared/ dispatch-notifications/ whatsapp-webhook/ parse-price-list/ tests/",
+    "check": "deno check --allow-import=cdn.sheetjs.com,jsr.io,registry.npmjs.org _shared/ dispatch-notifications/ whatsapp-webhook/ parse-price-list/ tests/ bundle.ts",
     "lint": "deno lint",
-    "fmt": "deno fmt --check"
+    "fmt": "deno fmt --check",
+    "bundle": "deno run --allow-run --allow-read --allow-write=_dist --allow-env --allow-import=cdn.sheetjs.com,jsr.io,registry.npmjs.org bundle.ts",
+    "deploy": "deno task bundle && supabase --workdir ../.. functions deploy dispatch-notifications whatsapp-webhook parse-price-list --yes"
   },
+  "exclude": [
+    "_dist/"
+  ],
   "fmt": {
     "lineWidth": 120
   },
