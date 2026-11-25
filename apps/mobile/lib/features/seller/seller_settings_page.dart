@@ -24,6 +24,21 @@ class _SellerSettingsPageState extends ConsumerState<SellerSettingsPage> {
   NotifyChannel? _savingChannel;
   bool _saving = false;
 
+  /// 老板照提示去手机的「设定」打开（或关掉）通知再回来：重新看一次权限，不然一直显示旧的
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    _lifecycle = AppLifecycleListener(onResume: () => ref.invalidate(pushPermissionProvider));
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
   Future<void> _save(Future<void> Function(SellerActions actions) change, {NotifyChannel? channel}) async {
     final l = context.l10n;
     setState(() {

@@ -31,12 +31,15 @@ class ImportReviewPage extends ConsumerStatefulWidget {
 class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
   final _rowKeys = <int, GlobalKey>{};
 
-  /// 上架失败时框红色的那一行
-  int? _highlight;
+  /// 框红色的那几行：还没填好就按了「确认上架」，或服务器说那一行不行
+  final _highlight = <int>{};
   final _busyRows = <String>{};
   bool _applying = false;
 
   String get _id => widget.importId;
+
+  /// 老板已经看过、改过的行（AI 不太肯定的那几行就不再标黄色）。离开这一页再回来也记得
+  Set<String> get _checked => ref.read(checkedImportRowsProvider).putIfAbsent(_id, () => <String>{});
 
   GlobalKey _keyFor(int rowNo) => _rowKeys.putIfAbsent(rowNo, GlobalKey.new);
 
@@ -46,10 +49,11 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
     final l = context.l10n;
     setState(() {
       _busyRows.add(row.id);
-      if (_highlight == row.rowNo) _highlight = null;
+      _highlight.remove(row.rowNo);
     });
     try {
       await ref.read(sellerActionsProvider).updateImportRow(row, fields);
+      _checked.add(row.id);
     } catch (e) {
       if (mounted) showMessage(context, l.error(e), error: true);
     } finally {
@@ -64,9 +68,8 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
     }
   }
 
-  /// 选「更新」要改哪一样商品（也可以清掉：当新商品）
+  /// 选「更新」要改哪一样商品（也可以清掉：当新商品）。商品还在读 / 读不到的话，选的那一页自己显示、可以再读
   Future<void> _chooseProduct(PriceListImportRow row, List<PriceListImportRow> rows) async {
-    final products = ref.read(sellerProductsProvider).value ?? const <SellerProduct>[];
     final usedBy = <String, int>{
       for (final r in rows)
         if (r.id != row.id && r.action == ImportRowAction.update && r.matchedProductId != null)
@@ -77,7 +80,7 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
       isScrollControlled: true,
       useSafeArea: true,
       showDragHandle: true,
-      builder: (_) => _ProductChooser(row: row, products: products, usedBy: usedBy),
+      builder: (_) => _ProductChooser(row: row, usedBy: usedBy),
     );
     if (chosen == null || !mounted) return;
     final p = chosen.product;
@@ -99,9 +102,10 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
       builder: (_) => _RowEditor(row: row),
     );
     if (edited == null || !mounted) return;
-    // 跳过的行补齐了资料：改成新增（对到商品的话改成更新）
+    // 跳过的行这一次才补齐资料（本来不能新增）：改成新增（对到商品的话改成更新）。
+    // 本来就齐全、是老板自己按「跳过」的，照样跳过（不然会改掉老板不想改的商品）
     var e = edited;
-    if (e.action == ImportRowAction.skip && e.canCreate) {
+    if (e.action == ImportRowAction.skip && !row.canCreate && e.canCreate) {
       e = e.copyWith(action: e.canUpdate ? ImportRowAction.update : ImportRowAction.create);
     }
     await _update(row, e.toWriteJson());
@@ -110,6 +114,16 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
   Future<void> _apply() async {
     final l = context.l10n;
     if (_busyRows.isNotEmpty) return;
+    // 先自己检查：还没填好的全部框红色、跳到第一行（不用一次按一下、服务器一次只说一行）
+    final notReady = [
+      for (final r in ref.read(importRowsProvider(_id)).value ?? const <PriceListImportRow>[])
+        if (!r.isReady) r.rowNo,
+    ]..sort();
+    if (notReady.isNotEmpty) {
+      showMessage(context, l.sellerReviewIncomplete(notReady.length), error: true);
+      _jumpTo(notReady.first, all: notReady);
+      return;
+    }
     setState(() => _applying = true);
     try {
       final r = await ref.read(sellerActionsProvider).applyImport(_id);
@@ -128,9 +142,13 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
     }
   }
 
-  /// 跳到某一行，框红色
-  void _jumpTo(int rowNo) {
-    setState(() => _highlight = rowNo);
+  /// 跳到某一行；框红色的是 [all]（没给就只有这一行）
+  void _jumpTo(int rowNo, {List<int>? all}) {
+    setState(() {
+      _highlight
+        ..clear()
+        ..addAll(all ?? [rowNo]);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final c = _rowKeys[rowNo]?.currentContext;
       if (c != null && c.mounted) {
@@ -144,8 +162,10 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
     final l = context.l10n;
     final imp = ref.watch(priceListImportProvider(_id));
     final rows = ref.watch(importRowsProvider(_id));
-    // 「更新」的那几行要显示对到哪样商品、现在多少钱（读不到也照样可以确认）
-    final products = {for (final p in ref.watch(sellerProductsProvider).value ?? <SellerProduct>[]) p.id: p};
+    // 「更新」的那几行要显示对到哪样商品、现在多少钱（读不到也照样可以确认，但那几行会说读不到、往下拉再读）
+    final productsValue = ref.watch(sellerProductsProvider);
+    final products = {for (final p in productsValue.value ?? <SellerProduct>[]) p.id: p};
+    final productsFailed = productsValue.hasError && !productsValue.isLoading;
     final inReview = imp.value?.status == ImportStatus.review;
     final list = rows.value;
     return Scaffold(
@@ -159,8 +179,11 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
         builder: (i) => switch (i.status) {
           ImportStatus.review => AsyncView(
             value: rows,
-            onRetry: () => ref.invalidate(importRowsProvider(_id)),
-            builder: (rows) => _review(context, rows, products),
+            onRetry: () {
+              ref.invalidate(importRowsProvider(_id));
+              if (productsFailed) ref.invalidate(sellerProductsProvider);
+            },
+            builder: (rows) => _review(context, rows, products, productsFailed: productsFailed),
           ),
           ImportStatus.processing => CenterMessage(
             icon: Icons.hourglass_top,
@@ -237,7 +260,20 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
     );
   }
 
-  Widget _review(BuildContext context, List<PriceListImportRow> rows, Map<String, SellerProduct> products) {
+  /// 往下拉：行和商品都重新读（商品读不到的话，「会更新：…」才会回来）
+  Future<void> _reload() async {
+    // 商品读不到不算失败：那几行会说读不到，可以再拉一次
+    final products = ref.refresh(sellerProductsProvider.future).then<void>((_) {}, onError: (_) {});
+    final rows = ref.refresh(importRowsProvider(_id).future);
+    await Future.wait<Object?>([rows, products]);
+  }
+
+  Widget _review(
+    BuildContext context,
+    List<PriceListImportRow> rows,
+    Map<String, SellerProduct> products, {
+    required bool productsFailed,
+  }) {
     final l = context.l10n;
     final t = Theme.of(context).textTheme;
     if (rows.isEmpty) {
@@ -251,10 +287,14 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
       );
     }
     int count(ImportRowAction a) => rows.where((r) => r.action == a).length;
-    final unsure = rows.where((r) => r.isUnsure).length;
+    final checked = _checked;
+    // AI 不太肯定、老板还没看过（改过）的
+    bool unsure(PriceListImportRow r) => r.isUnsure && !checked.contains(r.id);
+    final unsureCount = rows.where(unsure).length;
+    final notReady = rows.where((r) => !r.isReady).length;
     // 全部都建出来（不是 ListView.builder）：上架失败时才跳得到看不见的那一行
     return RefreshIndicator(
-      onRefresh: () => ref.refresh(importRowsProvider(_id).future),
+      onRefresh: _reload,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
@@ -284,9 +324,23 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
                 ),
               ),
             ),
-            if (unsure > 0) ...[
+            if (unsureCount > 0) ...[
               const SizedBox(height: 12),
-              NoticeBanner(color: AppTheme.warningBg, icon: Icons.warning_amber, text: l.sellerReviewUnsure(unsure)),
+              NoticeBanner(
+                key: const Key('review-unsure'),
+                color: AppTheme.warningBg,
+                icon: Icons.warning_amber,
+                text: l.sellerReviewUnsure(unsureCount),
+              ),
+            ],
+            if (notReady > 0) ...[
+              const SizedBox(height: 12),
+              NoticeBanner(
+                key: const Key('review-incomplete'),
+                color: const Color(0xFFFDE7E7),
+                icon: Icons.error_outline,
+                text: l.sellerReviewIncomplete(notReady),
+              ),
             ],
             for (final r in rows) ...[
               const SizedBox(height: 12),
@@ -294,7 +348,10 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
                 key: _keyFor(r.rowNo),
                 row: r,
                 product: r.matchedProductId == null ? null : products[r.matchedProductId],
-                highlighted: _highlight == r.rowNo,
+                productUnknown:
+                    productsFailed && r.matchedProductId != null && !products.containsKey(r.matchedProductId),
+                unsure: unsure(r),
+                highlighted: _highlight.contains(r.rowNo),
                 busy: _busyRows.contains(r.id),
                 onAction: (a) => _update(r, {'action': a.name}),
                 onChooseProduct: () => _chooseProduct(r, rows),
@@ -328,6 +385,8 @@ class _RowCard extends StatelessWidget {
     super.key,
     required this.row,
     required this.product,
+    this.productUnknown = false,
+    required this.unsure,
     required this.highlighted,
     required this.busy,
     required this.onAction,
@@ -339,6 +398,12 @@ class _RowCard extends StatelessWidget {
 
   /// 对到的商品（action = update 时会改它）
   final SellerProduct? product;
+
+  /// 商品读不到（没网络……）：不知道会改哪一样，要说出来（往下拉再读）
+  final bool productUnknown;
+
+  /// AI 不太肯定、老板还没看过：框黄色
+  final bool unsure;
   final bool highlighted;
   final bool busy;
   final ValueChanged<ImportRowAction> onAction;
@@ -357,7 +422,7 @@ class _RowCard extends StatelessWidget {
     final unit = r.unit == null ? null : l.unit(r.unit!);
     final border = highlighted
         ? AppTheme.problem
-        : r.isUnsure
+        : unsure
         ? AppTheme.unsure
         : const Color(0xFFE2E5DF);
     final dim = skipped ? Colors.black45 : null;
@@ -366,7 +431,7 @@ class _RowCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: highlighted ? const Color(0xFFFDE7E7) : Colors.white,
         borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: border, width: highlighted || r.isUnsure ? 3 : 1),
+        border: Border.all(color: border, width: highlighted || unsure ? 3 : 1),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -377,7 +442,7 @@ class _RowCard extends StatelessWidget {
               Expanded(
                 child: Text(l.sellerReviewRow(r.rowNo), style: t.bodyLarge?.copyWith(color: Colors.black54)),
               ),
-              if (r.isUnsure)
+              if (unsure)
                 LabelChip(text: l.sellerReviewCheck, color: const Color(0xFF8A6100), icon: Icons.warning_amber),
             ],
           ),
@@ -426,6 +491,13 @@ class _RowCard extends StatelessWidget {
                 color: _warning,
               ),
           ],
+          if (r.action == ImportRowAction.update && product == null && productUnknown)
+            InfoLine(
+              key: Key('row-${r.rowNo}-product-unknown'),
+              icon: Icons.sync_problem,
+              text: l.sellerReviewProductUnknown,
+              color: _warning,
+            ),
           if (r.action == ImportRowAction.create && r.matchedProductId == null && r.hasName)
             InfoLine(icon: Icons.add_circle_outline, text: l.sellerReviewNoMatch),
           if (missing.isNotEmpty)
@@ -511,21 +583,21 @@ class _RowCard extends StatelessWidget {
 typedef _Chosen = ({SellerProduct? product});
 
 /// 选「更新」要改哪一样商品：自己的全部商品（可以搜；下架、草稿的也在），已经被别行对到的会写出来。
-/// 已经对到商品的行可以按「都不是」清掉。关掉回传 null
-class _ProductChooser extends StatefulWidget {
-  const _ProductChooser({required this.row, required this.products, required this.usedBy});
+/// 已经对到商品的行可以按「都不是」清掉。关掉回传 null。
+/// 商品还在读：转圈；读不到：说原因、可以再读（不会说成「找不到符合的商品」）
+class _ProductChooser extends ConsumerStatefulWidget {
+  const _ProductChooser({required this.row, required this.usedBy});
 
   final PriceListImportRow row;
-  final List<SellerProduct> products;
 
   /// 商品 id → 已经对到它的那一行（不算这一行）
   final Map<String, int> usedBy;
 
   @override
-  State<_ProductChooser> createState() => _ProductChooserState();
+  ConsumerState<_ProductChooser> createState() => _ProductChooserState();
 }
 
-class _ProductChooserState extends State<_ProductChooser> {
+class _ProductChooserState extends ConsumerState<_ProductChooser> {
   final _search = TextEditingController();
 
   @override
@@ -540,7 +612,10 @@ class _ProductChooserState extends State<_ProductChooser> {
     final t = Theme.of(context).textTheme;
     final r = widget.row;
     final q = _search.text.trim().toLowerCase();
-    final shown = widget.products.where((p) => q.isEmpty || p.name.toLowerCase().contains(q)).toList();
+    final products = ref.watch(sellerProductsProvider);
+    final shown = (products.value ?? const <SellerProduct>[])
+        .where((p) => q.isEmpty || p.name.toLowerCase().contains(q))
+        .toList();
     final rowText = r.hasName ? r.name!.trim() : r.rawText?.trim();
     return Padding(
       padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
@@ -578,7 +653,21 @@ class _ProductChooserState extends State<_ProductChooser> {
                   ),
                 ),
                 Flexible(
-                  child: shown.isEmpty
+                  child: products.hasError && !products.isLoading && !products.hasValue
+                      ? SingleChildScrollView(
+                          key: const Key('choose-error'),
+                          child: ErrorView(
+                            error: products.error!,
+                            onRetry: () => ref.invalidate(sellerProductsProvider),
+                          ),
+                        )
+                      : !products.hasValue
+                      ? const Padding(
+                          key: Key('choose-loading'),
+                          padding: EdgeInsets.all(24),
+                          child: Center(child: CircularProgressIndicator()),
+                        )
+                      : shown.isEmpty
                       ? Padding(
                           padding: const EdgeInsets.all(24),
                           child: Text(l.sellerProductsNoMatch, textAlign: TextAlign.center, style: t.titleMedium),

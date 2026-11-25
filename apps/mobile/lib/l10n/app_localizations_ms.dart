@@ -1398,7 +1398,7 @@ class L10nMs extends L10n {
   String get sellerReviewChangeProduct => 'Pilih barang lain';
 
   @override
-  String get sellerReviewClearMatch => 'Bukan semua ini (tambah sebagai baharu)';
+  String get sellerReviewClearMatch => 'Tiada antara ini (tambah sebagai baharu)';
 
   @override
   String sellerReviewUsedByRow(int row) {
@@ -1429,5 +1429,36 @@ class L10nMs extends L10n {
       'other': 'biji',
     });
     return '$_temp0';
+  }
+
+  @override
+  String sellerErrTooManyImports(int minutes) {
+    return 'Anda baru sahaja muat naik terlalu banyak. Sila tunggu $minutes minit sebelum muat naik yang seterusnya.';
+  }
+
+  @override
+  String get sellerErrSuspended =>
+      'Akaun anda digantung, jadi anda tidak boleh muat naik senarai harga sekarang. Sila hubungi khidmat pelanggan.';
+
+  @override
+  String get sellerErrQuotaUnavailable =>
+      'Sistem terlalu sibuk sekarang dan belum mula membaca senarai ini. Sila muat naik semula dalam beberapa minit.';
+
+  @override
+  String get sellerImportErrNoProductsFile =>
+      'AI tidak menjumpai nama barang dan harga dalam fail ini. Sila semak sama ada ini senarai harga (ada nama barang dan harga), kemudian muat naik semula.';
+
+  @override
+  String get sellerReviewProductUnknown =>
+      'Tidak dapat memuatkan barang yang akan dikemas kini. Tarik ke bawah untuk memuatkan semula.';
+
+  @override
+  String sellerReviewIncomplete(int count) {
+    return 'Ada $count baris yang belum lengkap (yang merah). Sila lengkapkan, atau pilih \"Langkau\".';
+  }
+
+  @override
+  String sellerOrdersLimited(int count) {
+    return 'Hanya $count pesanan terkini ditunjukkan di sini';
   }
 }

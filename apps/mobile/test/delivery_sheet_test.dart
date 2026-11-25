@@ -2,6 +2,8 @@
 import 'dart:convert';
 import 'dart:ui' show Locale;
 
+import 'package:pdf/pdf.dart';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:jb_wholesale/demo/demo_data.dart';
@@ -14,8 +16,8 @@ import 'package:wholesale_core/wholesale_core.dart';
 /// packages/core/test/fixtures/delivery_summary.json（本机数据库真实回传：2 张单、4 样拣货）
 DeliverySummary fixtureSummary() => DeliverySummary.fromJson(asJson(jsonDecode(demoFixtures['delivery_summary']!)));
 
-/// 很多张单的一天（测试跨页）：样本的单复制 n 次，店名加号码
-DeliverySummary bigSummary(int n) {
+/// 很多张单的一天（测试跨页）：样本的单复制 n 次，店名加号码。[notes]：每张单的备注是 NOTE<第几张>END
+DeliverySummary bigSummary(int n, {bool notes = false}) {
   final j = asJson(jsonDecode(demoFixtures['delivery_summary']!));
   final orders = asJsonList(j['orders']);
   j['orders'] = [
@@ -25,6 +27,7 @@ DeliverySummary bigSummary(int n) {
         'id': '00000000-0000-4000-9000-${i.toString().padLeft(12, '0')}',
         'order_no': 'JHB261125-${(100 + i).toString().padLeft(5, '0')}',
         'shop': {...asJson(orders[i % orders.length]['shop']), 'name': 'Shop ${i + 1}'},
+        if (notes) 'note': 'NOTE${i}END',
       },
   ];
   j['order_count'] = n;
@@ -44,6 +47,28 @@ DeliverySummary longOrder(int items) {
 }
 
 int pages(pw.Document doc) => doc.document.pdfPageList.pages.length;
+
+/// 每一页印了哪些字（字跟字之间没有空格）。PDF 里的中文字是字体的编号（[<0012003a>]TJ），用字体的 unicode 表换回来
+Future<List<String>> pageTexts(pw.Document doc, pw.Font font) async {
+  await doc.save();
+  final cmap = (font.getFont(pw.Context(document: doc.document)) as PdfTtfFont).unicodeCMap.cmap;
+  final run = RegExp(r'\[<([0-9a-f]+)>\]TJ');
+  String decode(String hex) => String.fromCharCodes([
+    for (var i = 0; i + 4 <= hex.length; i += 4) cmap[int.parse(hex.substring(i, i + 4), radix: 16)],
+  ]);
+  return [
+    for (final page in doc.document.pdfPageList.pages)
+      [
+        for (final c in page.contents)
+          // 页的内容是 PdfObjectStream（pdf 没有 export），它的 buf 是画的指令
+          for (final m in run.allMatches(latin1.decode(((c as dynamic).buf as PdfStream).output())))
+            decode(m.group(1)!),
+      ].join(),
+  ];
+}
+
+/// 第几页有这段字（没有 → -1）
+int pageOf(List<String> texts, String text) => texts.indexWhere((t) => t.contains(text));
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -83,6 +108,47 @@ void main() {
       expect(pages(many), greaterThan(2));
       final more = deliveryPdfDocument(bigSummary(60), zh, font: font);
       expect(pages(more), greaterThan(pages(many)));
+    });
+
+    test('每张单的开头（店名、单号）跟最后（备注、签收）一定在同一页：放不下就整张搬到下一页，不会切开', () async {
+      // 每张单一个认得出来的备注（印在最后、签收的上面）
+      final withNotes = bigSummary(60, notes: true);
+      final orders = withNotes.orders;
+      final texts = await pageTexts(deliveryPdfDocument(withNotes, zh, font: font), font);
+      expect(texts.length, greaterThan(10));
+      for (final (i, o) in orders.indexed) {
+        final head = pageOf(texts, o.orderNo);
+        expect(head, isNot(-1), reason: o.orderNo);
+        expect(pageOf(texts, 'NOTE${i}END'), head, reason: '${o.orderNo}：单的开头跟最后在不同页');
+      }
+    });
+
+    test('估计放得下一页的最长的单：照样印得出来（整块的比一页还高 pdf 会出错）', () {
+      // 名字很长（每样两三行）的单，加到估计刚好不超过上限
+      final j = asJson(jsonDecode(demoFixtures['delivery_summary']!));
+      final first = asJson(asJsonList(j['orders']).first);
+      final item = asJson(asJsonList(first['items']).first);
+      first['note'] = '后门进，' * 40;
+      first['shop'] = {...asJson(first['shop']), 'address': 'Jalan Demo 10, Taman Molek, ' * 6};
+      final items = <Object>[];
+      DeliverySummary build() => DeliverySummary.fromJson({
+        ...j,
+        'orders': [
+          {...first, 'items': items},
+        ],
+      });
+      while (true) {
+        items.add({...item, 'name': '${'很长很长的商品名字' * 6} #${items.length}'});
+        if (estimatedOrderHeight(build().orders.single, zh, withZone: true) > keepTogetherMaxHeight) {
+          items.removeLast();
+          break;
+        }
+      }
+      expect(items.length, greaterThan(3));
+      for (final l in [zh, en, ms]) {
+        final doc = deliveryPdfDocument(build(), l, font: font);
+        expect(pages(doc), greaterThanOrEqualTo(1), reason: l.localeName);
+      }
     });
 
     test('一张单有很多样东西：可以跨页，不会印不出来', () {

@@ -9,6 +9,8 @@ import 'package:wholesale_core/wholesale_core.dart';
 /// | order_status_changed、order_cancelled | /seller/orders/{id} | /orders/{id} |
 /// | daily_summary | /seller/summary?date= | — |
 /// | order_unconfirmed | — | — |
+///
+/// 批发商的通知带 data.wholesaler_id 的话，PushNavigator 先换到那一家（一个人可以是几家批发商的成员）
 String? pushRoute(Map<String, String> data, {required bool isSeller}) {
   final type = data['type'] ?? data['event_type'];
   final orderId = data['order_id'];

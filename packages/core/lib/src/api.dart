@@ -69,6 +69,12 @@ class AppError implements Exception {
     if (code == 'UNAUTHORIZED' || code == 'AUTH') {
       return AppError('AUTH', detail: sessionExpired, message: e.reasonPhrase);
     }
+    // parse-price-list 用量满了（429）：detail 是要等几秒（body 的 retry_after），老板才知道要等多久
+    if (code == 'TOO_MANY_IMPORTS') {
+      final after = details is Map ? details['retry_after'] : null;
+      final sec = after is num ? after.ceil() : int.tryParse('${after ?? ''}');
+      return AppError(code, detail: sec != null && sec > 0 ? '$sec' : null, message: e.reasonPhrase);
+    }
     return AppError(code, detail: '${e.status}', message: e.reasonPhrase);
   }
 
@@ -81,6 +87,13 @@ class AppError implements Exception {
 
   /// 价目表导入的错误（IMPORT_ROW_INCOMPLETE 等），detail 是第几行
   int? get rowNo => int.tryParse(detail ?? '');
+
+  /// TOO_MANY_IMPORTS（价目表上传太多次）：要等多久才可以再上传。不知道 → null
+  Duration? get retryAfter {
+    if (code != 'TOO_MANY_IMPORTS') return null;
+    final sec = int.tryParse(detail ?? '');
+    return sec == null || sec <= 0 ? null : Duration(seconds: sec);
+  }
 
   /// PRICE_CHANGED / CART_HAS_PROBLEMS 时，detail 是服务器最新的报价
   CartQuote? get quote {
@@ -149,6 +162,22 @@ class WholesaleApi {
 
   Future<void> setMyLocale(String userId, String locale) =>
       _call(() => client.from('profiles').update({'locale': locale}).eq('id', userId));
+
+  /// 老板换了 App 的语言：自己的批发商 / 店铺收到的通知（推送、WhatsApp 模板）也换成这个语言。
+  /// 发给批发商、店铺的通知看的是 wholesalers.locale / shops.locale，不是个人的 profiles.locale。
+  /// RLS：只有老板改得到（员工改了 0 行，不算错）；已经是这个语言的不会再写
+  Future<void> setBusinessLocale(
+    String locale, {
+    Iterable<String> wholesalerIds = const [],
+    Iterable<String> shopIds = const [],
+  }) => _call(() async {
+    for (final id in wholesalerIds) {
+      await client.from('wholesalers').update({'locale': locale}).eq('id', id).neq('locale', locale);
+    }
+    for (final id in shopIds) {
+      await client.from('shops').update({'locale': locale}).eq('id', id).neq('locale', locale);
+    }
+  });
 
   // ---------------- 店铺 ----------------
 
@@ -481,9 +510,13 @@ class WholesaleApi {
   });
 
   /// 一次做完：判断格式 → 上传 → 建导入 → 叫 AI。回传的导入还是 processing。
-  /// 不收的格式（HEIC、Word……）→ UNSUPPORTED_FILE；超过 10 MB → FILE_TOO_LARGE
+  /// 不收的格式（HEIC、Word……）→ UNSUPPORTED_FILE；超过 10 MB → FILE_TOO_LARGE。
+  /// parse-price-list 不肯读（[importStartRefused]：停权、用量满了、暂时叫不到）：这一次当作没传过——
+  /// 删掉导入和档案（首页不会显示「上次的读不到」），错误照样丢出来。用量满了之后，
+  /// 等 retry_after 之前再传会直接丢 TOO_MANY_IMPORTS（不上传，不会多一个档案、多一份导入）
   Future<PriceListImport> submitPriceList(String wholesalerId, Uint8List bytes, {String? fileName}) async {
     final kind = checkPriceListFile(bytes, fileName: fileName);
+    _checkImportCooldown(wholesalerId);
     final path = await uploadPriceList(wholesalerId, bytes, kind.ext, kind.contentType);
     final import = await createImport(wholesalerId: wholesalerId, filePath: path, fileType: kind.importType!);
     try {
@@ -491,23 +524,87 @@ class WholesaleApi {
     } on AppError catch (e) {
       // 已经有人叫了（另一部手机、等的页面再叫一次）：一样在读，不算失败
       if (e.code == 'IMPORT_ALREADY_RUNNING') return import;
+      if (importStartRefused.contains(e.code)) {
+        final wait = e.retryAfter;
+        if (wait != null) _importCooldown[wholesalerId] = DateTime.now().add(wait);
+        var gone = false;
+        try {
+          gone = await discardImport(import);
+        } catch (_) {}
+        // 删不掉（没网络……）：照样标成失败，首页才不会一直显示「AI 在读」
+        if (!gone) await markImportFailed(import.id, 'START_FAILED').catchError((_) => false);
+        rethrow;
+      }
       // 叫不到 AI：标成失败（记下真正的原因：没网络 / 登录过期 / 其他），免得首页一直显示「AI 在读」。
       // 批发商重新上传就好。标不了（例如一样没网络）也没关系：之后等的时候 [watchImport] 会再叫一次 AI
       final reason = e.code == 'NETWORK' || e.code == 'AUTH' ? e.code : 'START_FAILED';
-      await markImportFailed(import.id, reason).catchError((_) {});
+      bool? marked;
+      try {
+        marked = await markImportFailed(import.id, reason);
+      } catch (_) {}
+      if (marked == false) {
+        // 没标到：parse-price-list 其实已经开始读了（202 在路上断了），或已经读完。不是失败，照常等
+        try {
+          final now = await getImport(import.id);
+          if (now.claimedAt != null || now.isDone) return now;
+        } catch (_) {}
+      }
       rethrow;
     }
     return import;
   }
 
-  /// 还在 processing 的导入标成失败（App 叫不到 parse-price-list 时）
-  Future<void> markImportFailed(String importId, String code) => _call(
-    () => client
+  /// parse-price-list 这几个回应是「没开始读、什么都没改」（见 supabase/functions/README.md）：
+  /// 403 停权、429 用量满了、503 暂时叫不到。这一次的导入不会有人读
+  static const importStartRefused = {'WHOLESALER_SUSPENDED', 'TOO_MANY_IMPORTS', 'QUOTA_UNAVAILABLE'};
+
+  /// 批发商 id → 用量满了，等到这个时间才可以再上传（这部手机记着，不用每次都上传了才知道）
+  final _importCooldown = <String, DateTime>{};
+
+  void _checkImportCooldown(String wholesalerId) {
+    final until = _importCooldown[wholesalerId];
+    if (until == null) return;
+    final left = until.difference(DateTime.now());
+    if (left <= Duration.zero) {
+      _importCooldown.remove(wholesalerId);
+      return;
+    }
+    throw AppError('TOO_MANY_IMPORTS', detail: '${(left.inMilliseconds / 1000).ceil()}');
+  }
+
+  /// 还在 processing、而且从来没人开始读（ai_raw 是空的）的导入标成失败（App 叫不到 parse-price-list 时）。
+  /// 已经有人在读的不标（回应断了，其实在读）。回传有没有标到
+  Future<bool> markImportFailed(String importId, String code) => _call(() async {
+    final rows = await client
         .from('price_list_imports')
         .update({'status': 'failed', 'error_message': code})
         .eq('id', importId)
-        .eq('status', 'processing'),
-  );
+        .eq('status', 'processing')
+        .isFilter('ai_raw', null)
+        .select('id');
+    return rows.isNotEmpty;
+  });
+
+  /// 删掉一份没人读过的导入（还是 processing、ai_raw 是空的）和它在 Storage 的档案：parse-price-list 不肯读的那一次。
+  /// RLS：只删得到自己批发商的。回传有没有删到（删到了档案删不掉也算）
+  Future<bool> discardImport(PriceListImport import) => _call(() async {
+    final rows = await client
+        .from('price_list_imports')
+        .delete()
+        .eq('id', import.id)
+        .eq('status', 'processing')
+        .isFilter('ai_raw', null)
+        .select('id');
+    if (rows.isEmpty) return false;
+    if (import.filePath.isNotEmpty) {
+      try {
+        await client.storage.from('price-lists').remove([import.filePath]);
+      } catch (_) {
+        // 档案留着也不影响什么
+      }
+    }
+    return true;
+  });
 
   Future<PriceListImport> getImport(String importId) => _call(() async {
     final row = await client.from('price_list_imports').select().eq('id', importId).maybeSingle();
@@ -543,7 +640,8 @@ class WholesaleApi {
     var timedOut = false;
     var polling = false;
     var cancelled = false;
-    DateTime? kickedAt;
+    // 下一次可以再叫 AI 的时间（叫过之后至少等 importRestartInterval；用量满了等 retry_after）
+    DateTime? nextKick;
 
     void stop([Object? error]) {
       timer?.cancel();
@@ -588,10 +686,11 @@ class WholesaleApi {
             return;
           }
           final stuck = importNeedsRestart(current, now: now) || (timedOut && current.claimedAt == null);
-          if (stuck && (kickedAt == null || now.difference(kickedAt!) >= importRestartInterval)) {
-            kickedAt = now;
+          if (stuck && (nextKick == null || !now.isBefore(nextKick!))) {
             // 刚好读完了、或标成失败了：马上再查一次，把结果交出去
-            again = await _restartParse(current);
+            final kick = await _restartParse(current);
+            again = kick.again;
+            nextKick = now.add(kick.wait > importRestartInterval ? kick.wait : importRestartInterval);
           }
         }
         if (cancelled || out.isClosed) return;
@@ -625,28 +724,38 @@ class WholesaleApi {
   /// 等导入的时候遇到这些错误就不再等（其他的当成暂时的，下一次再查）
   static const _importWatchFatal = {'IMPORT_NOT_FOUND', 'NOT_ALLOWED', 'AUTH', 'NOT_LOGGED_IN'};
 
-  /// 再叫 parse-price-list 都没用的错误：登录过期、函数没设定好、参数不对
-  static const _parseCannotStart = {'AUTH', 'NOT_ALLOWED', 'CONFIG_MISSING', 'INVALID_IMPORT_ID'};
+  /// 再叫 parse-price-list 都没用的错误：登录过期、函数没设定好、参数不对、批发商停权了
+  static const _parseCannotStart = {
+    'AUTH',
+    'NOT_ALLOWED',
+    'CONFIG_MISSING',
+    'INVALID_IMPORT_ID',
+    'WHOLESALER_SUSPENDED',
+  };
 
-  /// 卡住的导入再叫一次 parse-price-list。回传 true = 状态可能变了（读完了 / 标成失败了），马上再查一次
-  Future<bool> _restartParse(PriceListImport imp) async {
+  /// 卡住的导入再叫一次 parse-price-list。again = 状态可能变了（读完了 / 标成失败了），马上再查一次；
+  /// wait = 至少等多久才再叫（用量满了：函数说的 retry_after）
+  Future<({bool again, Duration wait})> _restartParse(PriceListImport imp) async {
     try {
       await startParse(imp.id);
-      return false;
+      return (again: false, wait: Duration.zero);
     } on AppError catch (e) {
       switch (e.code) {
         case 'IMPORT_ALREADY_RUNNING':
-          return false; // 有人在读
+          return (again: false, wait: Duration.zero); // 有人在读
         case 'IMPORT_NOT_PROCESSING' || 'IMPORT_NOT_FOUND':
-          return true;
+          return (again: true, wait: Duration.zero);
+        case 'TOO_MANY_IMPORTS':
+          // 用量满了（不算失败，导入没动）：等到有位置再叫
+          return (again: false, wait: e.retryAfter ?? Duration.zero);
       }
       // 从来没开始读、又叫不动：标成失败（首页会让老板重新上传）。没网络、函数暂时出错：等下一次
-      if (imp.claimedAt != null || !_parseCannotStart.contains(e.code)) return false;
+      if (imp.claimedAt != null || !_parseCannotStart.contains(e.code)) return (again: false, wait: Duration.zero);
       try {
         await markImportFailed(imp.id, e.code == 'AUTH' ? 'AUTH' : 'START_FAILED');
-        return true;
+        return (again: true, wait: Duration.zero);
       } on AppError {
-        return false;
+        return (again: false, wait: Duration.zero);
       }
     }
   }
@@ -709,15 +818,17 @@ class WholesaleApi {
     return WholesalerSettings.fromJson(asJson(row));
   });
 
-  /// 通知方式（只有批发商老板能改，员工会得到 NOT_ALLOWED）。选 WhatsApp 等于同意用 WhatsApp 收订单
+  /// 通知方式（只有批发商老板能改，员工会得到 NOT_ALLOWED）。选 WhatsApp 等于同意用 WhatsApp 收订单。
+  /// 先记同意、再改通知方式：第二步失败的话还是原本的通知方式（多了同意也没关系）。
+  /// 反过来的话会留下「选了 WhatsApp、没有同意」：服务器什么通知都不发（不会改用推送）
   Future<WholesalerSettings> setNotifyChannel(String wholesalerId, NotifyChannel channel) => _call(() async {
+    if (channel == NotifyChannel.whatsapp) await setWhatsappOptIn(wholesalerId, true);
     final rows = await client
         .from('wholesalers')
         .update({'notify_channel': channel.name})
         .eq('id', wholesalerId)
         .select('id');
     if (rows.isEmpty) throw const AppError('NOT_ALLOWED');
-    if (channel == NotifyChannel.whatsapp) await setWhatsappOptIn(wholesalerId, true);
     return getWholesalerSettings(wholesalerId);
   });
 

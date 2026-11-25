@@ -78,6 +78,20 @@ class DemoApi extends WholesaleApi {
   Future<void> setMyLocale(String userId, String locale) async {}
 
   @override
+  Future<void> setBusinessLocale(
+    String locale, {
+    Iterable<String> wholesalerIds = const [],
+    Iterable<String> shopIds = const [],
+  }) async {
+    for (final id in wholesalerIds) {
+      calls.add('wholesalerLocale $id $locale');
+    }
+    for (final id in shopIds) {
+      calls.add('shopLocale $id $locale');
+    }
+  }
+
+  @override
   Future<List<Zone>> listZones() => _later(() => asJsonList(_j('zones')).map(Zone.fromJson).toList());
 
   @override
@@ -314,8 +328,15 @@ class DemoApi extends WholesaleApi {
     return channel;
   }
 
+  /// 测试用：读商品失败（例如没网络），清掉就好了
+  AppError? productsError;
+
   @override
-  Future<List<SellerProduct>> listMyProducts(String wholesalerId) => _later(sellerData.products);
+  Future<List<SellerProduct>> listMyProducts(String wholesalerId) => _later(() {
+    final e = productsError;
+    if (e != null) throw e;
+    return sellerData.products();
+  });
 
   @override
   Future<SellerProduct> getProduct(String productId) => _later(() => sellerData.product(productId));
@@ -387,7 +408,13 @@ class DemoApi extends WholesaleApi {
   });
 
   @override
-  Future<void> markImportFailed(String importId, String code) => _later(() => sellerData.markFailed(importId, code));
+  Future<bool> markImportFailed(String importId, String code) => _later(() => sellerData.markFailed(importId, code));
+
+  @override
+  Future<bool> discardImport(PriceListImport import) => _later(() {
+    calls.add('discardImport ${import.fileType.name}');
+    return sellerData.discard(import.id);
+  });
 
   @override
   Future<PriceListImport> getImport(String importId) => _later(() => sellerData.getImport(importId));
@@ -418,10 +445,18 @@ class DemoApi extends WholesaleApi {
   @override
   Future<WholesalerSettings> getWholesalerSettings(String wholesalerId) => _later(sellerData.settings);
 
+  /// 测试用：下一次改通知方式，服务器改好了、但回应在路上断了（App 收到 NETWORK）
+  bool loseNextSettingsReply = false;
+
   @override
   Future<WholesalerSettings> setNotifyChannel(String wholesalerId, NotifyChannel channel) => _later(() {
     calls.add('notifyChannel ${channel.name}');
-    return sellerData.setNotifyChannel(channel);
+    final s = sellerData.setNotifyChannel(channel);
+    if (loseNextSettingsReply) {
+      loseNextSettingsReply = false;
+      throw const AppError('NETWORK');
+    }
+    return s;
   });
 
   @override

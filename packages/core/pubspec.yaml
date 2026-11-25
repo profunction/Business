@@ -11,5 +11,7 @@ dependencies:
   supabase: ^2.16.5
 
 dev_dependencies:
+  # 测试里换掉连服务器的那一层（http 的 MockClient），检查送出去的请求和顺序
+  http: ^1.6.0
   lints: ^6.0.0
   test: ^1.25.6

@@ -419,9 +419,16 @@
   "sellerErrLoginExpired": "Log masuk anda sudah tamat tempoh. Sila log keluar di Tetapan dan log masuk semula.",
   "sellerReviewChooseProduct": "Barang mana yang hendak dikemas kini?",
   "sellerReviewChangeProduct": "Pilih barang lain",
-  "sellerReviewClearMatch": "Bukan semua ini (tambah sebagai baharu)",
+  "sellerReviewClearMatch": "Tiada antara ini (tambah sebagai baharu)",
   "sellerReviewUsedByRow": "Sudah dipadankan dengan baris {row}",
   "sellerReviewWillRelist": "Kini \"{status}\". Ia akan dijual kepada pembeli.",
   "sellerReviewPackChange": "Pembungkusan akan bertukar: {before} → {after}",
-  "sellerUnitPlural": "{unit, select, carton{karton} pack{paket} bag{beg} roll{gulung} bundle{ikat} box{kotak} dozen{dozen} kg{kg} other{biji}}"
+  "sellerUnitPlural": "{unit, select, carton{karton} pack{paket} bag{beg} roll{gulung} bundle{ikat} box{kotak} dozen{dozen} kg{kg} other{biji}}",
+  "sellerErrTooManyImports": "Anda baru sahaja muat naik terlalu banyak. Sila tunggu {minutes} minit sebelum muat naik yang seterusnya.",
+  "sellerErrSuspended": "Akaun anda digantung, jadi anda tidak boleh muat naik senarai harga sekarang. Sila hubungi khidmat pelanggan.",
+  "sellerErrQuotaUnavailable": "Sistem terlalu sibuk sekarang dan belum mula membaca senarai ini. Sila muat naik semula dalam beberapa minit.",
+  "sellerImportErrNoProductsFile": "AI tidak menjumpai nama barang dan harga dalam fail ini. Sila semak sama ada ini senarai harga (ada nama barang dan harga), kemudian muat naik semula.",
+  "sellerReviewProductUnknown": "Tidak dapat memuatkan barang yang akan dikemas kini. Tarik ke bawah untuk memuatkan semula.",
+  "sellerReviewIncomplete": "Ada {count} baris yang belum lengkap (yang merah). Sila lengkapkan, atau pilih \"Langkau\".",
+  "sellerOrdersLimited": "Hanya {count} pesanan terkini ditunjukkan di sini"
 }

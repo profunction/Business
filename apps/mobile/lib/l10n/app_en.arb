@@ -423,5 +423,12 @@
   "sellerReviewUsedByRow": "Already matched to row {row}",
   "sellerReviewWillRelist": "Now \"{status}\". It will go on sale to buyers.",
   "sellerReviewPackChange": "Packing will change: {before} → {after}",
-  "sellerUnitPlural": "{unit, select, carton{cartons} pack{packs} bag{bags} roll{rolls} bundle{bundles} box{boxes} dozen{dozen} kg{kg} other{pieces}}"
+  "sellerUnitPlural": "{unit, select, carton{cartons} pack{packs} bag{bags} roll{rolls} bundle{bundles} box{boxes} dozen{dozen} kg{kg} other{pieces}}",
+  "sellerErrTooManyImports": "{minutes, plural, =1{You've uploaded a lot just now. Please wait 1 minute before uploading the next one.} other{You've uploaded a lot just now. Please wait {minutes} minutes before uploading the next one.}}",
+  "sellerErrSuspended": "Your account is on hold, so you can't upload price lists now. Please contact customer service.",
+  "sellerErrQuotaUnavailable": "The system is too busy right now and hasn't started reading this one. Please upload it again in a few minutes.",
+  "sellerImportErrNoProductsFile": "The AI couldn't find product names and prices in this file. Please check it's a price list (with product names and prices), then upload it again.",
+  "sellerReviewProductUnknown": "Couldn't load which product this will update. Pull down to load it again.",
+  "sellerReviewIncomplete": "{count, plural, =1{1 row is not filled in yet (in red). Fill it in, or choose \"Skip\".} other{{count} rows are not filled in yet (in red). Fill them in, or choose \"Skip\".}}",
+  "sellerOrdersLimited": "Only the latest {count} orders are shown here"
 }

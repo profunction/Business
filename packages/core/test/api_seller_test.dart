@@ -1,6 +1,10 @@
-// WholesaleApi 批发商端不连服务器也能测的部分：错误代码、等 AI 读完、上传前的检查
+// WholesaleApi 批发商端不连服务器也能测的部分：错误代码、等 AI 读完、上传前的检查；
+// 送出去的请求（顺序、过滤条件）用 http 的 MockClient 看
+import 'dart:convert';
 import 'dart:typed_data';
 
+import 'package:http/http.dart' as http;
+import 'package:http/testing.dart';
 import 'package:supabase/supabase.dart';
 import 'package:test/test.dart';
 import 'package:wholesale_core/wholesale_core.dart';
@@ -72,8 +76,58 @@ class FakeApi extends WholesaleApi {
     if (e != null) throw e;
   }
 
+  /// markImportFailed 标不到（例如 AI 其实已经开始读了：ai_raw 不是空的）
+  bool markMisses = false;
+
+  /// discardImport 丢这个错误（例如没网络）
+  Object? discardError;
+
   @override
-  Future<void> markImportFailed(String importId, String code) async => calls.add('failed $importId $code');
+  Future<bool> markImportFailed(String importId, String code) async {
+    calls.add('failed $importId $code');
+    return !markMisses;
+  }
+
+  @override
+  Future<bool> discardImport(PriceListImport import) async {
+    calls.add('discard ${import.id} ${import.filePath}');
+    final e = discardError;
+    if (e != null) throw e;
+    return true;
+  }
+}
+
+/// 假的服务器：记下每个请求（method path?query），回传 [reply] 给的内容
+class Recorder {
+  final requests = <String>[];
+
+  /// 第几个请求（从 0 开始）丢 ClientException（没网络）
+  int? failAt;
+
+  late final api = WholesaleApi(
+    SupabaseClient(
+      'http://localhost:54321',
+      'test-key',
+      httpClient: MockClient((req) async {
+        final n = requests.length;
+        requests.add('${req.method} ${req.url.path}?${Uri.decodeQueryComponent(req.url.query)}');
+        if (n == failAt) throw http.ClientException('Connection reset by peer', req.url);
+        final body = req.url.path.contains('/storage/')
+            ? '[]'
+            : req.method == 'GET'
+            ? jsonEncode({
+                'id': 'w1',
+                'name': 'A',
+                'phone': '60120000002',
+                'whatsapp_phone': null,
+                'notify_channel': 'whatsapp',
+                'whatsapp_opt_in_at': '2026-11-25T00:00:00Z',
+              })
+            : '[{"id":"x"}]';
+        return http.Response(body, 200, headers: {'content-type': 'application/json'}, request: req);
+      }),
+    ),
+  );
 }
 
 final jpeg = Uint8List.fromList([0xFF, 0xD8, 0xFF, 0xE0, ...List.filled(100, 1)]);
@@ -137,6 +191,33 @@ void main() {
       final expired = AppError.fromFunction(const FunctionsFetchException(details: AuthException('expired')));
       expect((expired.code, expired.detail), ('AUTH', AppError.sessionExpired));
       expect(AppError.fromFunction(const FunctionsRelayException(status: 502)).code, 'UNKNOWN');
+    });
+
+    test('parse-price-list 不肯读：429 用量满了（detail 是要等几秒）、403 停权、503 暂时叫不到', () {
+      final quota = AppError.fromFunction(
+        const FunctionsHttpException(
+          status: 429,
+          details: {'error': 'TOO_MANY_IMPORTS', 'retry_after': 420, 'window': 'burst'},
+        ),
+      );
+      expect(quota.code, 'TOO_MANY_IMPORTS');
+      expect(quota.retryAfter, const Duration(minutes: 7));
+      expect(
+        AppError.fromFunction(const FunctionsHttpException(status: 429, details: '{"error":"TOO_MANY_IMPORTS"}'))
+            .retryAfter,
+        isNull,
+        reason: '没给 retry_after：不知道要等多久',
+      );
+      expect(
+        AppError.fromFunction(const FunctionsHttpException(status: 403, details: {'error': 'WHOLESALER_SUSPENDED'}))
+            .code,
+        'WHOLESALER_SUSPENDED',
+      );
+      expect(
+        AppError.fromFunction(const FunctionsHttpException(status: 503, details: {'error': 'QUOTA_UNAVAILABLE'})).code,
+        'QUOTA_UNAVAILABLE',
+      );
+      expect(const AppError('IMPORT_ROW_INCOMPLETE', detail: '420').retryAfter, isNull);
     });
 
     test('parse-price-list 自己验 JWT：401 {"error":"UNAUTHORIZED"} = 登录过期（AUTH），不是不认识的错误', () {
@@ -236,6 +317,18 @@ void main() {
         ]);
         expect(api.calls, ['parse imp', 'failed imp $reason']);
       }
+      // 批发商停权了：再叫也一样，标成失败（不会一直再叫）
+      final suspended = FakeApi()
+        ..startParseError = const AppError('WHOLESALER_SUSPENDED')
+        ..statuses.addAll([ImportStatus.processing, ImportStatus.failed]);
+      await suspended.watchImport('imp').drain<void>();
+      expect(suspended.calls, ['parse imp', 'failed imp START_FAILED']);
+      // 用量满了：不是失败（导入没动），等有位置再叫
+      final quota = FakeApi()
+        ..startParseError = const AppError('TOO_MANY_IMPORTS', detail: '300')
+        ..statuses.addAll([ImportStatus.processing, ImportStatus.processing, ImportStatus.review]);
+      await quota.watchImport('imp').drain<void>();
+      expect(quota.calls, ['parse imp']);
       // 有人读过（有占位）的不标：可能还在读
       final running = FakeApi()
         ..startParseError = const AppError('CONFIG_MISSING')
@@ -386,6 +479,66 @@ void main() {
       }
     });
 
+    test('没网络，但 AI 其实已经开始读了（202 在路上断了）：不标成失败，照常等那一份', () async {
+      final api = FakeApi()
+        ..startParseError = const AppError('NETWORK')
+        ..markMisses = true
+        ..claimedAt = DateTime.now();
+      final imp = await api.submitPriceList('w1', jpeg);
+      expect(imp.claimedAt, isNotNull);
+      expect(imp.status, ImportStatus.processing);
+      expect(api.calls.last, 'failed imp-1 NETWORK', reason: '只标没人读过的（ai_raw 是空的）');
+      // 标不到、也没人在读（例如已经被别人标成失败）：照样说没网络
+      final gone = FakeApi()
+        ..startParseError = const AppError('NETWORK')
+        ..markMisses = true;
+      await expectLater(
+        gone.submitPriceList('w1', jpeg),
+        throwsA(isA<AppError>().having((e) => e.code, 'code', 'NETWORK')),
+      );
+    });
+
+    test('停权、用量满了、暂时叫不到：这一次当作没传过（删掉导入和档案，不留一份「读不到」），错误照样丢给页面', () async {
+      for (final code in ['WHOLESALER_SUSPENDED', 'TOO_MANY_IMPORTS', 'QUOTA_UNAVAILABLE']) {
+        final api = FakeApi()..startParseError = AppError(code);
+        await expectLater(
+          api.submitPriceList('w1', jpeg),
+          throwsA(isA<AppError>().having((e) => e.code, 'code', code)),
+        );
+        expect(api.calls, [
+          'upload jpg image/jpeg',
+          'create w1/abc.jpg image',
+          'parse imp-1',
+          'discard imp-1 w1/abc.jpg',
+        ]);
+      }
+      // 删不掉（没网络）：标成失败，首页才不会一直显示「AI 在读」
+      final offline = FakeApi()
+        ..startParseError = const AppError('WHOLESALER_SUSPENDED')
+        ..discardError = const AppError('NETWORK');
+      await expectLater(offline.submitPriceList('w1', jpeg), throwsA(isA<AppError>()));
+      expect(offline.calls.last, 'failed imp-1 START_FAILED');
+    });
+
+    test('用量满了：等 retry_after 之前再传，直接说还要等几分钟，不再上传（不会多一个档案、一份导入）', () async {
+      final api = FakeApi()..startParseError = const AppError('TOO_MANY_IMPORTS', detail: '480');
+      await expectLater(api.submitPriceList('w1', jpeg), throwsA(isA<AppError>()));
+      api.calls.clear();
+      await expectLater(
+        api.submitPriceList('w1', jpeg),
+        throwsA(
+          isA<AppError>()
+              .having((e) => e.code, 'code', 'TOO_MANY_IMPORTS')
+              .having((e) => e.retryAfter!.inSeconds, 'retryAfter', inInclusiveRange(470, 480)),
+        ),
+      );
+      expect(api.calls, isEmpty, reason: '没上传、没建导入');
+      // 别家批发商不受影响
+      api.startParseError = null;
+      await api.submitPriceList('w2', jpeg);
+      expect(api.calls, contains('parse imp-1'));
+    });
+
     test('别人已经叫了 AI（409 IMPORT_ALREADY_RUNNING）：一样在读，不算失败', () async {
       final api = FakeApi()..startParseError = const AppError('IMPORT_ALREADY_RUNNING');
       final imp = await api.submitPriceList('w1', jpeg);
@@ -442,6 +595,63 @@ void main() {
       }
       final big = Uint8List(productPhotoMaxBytes + 1)..setAll(0, jpeg);
       expect(() => checkProductPhoto(big), throwsA(isA<AppError>().having((e) => e.code, 'code', 'FILE_TOO_LARGE')));
+    });
+  });
+
+  group('送出去的请求', () {
+    test('选 WhatsApp：先记同意、再改通知方式（第二步断线也不会变成「WhatsApp 没同意」= 什么通知都不发）', () async {
+      final r = Recorder();
+      await r.api.setNotifyChannel('w1', NotifyChannel.whatsapp);
+      expect(r.requests.take(2), [
+        'PATCH /rest/v1/wholesalers?id=eq.w1&whatsapp_opt_in_at=is.null',
+        'PATCH /rest/v1/wholesalers?id=eq.w1&select=id',
+      ]);
+
+      // 记同意之后断线：通知方式没改（还是原本的），错误丢给页面
+      final cut = Recorder()..failAt = 1;
+      await expectLater(
+        cut.api.setNotifyChannel('w1', NotifyChannel.whatsapp),
+        throwsA(isA<AppError>().having((e) => e.code, 'code', 'NETWORK')),
+      );
+      expect(cut.requests.first, contains('whatsapp_opt_in_at=is.null'));
+
+      // 其他方式不用同意
+      final push = Recorder();
+      await push.api.setNotifyChannel('w1', NotifyChannel.push);
+      expect(push.requests.first, 'PATCH /rest/v1/wholesalers?id=eq.w1&select=id');
+    });
+
+    test('标成失败只标没人读过的（ai_raw 是空的）；删导入也是，删到了才删档案', () async {
+      final r = Recorder();
+      expect(await r.api.markImportFailed('i1', 'NETWORK'), isTrue);
+      expect(
+        r.requests.single,
+        'PATCH /rest/v1/price_list_imports?id=eq.i1&status=eq.processing&ai_raw=is.null&select=id',
+      );
+
+      final d = Recorder();
+      final imp = PriceListImport(
+        id: 'i1',
+        wholesalerId: 'w1',
+        filePath: 'w1/abc.jpg',
+        fileType: ImportFileType.image,
+        status: ImportStatus.processing,
+        createdAt: DateTime(2026),
+      );
+      expect(await d.api.discardImport(imp), isTrue);
+      expect(d.requests, [
+        'DELETE /rest/v1/price_list_imports?id=eq.i1&status=eq.processing&ai_raw=is.null&select=id',
+        'DELETE /storage/v1/object/price-lists?',
+      ]);
+    });
+
+    test('老板换语言：批发商、店铺的通知语言也换（一样的不写）', () async {
+      final r = Recorder();
+      await r.api.setBusinessLocale('ms', wholesalerIds: ['w1'], shopIds: ['s1']);
+      expect(r.requests, [
+        'PATCH /rest/v1/wholesalers?id=eq.w1&locale=neq.ms',
+        'PATCH /rest/v1/shops?id=eq.s1&locale=neq.ms',
+      ]);
     });
   });
 

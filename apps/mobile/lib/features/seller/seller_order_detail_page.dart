@@ -356,7 +356,8 @@ class _ItemLine extends StatelessWidget {
           children: [
             Expanded(
               child: Text(
-                '${i.name}  ×${i.qty} $unit',
+                // 英文要复数：×3 cartons（跟送货单一样）
+                '${i.name}  ×${l.qtyUnit(i.qty, i.unit)}',
                 style: t.titleMedium?.copyWith(decoration: crossed, color: i.isOutOfStock ? Colors.black45 : null),
               ),
             ),
@@ -451,7 +452,7 @@ class _OutOfStockChecklistState extends State<_OutOfStockChecklist> {
                         subtitle: Text(
                           _ticked.contains(i.id)
                               ? l.itemOutOfStockLabel
-                              : '×${i.qty} ${l.unit(i.unit)}  ${formatRm(i.lineTotalSen)}',
+                              : '×${l.qtyUnit(i.qty, i.unit)}  ${formatRm(i.lineTotalSen)}',
                           style: t.bodyLarge?.copyWith(color: _ticked.contains(i.id) ? AppTheme.problem : null),
                         ),
                       ),

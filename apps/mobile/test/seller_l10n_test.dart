@@ -41,6 +41,10 @@ void main() {
       expect((msArb[k]! as String).toLowerCase(), isNot(contains('produk')), reason: k);
     }
     expect(ms.sellerHomeProducts, 'Barang & harga');
+    // 「都不是」= none of these：马来文不能说「Bukan semua」（= not all of these）
+    expect(en.sellerReviewClearMatch, startsWith('None of these'));
+    expect(ms.sellerReviewClearMatch, 'Tiada antara ini (tambah sebagai baharu)');
+    expect(ms.sellerReviewClearMatch.toLowerCase(), isNot(contains('bukan semua')));
   });
 
   test('送货单「还有几张没确认」旁边的按钮：是去确认（打开列表），不是直接确认', () {

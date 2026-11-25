@@ -29,10 +29,15 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
     super.dispose();
   }
 
+  /// 缺货：只算上架中的（跟首页 get_seller_home 的 product_counts.out_of_stock 一样）。
+  /// 下架、草稿的买家本来就看不到，不算缺货
+  static bool _outOfStock(SellerProduct p) =>
+      p.status == ProductStatus.active && p.stockStatus == StockStatus.outOfStock;
+
   bool _matches(SellerProduct p) {
     final ok = switch (_filter) {
       ProductFilter.all => true,
-      ProductFilter.outOfStock => p.stockStatus == StockStatus.outOfStock,
+      ProductFilter.outOfStock => _outOfStock(p),
       ProductFilter.draft => p.status == ProductStatus.draft,
     };
     final q = _search.text.trim().toLowerCase();
@@ -47,10 +52,7 @@ class _ProductsPageState extends ConsumerState<ProductsPage> {
     String label(ProductFilter f) {
       final (name, count) = switch (f) {
         ProductFilter.all => (l.sellerFilterAll, null),
-        ProductFilter.outOfStock => (
-          l.sellerFilterOutOfStock,
-          all.where((p) => p.stockStatus == StockStatus.outOfStock).length,
-        ),
+        ProductFilter.outOfStock => (l.sellerFilterOutOfStock, all.where(_outOfStock).length),
         ProductFilter.draft => (l.sellerFilterDraft, all.where((p) => p.status == ProductStatus.draft).length),
       };
       return count == null || products.value == null ? name : l.sellerTabWithCount(name, count);

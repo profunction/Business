@@ -232,6 +232,29 @@ void main() {
     expect(s.location, '/seller/orders/$sellerOrderId');
   });
 
+  testWidgets('批发商点另一家（也是成员）的「今天要送」：先换到那一家，再打开送货总结', (tester) async {
+    final s = await start(tester, seller: true, prefs: {'push_permission_asked': true});
+    const other = '00000000-0000-4000-a000-0000000000bb';
+    s.api.sellerData.otherWholesalers.add({'id': other, 'name': '示范批发 B', 'status': 'active', 'member_role': 'owner'});
+    unawaited(s.session.refresh()); // 示范资料要等（假的时间），不能直接 await
+    await settle(tester);
+    final first = s.session.wholesalerId;
+    expect(first, isNot(other));
+
+    await s.tap({'type': 'daily_summary', 'date': '2026-11-25', 'wholesaler_id': other});
+    expect(s.session.wholesalerId, other, reason: '换到通知说的那一家');
+    expect(s.location, '/seller/summary?date=2026-11-25');
+
+    // 不是我的批发商、或是现在这一家：不换
+    await s.tap({
+      'type': 'daily_summary',
+      'date': '2026-11-26',
+      'wholesaler_id': '00000000-0000-4000-a000-0000000000cc',
+    });
+    expect(s.session.wholesalerId, other);
+    expect(s.location, '/seller/summary?date=2026-11-26');
+  });
+
   testWidgets('买家打不开批发商的页面', (tester) async {
     final s = await start(tester);
     s.router.go('/seller/summary');

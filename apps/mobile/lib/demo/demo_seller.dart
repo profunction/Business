@@ -35,12 +35,16 @@ class DemoSeller {
   /// 登录的人在这家批发商的角色：'owner'（老板）或 'staff'（员工不能改通知方式，跟数据库的 RLS 一样）
   String memberRole = 'owner';
 
+  /// 测试用：这个人另外也是这几家批发商的成员（get_my_context 的 wholesalers）
+  final otherWholesalers = <Json>[];
+
   /// get_my_context()：示范批发商的老板（my_context 样本是买家，这里另外做一个）
   Json myContext() => {
     'profile': {'id': userId, 'role': 'seller', 'full_name': 'Demo', 'phone': '60120000002', 'locale': 'zh'},
     'shops': <Object>[],
     'wholesalers': [
       {'id': wholesalerId, 'name': wholesalerName, 'status': wholesalerStatus, 'member_role': memberRole},
+      ...otherWholesalers,
     ],
   };
 
@@ -290,6 +294,24 @@ class DemoSeller {
 
   bool hasOrder(String id) => _orders.any((o) => o['id'] == id);
 
+  /// 测试用：再加 [n] 张以前的单（已送达，一天一张往前推），测「全部」最多只显示几张
+  void addPastOrders(int n) {
+    final base = _orders.first;
+    final start = DateTime.parse(base['created_at'] as String);
+    for (var i = 0; i < n; i++) {
+      final at = start.subtract(Duration(days: i + 1)).toUtc().toIso8601String();
+      _orders.add({
+        ...base,
+        'id': '00000000-0000-4000-e000-${i.toString().padLeft(12, '0')}',
+        'order_no': 'JHB250101-${i.toString().padLeft(5, '0')}',
+        'status': 'delivered',
+        'created_at': at,
+        'expected_delivery_date': at.substring(0, 10),
+        'events': <Object>[],
+      });
+    }
+  }
+
   OrderDetail order(String id) {
     final o = _order(id);
     final status = o['status'];
@@ -514,8 +536,14 @@ class DemoSeller {
   /// 下一次导入 AI 读失败（测试失败画面）：例如 'AI_REFUSED'、'UNSUPPORTED_FILE'
   String? nextImportError;
 
-  /// 下一次叫 parse-price-list 失败（测试叫不到 AI）：例如 'NETWORK'、'AUTH'、'CONFIG_MISSING'
+  /// 下一次叫 parse-price-list 失败（测试叫不到 AI）：例如 'NETWORK'、'AUTH'、'CONFIG_MISSING'、
+  /// 'TOO_MANY_IMPORTS'（[nextStartErrorDetail] 是要等几秒）、'WHOLESALER_SUSPENDED'
   String? nextStartError;
+  String? nextStartErrorDetail;
+
+  /// 建新的导入之前那一份（parse-price-list 不肯读、App 删掉新的那一份时，首页又显示回这一份）
+  Json? _previousImport;
+  List<Json> _previousRows = [];
 
   /// 叫了几次 parse-price-list（包括卡住之后再叫的）
   int startParseCount = 0;
@@ -542,6 +570,10 @@ class DemoSeller {
 
   PriceListImport createImport(String filePath, ImportFileType type) {
     final now = DateTime.now().toUtc().toIso8601String();
+    _previousImport = {..._import};
+    _previousRows = [
+      for (final r in _rows) {...r},
+    ];
     _resetImport({
       ...asJson(_j('price_list_import')),
       'id': newUuidV4(),
@@ -563,8 +595,10 @@ class DemoSeller {
   void startParse(String importId) {
     startParseCount++;
     final error = nextStartError;
+    final detail = nextStartErrorDetail;
     nextStartError = null;
-    if (error != null) throw AppError(error);
+    nextStartErrorDetail = null;
+    if (error != null) throw AppError(error, detail: detail);
     _checkImport(importId);
     if (_import['status'] != 'processing') throw const AppError('IMPORT_NOT_PROCESSING');
     final claimed = PriceListImport.fromJson(_import).claimedAt;
@@ -598,13 +632,28 @@ class DemoSeller {
     return PriceListImport.fromJson(_import);
   }
 
-  void markFailed(String importId, String code) {
+  /// 跟 WholesaleApi.markImportFailed 一样：只标还在 processing、没人读过（ai_raw 是空的）的
+  bool markFailed(String importId, String code) {
     _checkImport(importId);
-    if (_import['status'] == 'processing') {
-      _import
-        ..['status'] = 'failed'
-        ..['error_message'] = code;
-    }
+    if (_import['status'] != 'processing' || _import['ai_raw'] != null) return false;
+    _import
+      ..['status'] = 'failed'
+      ..['error_message'] = code;
+    return true;
+  }
+
+  /// 跟 WholesaleApi.discardImport 一样：删掉还在 processing、没人读过的那一份（首页变回之前那一份）
+  bool discard(String importId) {
+    if (_import['id'] != importId || _import['status'] != 'processing' || _import['ai_raw'] != null) return false;
+    final previous = _previousImport;
+    if (previous == null) return false;
+    _import = previous;
+    _rows
+      ..clear()
+      ..addAll(_previousRows);
+    _previousImport = null;
+    _previousRows = [];
+    return true;
   }
 
   List<PriceListImport> imports() => [PriceListImport.fromJson(_import)];

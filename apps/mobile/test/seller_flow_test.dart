@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:jb_wholesale/app/router.dart';
 import 'package:jb_wholesale/push/push_service.dart';
 import 'package:jb_wholesale/widgets/common.dart';
+import 'package:wholesale_core/wholesale_core.dart';
 
 import 'seller_harness.dart';
 
@@ -208,6 +209,33 @@ void main() {
     expect(find.byKey(const Key('seller-order-$kopitiamPending')), findsNothing);
   });
 
+  testWidgets('「全部」只读最近的 100 张：读满了在最后说只显示最近的，没满就不说', (tester) async {
+    final api = await startSeller(tester);
+    routerOf(tester).push('/seller/orders?tab=all');
+    await tester.pumpAndSettle();
+    await settle(tester);
+    expect(find.byKey(const Key('seller-orders-limited'), skipOffstage: false), findsNothing);
+
+    api.sellerData.addPastOrders(150);
+    await tapAndSettle(tester, find.byKey(const Key('seller-tab-pending')));
+    await tapAndSettle(tester, find.byKey(const Key('seller-tab-all')));
+    await settle(tester);
+    await tester.scrollUntilVisible(find.byKey(const Key('seller-orders-limited')), 2000, scrollable: pageScrollable);
+    await tester.pumpAndSettle();
+    expect(find.text('这里只显示最近的 100 张单'), findsOneWidget);
+  });
+
+  testWidgets('英文：订单明细、缺货勾选的数量有复数（×2 cartons，跟送货单一样）', (tester) async {
+    await startSeller(tester, locale: 'en');
+    await openOrder(tester, tile: 'seller-new-orders', id: amingPending);
+    await scrollTo(tester, find.text('16安士 PP杯 95口径  ×2 cartons'));
+    expect(find.text('16安士 PP杯 95口径  ×2 cartons'), findsOneWidget);
+    expect(find.textContaining('×2 carton '), findsNothing);
+    await tapAndSettle(tester, find.byKey(const Key('seller-confirm')));
+    expect(find.textContaining('×5 packs'), findsNWidgets(2), reason: '白色塑料汤匙 ×5：明细 + 缺货勾选');
+    expect(find.textContaining('×5 pack '), findsNothing);
+  });
+
   testWidgets('从链接打开某张单（还在读登录资料）：读完就打开那张，按返回回到批发商首页', (tester) async {
     await startSeller(tester, settle: false);
     routerOf(tester).go('/seller/orders/$amingPending');
@@ -252,6 +280,52 @@ void main() {
     expect(api.calls, contains('notifyChannel auto'));
     await tapAndSettle(tester, find.byKey(const Key('whatsapp-opt-in')));
     expect(api.sellerData.settings().whatsappOptedIn, isFalse);
+  });
+
+  testWidgets('设定：选 WhatsApp 时回应在路上断了（服务器其实改好了）：画面显示服务器上真的设定，不是旧的', (tester) async {
+    final api = await startSeller(tester);
+    await tapAndSettle(tester, find.byKey(const Key('seller-open-settings')));
+    api.loseNextSettingsReply = true;
+    await tapAndSettle(tester, find.byKey(const Key('notify-whatsapp')));
+    await settle(tester);
+    expect(find.text('连不上网络，请检查网络再试'), findsOneWidget);
+    final group = tester.widget<RadioGroup<NotifyChannel>>(find.byType(RadioGroup<NotifyChannel>));
+    expect(group.groupValue, NotifyChannel.whatsapp, reason: '重新读了设定');
+    expect(api.sellerData.settings().whatsappOptedIn, isTrue);
+  });
+
+  testWidgets('设定：老板换语言，批发商收到的通知也换语言（wholesalers.locale）；员工换不会改', (tester) async {
+    final api = await startSeller(tester);
+    await tapAndSettle(tester, find.byKey(const Key('seller-open-settings')));
+    await tapAndSettle(tester, find.byKey(const Key('settings-lang-ms')));
+    expect(api.calls, contains('wholesalerLocale ${api.sellerData.wholesalerId} ms'));
+  });
+
+  testWidgets('设定：员工换语言，不改批发商的通知语言', (tester) async {
+    final api = await startSeller(tester, role: 'staff');
+    await tapAndSettle(tester, find.byKey(const Key('seller-open-settings')));
+    await tapAndSettle(tester, find.byKey(const Key('settings-lang-en')));
+    expect(api.calls.where((c) => c.startsWith('wholesalerLocale')), isEmpty);
+  });
+
+  testWidgets('设定：照提示去手机「设定」打开通知再回来：马上显示已经打开', (tester) async {
+    final push = FakePush()..status = PushPermission.denied;
+    await startSeller(tester, push: push);
+    await tapAndSettle(tester, find.byKey(const Key('seller-open-settings')));
+    await scrollTo(tester, find.byKey(const Key('push-enable')));
+    expect(find.byKey(const Key('push-off')), findsOneWidget);
+    // 去手机的设定（App 到背景），打开通知，再回来
+    for (final s in [AppLifecycleState.inactive, AppLifecycleState.hidden, AppLifecycleState.paused]) {
+      tester.binding.handleAppLifecycleStateChanged(s);
+    }
+    push.status = PushPermission.granted;
+    for (final s in [AppLifecycleState.hidden, AppLifecycleState.inactive, AppLifecycleState.resumed]) {
+      tester.binding.handleAppLifecycleStateChanged(s);
+    }
+    await settle(tester);
+    expect(find.byKey(const Key('push-on')), findsOneWidget);
+    expect(find.byKey(const Key('push-off')), findsNothing);
+    expect(push.calls, isEmpty, reason: '没有再问');
   });
 
   testWidgets('设定：员工只看得到现在的通知方式，不能改', (tester) async {

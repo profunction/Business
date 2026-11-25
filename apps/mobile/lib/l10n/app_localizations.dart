@@ -2504,6 +2504,48 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'{unit, select, carton{箱} pack{包} bag{袋} roll{卷} bundle{扎} box{盒} dozen{打} kg{公斤} other{个}}'**
   String sellerUnitPlural(String unit);
+
+  /// No description provided for @sellerErrTooManyImports.
+  ///
+  /// In zh, this message translates to:
+  /// **'刚才上传太多份了。请等 {minutes} 分钟再上传下一份。'**
+  String sellerErrTooManyImports(int minutes);
+
+  /// No description provided for @sellerErrSuspended.
+  ///
+  /// In zh, this message translates to:
+  /// **'你的账号暂停了，现在不能上传价目表。请联系客服。'**
+  String get sellerErrSuspended;
+
+  /// No description provided for @sellerErrQuotaUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'系统现在太忙，这份还没开始读。请过几分钟再上传一次。'**
+  String get sellerErrQuotaUnavailable;
+
+  /// No description provided for @sellerImportErrNoProductsFile.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 在这个文件里找不到商品名字和价钱。请看看是不是价目表（要有商品名字和价钱），再上传一次。'**
+  String get sellerImportErrNoProductsFile;
+
+  /// No description provided for @sellerReviewProductUnknown.
+  ///
+  /// In zh, this message translates to:
+  /// **'读不到会更新哪一样商品。请往下拉再读一次。'**
+  String get sellerReviewProductUnknown;
+
+  /// No description provided for @sellerReviewIncomplete.
+  ///
+  /// In zh, this message translates to:
+  /// **'还有 {count} 行没填好（红色的）。请填好，或选「跳过」。'**
+  String sellerReviewIncomplete(int count);
+
+  /// No description provided for @sellerOrdersLimited.
+  ///
+  /// In zh, this message translates to:
+  /// **'这里只显示最近的 {count} 张单'**
+  String sellerOrdersLimited(int count);
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

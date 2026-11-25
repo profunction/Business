@@ -100,6 +100,8 @@ class SessionController extends ChangeNotifier {
       if (code != null && _context!.profile.locale != code) {
         unawaited(api.setMyLocale(_context!.profile.id, code).catchError((_) {}));
       }
+      // 老板的批发商 / 店铺收到的通知也用 App 的语言（已经一样的不会写）
+      if (code != null) _syncBusinessLocale(_context!, code);
       // 买家、批发商都登记推送（每次开 App 都更新一次）；失败也不影响用 App
       unawaited(push.registerDevice(localeCode: code).catchError((_) {}));
     } catch (e) {
@@ -117,12 +119,28 @@ class SessionController extends ChangeNotifier {
     unawaited(push.setLocale(code).catchError((_) {}));
     final c = _context;
     if (c != null) {
+      _syncBusinessLocale(c, code);
       try {
         await api.setMyLocale(c.profile.id, code);
       } catch (_) {
         // 下次 refresh 会再同步
       }
     }
+  }
+
+  /// 发给批发商、店铺的通知（新订单推送、每天早上的送货总结、WhatsApp 模板）用的是 wholesalers.locale / shops.locale，
+  /// 不是个人的语言：老板换了 App 的语言，自己是老板的那几家也跟着换（员工换语言不会改）。失败也不影响用 App
+  void _syncBusinessLocale(MyContext c, String code) {
+    final wholesalers = [
+      for (final w in c.wholesalers)
+        if (w.isOwner) w.id,
+    ];
+    final shops = [
+      for (final s in c.shops)
+        if (s.isOwner) s.id,
+    ];
+    if (wholesalers.isEmpty && shops.isEmpty) return;
+    unawaited(api.setBusinessLocale(code, wholesalerIds: wholesalers, shopIds: shops).catchError((_) {}));
   }
 
   Future<void> selectShop(String shopId) async {

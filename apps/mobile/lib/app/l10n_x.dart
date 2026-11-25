@@ -118,8 +118,20 @@ extension L10nText on L10n {
       'IMPORT_ROW_INVALID_PRODUCT' => sellerErrRowInvalidProduct(_row(e)),
       'IMPORT_DUPLICATE_PRODUCT' => sellerErrDuplicateProduct(_row(e)),
       'IMPORT_NOT_FOUND' || 'PRODUCT_NOT_FOUND' || 'WHOLESALER_NOT_FOUND' || 'NOT_FOUND' => sellerErrNotFound,
+      // parse-price-list 不肯读（这一次的导入 App 已经删掉了）：用量满了要等几分钟 / 停权 / 暂时叫不到
+      'TOO_MANY_IMPORTS' => sellerErrTooManyImports(_waitMinutes(e)),
+      'WHOLESALER_SUSPENDED' => sellerErrSuspended,
+      'QUOTA_UNAVAILABLE' => sellerErrQuotaUnavailable,
       _ => errUnknown,
     };
+  }
+
+  /// 用量满了要等几分钟（无条件进位，最少 1）。函数没说的话当 10 分钟（最短的那一段）
+  int _waitMinutes(Object e) {
+    final wait = e is AppError ? e.retryAfter : null;
+    if (wait == null) return 10;
+    final m = (wait.inSeconds / 60).ceil();
+    return m < 1 ? 1 : m;
   }
 
   int _row(Object e) => (e is AppError ? e.rowNo : null) ?? 0;
@@ -166,9 +178,15 @@ extension L10nText on L10n {
     'DB_ERROR' ||
     'INTERNAL_ERROR' ||
     'START_FAILED' => sellerImportErrService,
+    'QUOTA_UNAVAILABLE' => sellerErrQuotaUnavailable,
+    'WHOLESALER_SUSPENDED' => sellerErrSuspended,
     'NETWORK' => errNetwork,
     'AUTH' => sellerErrLoginExpired,
-    _ => sellerErrAiFailed, // AI_INVALID_OUTPUT、NO_PRODUCTS_FOUND、不认识的：请拍清楚一点
+    // AI_INVALID_OUTPUT、NO_PRODUCTS_FOUND、不认识的：照片请拍清楚一点；Excel / PDF 拍清楚没用，请看是不是价目表
+    _ =>
+      fileType == ImportFileType.excel || fileType == ImportFileType.pdf
+          ? sellerImportErrNoProductsFile
+          : sellerErrAiFailed,
   };
 
   /// 库存：有货 / 快卖完 / 缺货

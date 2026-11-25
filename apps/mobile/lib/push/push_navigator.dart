@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
+import 'package:wholesale_core/wholesale_core.dart';
 
 import '../app/router.dart';
 import '../app/session.dart';
@@ -39,10 +40,24 @@ class PushNavigator {
     if (isSeller != isSellerPath(current.path)) return; // 路由还没跳到这个角色的首页
     _pending = null;
     final location = pushRoute(data, isSeller: isSeller);
-    if (location == null || current.toString() == location) return;
+    if (location == null) return;
+    // 通知是另一家批发商的（一个人可以是几家的成员；data.wholesaler_id）：先换到那一家，
+    // 送货总结、订单列表才会读那一家的资料（不然会打开现在选的那一家）
+    final switchTo = isSeller ? _otherWholesaler(data['wholesaler_id']) : null;
+    if (switchTo == null && current.toString() == location) return;
     // 不在 listener 里面直接改路由
-    WidgetsBinding.instance.addPostFrameCallback((_) => router.push(location));
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (switchTo != null) await session.selectWholesaler(switchTo);
+      if (currentLocation(router).toString() != location) router.push(location);
+    });
     WidgetsBinding.instance.ensureVisualUpdate();
+  }
+
+  /// 通知说的批发商：是我的另一家（不是现在选的）才回传，其他（没有、不认识、不是成员）→ null
+  String? _otherWholesaler(String? id) {
+    if (!isUuid(id) || id == session.wholesalerId) return null;
+    final mine = session.context?.wholesalers ?? const [];
+    return mine.any((w) => w.id == id) ? id : null;
   }
 
   void dispose() {

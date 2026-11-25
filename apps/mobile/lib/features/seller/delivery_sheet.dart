@@ -75,8 +75,30 @@ const _grey = PdfColor.fromInt(0xFF666666);
 const _light = PdfColor.fromInt(0xFFEEEEEE);
 const _red = PdfColor.fromInt(0xFFC62828);
 
-/// 一张订单的明细超过这么多样，就让它可以跨页（不然整块搬到下一页）
-const _keepTogetherItems = 20;
+/// 一张单估计印出来不超过这么高（pt），就整块放在同一页（这一页放不下就整块搬到下一页）；更长的才让它跨页。
+/// A4 扣掉边、每页上面的批发商名字和下面的页码，大约还有 715pt：留很多余地，
+/// 因为整块的（pw.Inseparable）比一整页还高的话，pdf 会直接出错、印不出来
+const keepTogetherMaxHeight = 540.0;
+
+/// 估计一张单印出来多高（pt），宁可估高：每个字都当成中文字那么宽（11pt 字，一行大约 16pt 高）
+double estimatedOrderHeight(DeliveryOrder o, L10n l, {bool withZone = false}) {
+  const line = 16.0;
+  // 一段字要几行：一行放得下 perLine 个字
+  int lines(String text, int perLine) => text.isEmpty ? 1 : (text.runes.length / perLine).ceil();
+  final shop = o.shop;
+  var h = withZone ? 32.0 : 0.0; // 区名
+  h += 8 + 20.0 * lines('999. ${shop.name}  ${o.orderNo}', 36); // 上面的线、店名（13pt，编号当三位数）
+  if (shop.contactName != null) h += line * lines(l.sellerContact(shop.contactName!), 40);
+  if (shop.phone != null) h += line;
+  if (shop.address != null) h += line * lines(l.sellerSummaryAddress(shop.address!), 40);
+  h += 4;
+  for (final i in o.items) {
+    h += 4 + line * lines(_itemLine(i, l), 34);
+  }
+  h += 4 + 20; // 付款方式、总额（13pt）
+  if (o.note != null) h += line * lines(l.sellerBuyerNote(o.note!), 40);
+  return h + 10 + 16 + 10; // 签名的线、下面的空白
+}
 
 /// 送货员打勾用的小方块
 pw.Widget _box() =>
@@ -235,11 +257,14 @@ pw.Document deliveryPdfDocument(
       ),
     );
     final items = o.items.map(itemRow).toList();
-    // 一般的单整块放在同一页（送货员不用翻页）；很长的才让它跨页
+    // 一般的单整块放在同一页（送货员不用翻页）：这一页放不下就整块搬到下一页。
+    // 要用 Inseparable：直的 Column 在 MultiPage 里会被切开（Flex 竖的可以跨页）。很长的单才让它跨页
     final top = [if (zone != null) zoneHeading(zone), head];
-    if (o.items.length <= _keepTogetherItems) {
+    if (estimatedOrderHeight(o, l, withZone: zone != null) <= keepTogetherMaxHeight) {
       return [
-        pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.stretch, children: [...top, ...items, foot]),
+        pw.Inseparable(
+          child: pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.stretch, children: [...top, ...items, foot]),
+        ),
       ];
     }
     return [...top, ...items, foot];

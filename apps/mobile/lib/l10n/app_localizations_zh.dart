@@ -1404,4 +1404,31 @@ class L10nZh extends L10n {
     });
     return '$_temp0';
   }
+
+  @override
+  String sellerErrTooManyImports(int minutes) {
+    return '刚才上传太多份了。请等 $minutes 分钟再上传下一份。';
+  }
+
+  @override
+  String get sellerErrSuspended => '你的账号暂停了，现在不能上传价目表。请联系客服。';
+
+  @override
+  String get sellerErrQuotaUnavailable => '系统现在太忙，这份还没开始读。请过几分钟再上传一次。';
+
+  @override
+  String get sellerImportErrNoProductsFile => 'AI 在这个文件里找不到商品名字和价钱。请看看是不是价目表（要有商品名字和价钱），再上传一次。';
+
+  @override
+  String get sellerReviewProductUnknown => '读不到会更新哪一样商品。请往下拉再读一次。';
+
+  @override
+  String sellerReviewIncomplete(int count) {
+    return '还有 $count 行没填好（红色的）。请填好，或选「跳过」。';
+  }
+
+  @override
+  String sellerOrdersLimited(int count) {
+    return '这里只显示最近的 $count 张单';
+  }
 }

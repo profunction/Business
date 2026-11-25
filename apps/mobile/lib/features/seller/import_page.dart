@@ -55,6 +55,10 @@ class _ImportPageState extends ConsumerState<ImportPage> {
   /// 失败画面的标题：AI 读不到，或查不到进度（没权限、找不到那一份……）
   String? _failureTitle;
 
+  /// AI 读好了，可是这一页被别的页盖住（例如点通知打开了一张订单）：回到这一页才去确认页。
+  /// 不然 pushReplacement 换掉的是最上面那一页（老板正在看的订单），这一页还留在底下一直转
+  PriceListImport? _readyWhileCovered;
+
   @override
   void initState() {
     super.initState();
@@ -72,13 +76,49 @@ class _ImportPageState extends ConsumerState<ImportPage> {
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // 盖在上面的那一页关掉了（这一页又在最上面）：去确认页
+    final ready = _readyWhileCovered;
+    if (ready != null && _isCurrent()) {
+      _readyWhileCovered = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _openReview(ready);
+      });
+    }
+  }
+
+  @override
   void dispose() {
     _watch?.cancel();
     super.dispose();
   }
 
+  /// 这一页是不是在最上面（没有被别的页盖住）。也让这一页在「被盖住 / 又露出来」时收到 didChangeDependencies
+  bool _isCurrent() => ModalRoute.isCurrentOf(context) ?? true;
+
+  /// 读好了（review / applied）：去确认页。被别的页盖住的话，等回到这一页再去
+  void _openReview(PriceListImport imp) {
+    if (!_isCurrent()) {
+      _readyWhileCovered = imp;
+      return;
+    }
+    _readyWhileCovered = null;
+    context.pushReplacement('/seller/import/${imp.id}');
+  }
+
+  /// 服务器刚说这家批发商停权了（登录之后才停权的：登录时读到的还是正常）
+  bool _refusedSuspended = false;
+
+  /// 批发商停权了：parse-price-list 不会读（403 WHOLESALER_SUSPENDED），不用上传了才知道
+  bool get _suspended => _refusedSuspended || ref.read(sessionProvider).wholesaler?.status == 'suspended';
+
   Future<void> _pick(PickSource source) async {
     final l = context.l10n;
+    if (_suspended) {
+      showMessage(context, l.sellerErrSuspended, error: true);
+      return;
+    }
     final device = ref.read(sellerDeviceProvider);
     try {
       final file = source == PickSource.file
@@ -96,6 +136,10 @@ class _ImportPageState extends ConsumerState<ImportPage> {
   /// 检查 → 上传 → 叫 AI → 等
   Future<void> _submit(PickedFile file) async {
     final l = context.l10n;
+    if (_suspended) {
+      showMessage(context, l.sellerErrSuspended, error: true);
+      return;
+    }
     try {
       final picked = await readPriceListFile(file);
       if (!mounted) return;
@@ -103,9 +147,12 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       final import = await ref.read(sellerActionsProvider).submitPriceList(picked.bytes, fileName: file.name);
       if (mounted) _wait(import.id);
     } catch (e) {
-      // HEIC、太大、上传不了……：留在这一页，说一句话就好
+      // HEIC、太大、上传不了、用量满了……：留在这一页，说一句话就好
       if (!mounted) return;
-      setState(() => _stage = _Stage.choose);
+      setState(() {
+        _stage = _Stage.choose;
+        if (e is AppError && e.code == 'WHOLESALER_SUSPENDED') _refusedSuspended = true;
+      });
       showMessage(context, l.error(e), error: true);
     }
   }
@@ -142,12 +189,12 @@ class _ImportPageState extends ConsumerState<ImportPage> {
                 if (slow != _slow) setState(() => _slow = slow);
               case ImportStatus.review:
                 ref.invalidate(sellerHomeProvider);
-                context.pushReplacement('/seller/import/${imp.id}');
+                _openReview(imp);
               case ImportStatus.failed:
                 ref.invalidate(sellerHomeProvider);
                 _fail(context.l10n.importFailure(imp.errorMessage, fileType: imp.fileType));
               case ImportStatus.applied:
-                context.pushReplacement('/seller/import/${imp.id}');
+                _openReview(imp);
             }
           },
           onError: (Object e) {
@@ -172,6 +219,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    _isCurrent(); // 被盖住 / 又露出来时重新 build（didChangeDependencies）
     return Scaffold(
       appBar: AppBar(title: Text(l.sellerHomeImport)),
       body: switch (_stage) {
@@ -228,6 +276,15 @@ class _ImportPageState extends ConsumerState<ImportPage> {
 
   Widget _choose(BuildContext context) {
     final l = context.l10n;
+    ref.watch(sessionProvider.select((s) => s.wholesaler?.status));
+    if (_suspended) {
+      return CenterMessage(
+        key: const Key('import-suspended'),
+        icon: Icons.block,
+        iconColor: AppTheme.problem,
+        text: l.sellerErrSuspended,
+      );
+    }
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [

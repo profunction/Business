@@ -5,6 +5,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jb_wholesale/app/theme.dart';
 import 'package:jb_wholesale/demo/demo_api.dart';
 import 'package:jb_wholesale/features/seller/seller_device.dart';
 import 'package:jb_wholesale/widgets/common.dart';
@@ -230,6 +231,244 @@ void main() {
       final raw = tester.widget<Text>(find.byKey(const Key('row-1-raw')));
       final style = DefaultTextStyle.of(tester.element(find.byKey(const Key('row-1-raw')))).style.merge(raw.style);
       expect(style.fontSize, greaterThanOrEqualTo(18));
+    });
+  });
+
+  group('parse-price-list 不肯读', () {
+    testWidgets('用量满了（429）：说要等几分钟；不留一份「读不到」；等到之前再按不会再上传', (tester) async {
+      final device = FakeDevice()..nextImage = PickedFile.memory(jpeg);
+      final api = await startSeller(tester, device: device, status: 'pending');
+      final before = api.sellerData.currentImport.id;
+      await tapAndSettle(tester, find.byKey(const Key('seller-import')));
+      await tapAndSettle(tester, find.byKey(const Key('review-upload-other')));
+      api.sellerData
+        ..nextStartError = 'TOO_MANY_IMPORTS'
+        ..nextStartErrorDetail = '450';
+      await tapAndSettle(tester, find.byKey(const Key('import-camera')));
+      await settle(tester);
+      expect(find.text('刚才上传太多份了。请等 8 分钟再上传下一份。'), findsOneWidget);
+      expect(find.text('出了点问题，请再试一次'), findsNothing);
+      expect(find.byKey(const Key('import-camera')), findsOneWidget, reason: '留在这一页');
+      expect(api.calls, contains('discardImport image'));
+      expect(api.sellerData.currentImport.id, before, reason: '这一次的导入删掉了，最近一次还是之前那一份');
+
+      // 马上再按：不用上传就知道还要等
+      api.calls.clear();
+      await tester.pump(const Duration(seconds: 5));
+      await tester.pumpAndSettle();
+      await tapAndSettle(tester, find.byKey(const Key('import-camera')));
+      expect(find.text('刚才上传太多份了。请等 8 分钟再上传下一份。'), findsOneWidget);
+      expect(api.calls.where((c) => c.startsWith('upload')), isEmpty, reason: '没有再上传');
+      expect(api.calls.where((c) => c.startsWith('createImport')), isEmpty);
+
+      await back(tester);
+      expect(find.text('上次的读不到，请再上传一次'), findsNothing, reason: '首页不会说上次的读不到');
+      expect(find.text('AI 读好了，去确认上架'), findsOneWidget, reason: '还是之前那一份');
+    });
+
+    testWidgets('停权：上传价目表那一页直接说，不能上传；登录之后才停权的（服务器 403）也说清楚', (tester) async {
+      final device = FakeDevice()..nextImage = PickedFile.memory(jpeg);
+      final api = await startSeller(tester, device: device, status: 'suspended');
+      routerOf(tester).push('/seller/import');
+      await tester.pumpAndSettle();
+      expect(find.byKey(const Key('import-suspended')), findsOneWidget);
+      expect(find.text('你的账号暂停了，现在不能上传价目表。请联系客服。'), findsOneWidget);
+      expect(find.byKey(const Key('import-camera')), findsNothing);
+      expect(api.calls.where((c) => c.startsWith('upload')), isEmpty);
+    });
+
+    testWidgets('登录时还正常、上传时服务器说停权了：说停权（不是「再试一次」），不留一份「读不到」', (tester) async {
+      final device = FakeDevice()..nextImage = PickedFile.memory(jpeg);
+      final api = await startSeller(tester, device: device);
+      routerOf(tester).push('/seller/import');
+      await tester.pumpAndSettle();
+      api.sellerData.nextStartError = 'WHOLESALER_SUSPENDED';
+      await tapAndSettle(tester, find.byKey(const Key('import-gallery')));
+      await settle(tester);
+      expect(find.text('你的账号暂停了，现在不能上传价目表。请联系客服。'), findsWidgets);
+      expect(find.byKey(const Key('import-suspended')), findsOneWidget, reason: '不再让老板一直上传');
+      expect(api.calls, contains('discardImport image'));
+      expect(api.sellerData.currentImport.status, ImportStatus.review, reason: '最近一次还是之前那一份');
+    });
+
+    testWidgets('系统太忙（503）：说过几分钟再上传', (tester) async {
+      final device = FakeDevice()..nextImage = PickedFile.memory(jpeg);
+      final api = await startSeller(tester, device: device);
+      routerOf(tester).push('/seller/import');
+      await tester.pumpAndSettle();
+      api.sellerData.nextStartError = 'QUOTA_UNAVAILABLE';
+      await tapAndSettle(tester, find.byKey(const Key('import-camera')));
+      await settle(tester);
+      expect(find.text('系统现在太忙，这份还没开始读。请过几分钟再上传一次。'), findsOneWidget);
+      expect(find.byKey(const Key('import-camera')), findsOneWidget);
+    });
+  });
+
+  group('等 AI 的页面被盖住', () {
+    testWidgets('等的时候点通知打开一张订单：AI 读好了也不会换掉那张订单；回来才去确认页（不会一直转）', (tester) async {
+      final device = FakeDevice()..nextImage = PickedFile.memory(jpeg);
+      final api = await startSeller(tester, device: device);
+      api.sellerData.pollsToFinish = 15;
+      routerOf(tester).push('/seller/import');
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const Key('import-camera')));
+      await pumpUntil(tester, find.byKey(const Key('import-leave')));
+      // 点了新订单的通知（PushNavigator 也是 router.push）
+      routerOf(tester).push('/seller/orders/1cf81f7b-9e34-42dd-9f8e-fe096bcf807c');
+      await pumpUntil(tester, find.byKey(const Key('seller-confirm')));
+      // AI 读好了（每 200ms 查一次，15 次）
+      for (var i = 0; i < 40; i++) {
+        await tester.pump(const Duration(milliseconds: 200));
+      }
+      expect(api.sellerData.currentImport.status, ImportStatus.review);
+      expect(routerOf(tester).state.uri.path, '/seller/orders/1cf81f7b-9e34-42dd-9f8e-fe096bcf807c');
+      expect(find.byKey(const Key('seller-confirm')), findsOneWidget, reason: '老板正在看的订单还在');
+
+      // 看完订单按返回：去确认页
+      await tester.tap(find.byType(BackButton));
+      await pumpUntil(tester, find.text('检查价目表'));
+      await tester.pumpAndSettle();
+      expect(routerOf(tester).state.uri.path, '/seller/import/${api.sellerData.currentImport.id}');
+      // 再按返回：回首页（等的那一页已经换成确认页了，不会留着一直转）
+      await back(tester);
+      expect(routerOf(tester).state.uri.path, '/seller');
+      expect(find.byKey(const Key('import-waiting')), findsNothing);
+    });
+  });
+
+  group('确认页：商品读不到、AI 不太肯定、跳过、还没填好', () {
+    testWidgets('商品读不到（没网络）：「更新」的行说读不到、选商品那一页说原因可以再读，不会说「找不到符合的商品」', (tester) async {
+      final api = await startSeller(tester);
+      api.productsError = const AppError('NETWORK');
+      await tapAndSettle(tester, find.byKey(const Key('seller-import')));
+      await settle(tester);
+      expect(find.byKey(const Key('row-1-product-unknown')), findsOneWidget);
+      expect(find.text('读不到会更新哪一样商品。请往下拉再读一次。'), findsNWidgets(2), reason: '第 1、2 行');
+      expect(find.textContaining('会更新：'), findsNothing);
+
+      // 第 3 行按「更新」：选的那一页说没网络，可以再读
+      await tapKey(tester, 'row-3-update');
+      expect(find.byKey(const Key('choose-error')), findsOneWidget);
+      expect(find.text('找不到符合的商品'), findsNothing);
+      expect(find.text('连不上网络，请检查网络再试'), findsOneWidget);
+      api.productsError = null; // 网络好了
+      await tapAndSettle(
+        tester,
+        find.descendant(of: find.byType(BottomSheet), matching: find.widgetWithText(FilledButton, '再试一次')),
+      );
+      await settle(tester);
+      expect(find.byKey(Key('choose-product-$cup16')), findsOneWidget);
+      await tapAndSettle(tester, find.byKey(const Key('choose-cancel')));
+
+      // 商品读好了：「更新」的行又写出会改哪一样
+      await scrollTo(tester, find.byKey(const Key('row-1-raw')));
+      expect(find.byKey(const Key('row-1-product-unknown')), findsNothing);
+      expect(find.text('会更新：16安士 PP杯 95口径 · 现在 RM85.00'), findsOneWidget);
+    });
+
+    testWidgets('往下拉：商品也重新读', (tester) async {
+      final api = await startSeller(tester);
+      api.productsError = const AppError('NETWORK');
+      await tapAndSettle(tester, find.byKey(const Key('seller-import')));
+      await settle(tester);
+      expect(find.byKey(const Key('row-1-product-unknown')), findsOneWidget);
+      api.productsError = null;
+      await tester.fling(find.byKey(const Key('review-summary')), const Offset(0, 500), 1000);
+      await tester.pumpAndSettle();
+      await settle(tester);
+      expect(find.byKey(const Key('row-1-product-unknown')), findsNothing);
+      expect(find.text('会更新：16安士 PP杯 95口径 · 现在 RM85.00'), findsOneWidget);
+    });
+
+    testWidgets('AI 不太肯定的行（黄色）：老板改过、存好了就不再标黄色，上面的数字也少一行', (tester) async {
+      await startSeller(tester);
+      await tapAndSettle(tester, find.byKey(const Key('seller-import')));
+      expect(find.text('有 2 行 AI 不太肯定，请检查黄色的'), findsOneWidget);
+      Color border(int n) =>
+          ((tester.widget<Container>(find.byKey(Key('import-row-$n'))).decoration! as BoxDecoration).border! as Border)
+              .top
+              .color;
+      expect(border(5), AppTheme.unsure);
+
+      // 改第 5 行（背心袋）：补价钱
+      await tapKey(tester, 'row-5-edit');
+      await scrollToSheet(tester, find.byKey(const Key('row-edit-price')));
+      await tester.enterText(find.byKey(const Key('row-edit-price')), '15');
+      await tapAndSettle(tester, find.byKey(const Key('row-edit-save')));
+      await settle(tester);
+      expect(find.text('有 1 行 AI 不太肯定，请检查黄色的'), findsOneWidget);
+      expect(border(5), isNot(AppTheme.unsure));
+      expect(find.descendant(of: find.byKey(const Key('import-row-5')), matching: find.text('请检查')), findsNothing);
+      expect(border(6), AppTheme.unsure, reason: '第 6 行还没看');
+
+      // 离开再回来也记得
+      await back(tester);
+      await tapAndSettle(tester, find.byKey(const Key('seller-import')));
+      expect(find.text('有 1 行 AI 不太肯定，请检查黄色的'), findsOneWidget);
+    });
+
+    testWidgets('自己按了「跳过」的行（资料齐全）：按「改」再保存，照样跳过（不会偷偷改回更新、改掉商品的价钱）', (tester) async {
+      final api = await startSeller(tester);
+      await tapAndSettle(tester, find.byKey(const Key('seller-import')));
+      await tapKey(tester, 'row-1-skip');
+      await settle(tester);
+      expect(row(api, 1).action, ImportRowAction.skip);
+      await tapKey(tester, 'row-1-edit');
+      await tapAndSettle(tester, find.byKey(const Key('row-edit-save')));
+      await settle(tester);
+      expect(row(api, 1).action, ImportRowAction.skip, reason: '老板自己跳过的');
+      expect(find.text('确认上架（3 样）'), findsOneWidget);
+      await tapAndSettle(tester, find.byKey(const Key('review-apply')));
+      await settle(tester);
+      expect(api.sellerData.product(cup16).priceSen, 8500, reason: '没有改');
+    });
+
+    testWidgets('本来缺资料而跳过的行：补好资料，自动改成新增', (tester) async {
+      final api = await startSeller(tester);
+      await tapAndSettle(tester, find.byKey(const Key('seller-import')));
+      await tapKey(tester, 'row-5-edit');
+      await scrollToSheet(tester, find.byKey(const Key('row-edit-price')));
+      await tester.enterText(find.byKey(const Key('row-edit-price')), '15');
+      await scrollToSheet(tester, find.byKey(const Key('row-edit-pack')));
+      await tester.enterText(find.byKey(const Key('row-edit-pack')), '100');
+      await tapAndSettle(tester, find.byKey(const Key('row-edit-save')));
+      await settle(tester);
+      expect(row(api, 5).action, ImportRowAction.create);
+    });
+
+    testWidgets('还有几行没填好：上面写几行；按「确认上架」全部框红色、跳到第一行，不用一次按一下、问一次服务器', (tester) async {
+      final api = await startSeller(tester);
+      // 第 3 行（新增）AI 没读到包装数量
+      api.sellerData.updateRow(row(api, 3).id, {'pack_qty': null});
+      await tapAndSettle(tester, find.byKey(const Key('seller-import')));
+      expect(find.text('还有 1 行没填好（红色的）。请填好，或选「跳过」。'), findsOneWidget);
+      // 第 5 行（缺包装数量、价钱）也改成新增
+      await tapKey(tester, 'row-5-create');
+      await settle(tester);
+      expect(find.text('还有 2 行没填好（红色的）。请填好，或选「跳过」。'), findsOneWidget);
+
+      await tapAndSettle(tester, find.byKey(const Key('review-apply')));
+      expect(api.applyAttempts, 0);
+      Color border(int n) =>
+          ((tester.widget<Container>(find.byKey(Key('import-row-$n'))).decoration! as BoxDecoration).border! as Border)
+              .top
+              .color;
+      expect(border(3), AppTheme.problem);
+      expect(border(5), AppTheme.problem);
+      expect(border(1), isNot(AppTheme.problem));
+      expect(tester.getRect(find.byKey(const Key('import-row-3'))).top, lessThan(860), reason: '跳到第一行');
+
+      // 两行都跳过：就可以上架了
+      await tapKey(tester, 'row-3-skip');
+      await settle(tester);
+      expect(border(3), isNot(AppTheme.problem));
+      await tapKey(tester, 'row-5-skip');
+      await settle(tester);
+      expect(find.byKey(const Key('review-incomplete')), findsNothing);
+      await tapAndSettle(tester, find.byKey(const Key('review-apply')));
+      await settle(tester);
+      expect(api.applyAttempts, 1);
+      expect(api.calls, contains('applyImport 1 2 3'));
     });
   });
 

@@ -107,15 +107,25 @@ class _SellerOrdersPageState extends ConsumerState<SellerOrdersPage> {
       );
     }
     final showToday = _tab == SellerOrdersTab.today;
+    // 「全部」只读最近的 N 张（服务器没有分页）：刚好读满就在最后说，老板才不会以为更早的单不见了
+    final limited = _tab == SellerOrdersTab.all && list.length >= sellerAllOrdersLimit;
+    final head = showToday ? 1 : 0;
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-      itemCount: list.length + (showToday ? 1 : 0),
+      itemCount: list.length + head + (limited ? 1 : 0),
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (_, i) {
         if (showToday && i == 0) {
           return _TodayHeader(count: list.length, totalSen: list.fold(0, (n, o) => n + o.totalSen));
         }
-        return SellerOrderCard(order: list[showToday ? i - 1 : i]);
+        if (i - head == list.length) {
+          return Padding(
+            key: const Key('seller-orders-limited'),
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: InfoLine(icon: Icons.info_outline, text: l.sellerOrdersLimited(sellerAllOrdersLimit)),
+          );
+        }
+        return SellerOrderCard(order: list[i - head]);
       },
     );
   }

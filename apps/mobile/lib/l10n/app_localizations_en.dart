@@ -1451,4 +1451,46 @@ class L10nEn extends L10n {
     });
     return '$_temp0';
   }
+
+  @override
+  String sellerErrTooManyImports(int minutes) {
+    String _temp0 = intl.Intl.pluralLogic(
+      minutes,
+      locale: localeName,
+      other: 'You\'ve uploaded a lot just now. Please wait $minutes minutes before uploading the next one.',
+      one: 'You\'ve uploaded a lot just now. Please wait 1 minute before uploading the next one.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get sellerErrSuspended =>
+      'Your account is on hold, so you can\'t upload price lists now. Please contact customer service.';
+
+  @override
+  String get sellerErrQuotaUnavailable =>
+      'The system is too busy right now and hasn\'t started reading this one. Please upload it again in a few minutes.';
+
+  @override
+  String get sellerImportErrNoProductsFile =>
+      'The AI couldn\'t find product names and prices in this file. Please check it\'s a price list (with product names and prices), then upload it again.';
+
+  @override
+  String get sellerReviewProductUnknown => 'Couldn\'t load which product this will update. Pull down to load it again.';
+
+  @override
+  String sellerReviewIncomplete(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count rows are not filled in yet (in red). Fill them in, or choose \"Skip\".',
+      one: '1 row is not filled in yet (in red). Fill it in, or choose \"Skip\".',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String sellerOrdersLimited(int count) {
+    return 'Only the latest $count orders are shown here';
+  }
 }

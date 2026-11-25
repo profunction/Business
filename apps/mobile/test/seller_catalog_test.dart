@@ -12,6 +12,7 @@ import 'package:jb_wholesale/features/seller/products_page.dart';
 import 'package:jb_wholesale/features/seller/seller_device.dart';
 import 'package:jb_wholesale/features/seller/seller_widgets.dart';
 import 'package:jb_wholesale/l10n/app_localizations.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show FunctionsHttpException;
 import 'package:wholesale_core/wholesale_core.dart';
 
 import 'seller_harness.dart';
@@ -157,7 +158,46 @@ void main() {
         expect(l.importFailure('FILE_TOO_LARGE', fileType: ImportFileType.image), l.sellerErrPhotoTooLarge);
         expect(l.importFailure('FILE_TOO_LARGE', fileType: ImportFileType.pdf), l.sellerErrFileTooLarge);
         expect(l.importFailure(null), photoAdvice);
+        // Excel / PDF 读不到商品：拍清楚没用，请看是不是价目表；照片才叫老板拍清楚一点
+        for (final c in ['NO_PRODUCTS_FOUND', 'AI_INVALID_OUTPUT', 'SOMETHING_NEW']) {
+          for (final type in [ImportFileType.excel, ImportFileType.pdf]) {
+            expect(l.importFailure(c, fileType: type), l.sellerImportErrNoProductsFile, reason: '$lang $c $type');
+            expect(l.importFailure(c, fileType: type), isNot(photoAdvice));
+          }
+          expect(l.importFailure(c, fileType: ImportFileType.image), photoAdvice, reason: '$lang $c');
+        }
       }
+    });
+
+    test('parse-price-list 不肯读（用量满了 / 停权 / 暂时叫不到）：三种语言都说清楚原因，不是「出了点问题」', () {
+      for (final lang in ['zh', 'en', 'ms']) {
+        final l = lookupL10n(Locale(lang));
+        // 函数回 429 {"error":"TOO_MANY_IMPORTS","retry_after":420}：要等 7 分钟
+        final quota = AppError.fromFunction(
+          const FunctionsHttpException(status: 429, details: {'error': 'TOO_MANY_IMPORTS', 'retry_after': 420}),
+        );
+        expect(l.error(quota), l.sellerErrTooManyImports(7), reason: lang);
+        expect(l.error(quota), contains('7'));
+        expect(
+          l.error(const AppError('TOO_MANY_IMPORTS', detail: '30')),
+          l.sellerErrTooManyImports(1),
+          reason: '不到 1 分钟也说 1 分钟',
+        );
+        final suspended = AppError.fromFunction(
+          const FunctionsHttpException(status: 403, details: {'error': 'WHOLESALER_SUSPENDED'}),
+        );
+        expect(l.error(suspended), l.sellerErrSuspended);
+        final busy = AppError.fromFunction(
+          const FunctionsHttpException(status: 503, details: {'error': 'QUOTA_UNAVAILABLE'}),
+        );
+        expect(l.error(busy), l.sellerErrQuotaUnavailable);
+        for (final e in [quota, suspended, busy]) {
+          expect(l.error(e), isNot(l.errUnknown), reason: '$lang ${e.code}');
+        }
+        expect(l.sellerErrSuspended, isNot(l.sellerImportErrService), reason: '停权不是「AI 服务有问题、过几分钟再试」');
+      }
+      expect(lookupL10n(const Locale('en')).sellerErrTooManyImports(1), contains('1 minute '));
+      expect(lookupL10n(const Locale('en')).sellerErrTooManyImports(8), contains('8 minutes'));
     });
 
     test('照片超过 7 MB（AI 收不了）：上传前就说，不用等上传完', () async {
@@ -283,6 +323,24 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(ProductCard), findsOneWidget);
       expect(find.text('白色塑料汤匙'), findsOneWidget);
+    });
+
+    testWidgets('「缺货」只算上架中的（跟首页一样）：下架了的缺货商品不算、不列出来', (tester) async {
+      final api = await startSeller(tester);
+      final straw = api.sellerData.products().firstWhere((p) => p.name == '黑色吸管 6mm 独立包').id;
+      // 老板把缺货的吸管下架了（库存还是缺货）
+      api.sellerData.updateProduct(straw, {'status': 'archived'});
+      api.simulateOrderChange(); // 首页重新读
+      await settle(tester);
+      expect(find.text('上架 5 样 · 1 样快卖完'), findsOneWidget, reason: '首页：没有缺货的');
+      await tapAndSettle(tester, find.byKey(const Key('seller-products')));
+      expect(find.text('缺货（0）'), findsOneWidget, reason: '跟首页一样是 0');
+      await tapAndSettle(tester, find.byKey(const Key('products-filter-outOfStock')));
+      expect(find.byType(ProductCard), findsNothing);
+      expect(find.text('找不到符合的商品'), findsOneWidget);
+      await tapAndSettle(tester, find.byKey(const Key('products-filter-all')));
+      await scrollTo(tester, find.text('黑色吸管 6mm 独立包'));
+      expect(find.widgetWithText(LabelChip, '已下架'), findsOneWidget, reason: '「全部」照样看得到');
     });
 
     testWidgets('改价钱 RM12.50（存成 1250 仙）、改成缺货', (tester) async {
@@ -429,10 +487,12 @@ void main() {
       expect(find.text('还缺：包装数量、价钱'), findsOneWidget);
       expect(find.text('确认上架（5 样）'), findsOneWidget);
 
-      // 先按确认上架：服务器说第 5 行不完整 → 跳到那一行，框红色
+      // 上面写着还有几行没填好
+      expect(find.byKey(const Key('review-incomplete')), findsOneWidget);
+      // 先按确认上架：App 自己先检查，第 5 行没填好 → 说还有几行、跳到那一行，框红色（不用一次问一次服务器）
       await tapAndSettle(tester, find.byKey(const Key('review-apply')));
-      expect(find.text('第 5 行还缺名字、单位、包装数量或价钱'), findsOneWidget);
-      expect(api.applyAttempts, 1, reason: '按了，服务器说不行');
+      expect(find.text('还有 1 行没填好（红色的）。请填好，或选「跳过」。'), findsNWidgets(2), reason: '上面的提示 + 底下的消息');
+      expect(api.applyAttempts, 0, reason: '没填好的不用问服务器');
       expect(api.sellerData.currentImport.status, ImportStatus.review, reason: '什么都没上架');
       expect(api.sellerData.product(cup16).priceSen, 8500);
       final row5 = tester.widget<Container>(find.byKey(const Key('import-row-5')));

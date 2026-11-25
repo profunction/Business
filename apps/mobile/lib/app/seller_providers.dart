@@ -43,9 +43,12 @@ final sellerOrdersProvider = FutureProvider.autoDispose.family<List<SellerOrderS
         limit: 200,
       );
     case SellerOrdersTab.all:
-      return api.listSellerOrders(wid, limit: 100);
+      return api.listSellerOrders(wid, limit: sellerAllOrdersLimit);
   }
 });
+
+/// 「全部」最多显示几张（list_seller_orders 没有分页；刚好这么多张就在最后说只显示最近的）
+const sellerAllOrdersLimit = 100;
 
 /// 送货单（get_delivery_summary）。参数是 'YYYY-MM-DD'；null = 服务器算的马来西亚今天
 final deliverySummaryProvider = FutureProvider.autoDispose.family<DeliverySummary, String?>(
@@ -74,6 +77,10 @@ final priceListImportProvider = FutureProvider.autoDispose.family<PriceListImpor
 final importProgressProvider = StreamProvider.autoDispose.family<PriceListImport, String>(
   (ref, id) => ref.watch(apiProvider).watchImport(id),
 );
+
+/// 价目表确认页：老板已经看过、改过的行（导入 id → 行 id）。AI 不太肯定的行改过就不再标黄色。
+/// 只记在这部手机、App 开着的时候（离开确认页再回来也记得）
+final checkedImportRowsProvider = Provider<Map<String, Set<String>>>((ref) => {});
 
 /// 价目表导入的每一行（AI 读到的商品）
 final importRowsProvider = FutureProvider.autoDispose.family<List<PriceListImportRow>, String>(
@@ -142,14 +149,21 @@ class SellerActions {
 
   Future<void> markDelivered(String orderId) => _change(orderId, () => _api.markDelivered(orderId));
 
+  /// 失败也重新读设定（例如服务器改好了、回应在路上断了）：画面显示服务器上真的设定，不是旧的
   Future<void> setNotifyChannel(NotifyChannel channel) async {
-    await _api.setNotifyChannel(_wholesalerId, channel);
-    _settingsChanged();
+    try {
+      await _api.setNotifyChannel(_wholesalerId, channel);
+    } finally {
+      _settingsChanged();
+    }
   }
 
   Future<void> setWhatsappOptIn(bool optIn) async {
-    await _api.setWhatsappOptIn(_wholesalerId, optIn);
-    _settingsChanged();
+    try {
+      await _api.setWhatsappOptIn(_wholesalerId, optIn);
+    } finally {
+      _settingsChanged();
+    }
   }
 
   /// 保存一样商品（新增或修改）。有新照片就先上传，换掉原本的照片

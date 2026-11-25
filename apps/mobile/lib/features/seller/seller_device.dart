@@ -64,16 +64,20 @@ abstract class SellerDevice {
 class PlatformSellerDevice implements SellerDevice {
   const PlatformSellerDevice();
 
-  /// 正在选（还没回来）的是什么。App 被关掉的话这个会留着，重新打开时才知道要不要拿回来
+  /// 正在选（还没回来）的是什么：'priceList:image'（拍照 / 选照片）、'priceList:file'（选文件）、'productPhoto'。
+  /// App 被关掉的话这个会留着，重新打开时才知道要不要拿回来、从哪一个拿
   static const pendingPickKey = 'seller_pending_pick';
+
+  static String _pending(PickPurpose purpose, {required bool file}) =>
+      purpose == PickPurpose.priceList ? '${purpose.name}:${file ? 'file' : 'image'}' : purpose.name;
 
   static bool get _isAndroid => !kIsWeb && defaultTargetPlatform == TargetPlatform.android;
 
-  /// Android：选之前记下在选什么，选完（不管有没有选到）就清掉
-  Future<T> _remember<T>(PickPurpose purpose, Future<T> Function() pick) async {
+  /// Android：选之前记下在选什么（[pending]），选完（不管有没有选到）就清掉
+  Future<T> _remember<T>(String pending, Future<T> Function() pick) async {
     if (!_isAndroid) return pick();
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(pendingPickKey, purpose.name);
+    await prefs.setString(pendingPickKey, pending);
     try {
       return await pick();
     } finally {
@@ -97,7 +101,7 @@ class PlatformSellerDevice implements SellerDevice {
     required PickPurpose purpose,
     double maxSide = 2576,
     int imageQuality = 85,
-  }) => _remember(purpose, () async {
+  }) => _remember(_pending(purpose, file: false), () async {
     final XFile? x;
     try {
       // 宽和高都要给：只给宽的话，直的照片长边会超过 maxSide（image_picker 只按给的那一边缩）
@@ -114,36 +118,45 @@ class PlatformSellerDevice implements SellerDevice {
   });
 
   @override
-  Future<PickedFile?> pickFile({required List<String> extensions}) => _remember(PickPurpose.priceList, () async {
-    final f = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: extensions);
-    return f == null ? null : _fromPlatformFile(f);
-  });
+  Future<PickedFile?> pickFile({required List<String> extensions}) =>
+      _remember(_pending(PickPurpose.priceList, file: true), () async {
+        final f = await FilePicker.pickFile(type: FileType.custom, allowedExtensions: extensions);
+        return f == null ? null : _fromPlatformFile(f);
+      });
 
   @override
   Future<PickedFile?> recoverLostPriceList() async {
     if (!_isAndroid) return null;
     final prefs = await SharedPreferences.getInstance();
-    final purpose = prefs.getString(pendingPickKey);
-    if (purpose == null) return null; // 上一次选完了（没有被关掉）
+    final pending = prefs.getString(pendingPickKey);
+    if (pending == null) return null; // 上一次选完了（没有被关掉）
     await prefs.remove(pendingPickKey);
-    if (purpose != PickPurpose.priceList.name) return null; // 商品照片：那一页填的资料已经不见了，不用拿回来
-    // 拍照 / 选照片（image_picker）
-    final lost = await ImagePicker().retrieveLostData();
-    if (!lost.isEmpty) {
-      final e = lost.exception;
+    // 两个 plugin 留着的都拿出来（拿了就清掉）：image_picker 留着的照片要等下一次拍照才会清掉，
+    // 不拿的话，之后选文件时被关掉，会拿到这张旧照片（例如商品照片）当成价目表上传。
+    // 只有要用的那一个才读档案（不用的旧照片可能已经被删掉了）
+    final image = await ImagePicker().retrieveLostData();
+    final files = FilePickerPlatform.instance;
+    final file = files is FilePickerAndroid ? await files.retrieveLostData() : null;
+    final hasImage =
+        !image.isEmpty && (image.exception != null || image.file != null || (image.files ?? const []).isNotEmpty);
+    final useImage = switch (pending) {
+      'priceList:image' => true,
+      'priceList:file' => false,
+      // 旧版本只记 'priceList'：不知道是哪一个，先看照片再看文件
+      'priceList' => hasImage,
+      _ => null, // 商品照片：那一页填的资料已经不见了，不用拿回来
+    };
+    if (useImage == null) return null;
+    if (useImage) {
+      if (!hasImage) return null;
+      final e = image.exception;
       if (e != null) throw _pickError(e);
-      final x = lost.file ?? lost.files?.firstOrNull;
-      if (x != null) return _fromXFile(x);
+      return _fromXFile(image.file ?? image.files!.first);
     }
-    // 选文件（file_picker）
-    if (FilePickerPlatform.instance case final FilePickerAndroid android) {
-      final result = await android.retrieveLostData();
-      final e = result?.exception;
-      if (e != null) throw _pickError(e);
-      final f = result?.files.firstOrNull;
-      if (f != null) return _fromPlatformFile(f);
-    }
-    return null;
+    final e = file?.exception;
+    if (e != null) throw _pickError(e);
+    final f = file?.files.firstOrNull;
+    return f == null ? null : _fromPlatformFile(f);
   }
 
   @override
