@@ -1148,4 +1148,230 @@ class L10nMs extends L10n {
 
   @override
   String get errTooManyPayments => 'Terlalu banyak pautan bayaran, sila tunggu';
+
+  @override
+  String get navCompanies => 'Syarikat';
+
+  @override
+  String get coHint =>
+      'Akaun syarikat (hotel, kilang, rangkaian…): pelan, percubaan, invois, penggantungan. Syarikat urus cawangan dan ahli sendiri di web perolehan.';
+
+  @override
+  String get coSearchHint => 'Nama syarikat, SSM atau telefon';
+
+  @override
+  String get coEmpty => 'Tiada syarikat';
+
+  @override
+  String get coLegalName => 'Nama berdaftar';
+
+  @override
+  String get coType => 'Jenis';
+
+  @override
+  String get coSitesLabel => 'Cawangan';
+
+  @override
+  String get coMembersLabel => 'Ahli';
+
+  @override
+  String get coAccessUntil => 'Akses hingga';
+
+  @override
+  String get coOpenInvoices => 'Invois belum bayar';
+
+  @override
+  String get coSuspend => 'Gantung';
+
+  @override
+  String get coSuspendHelp =>
+      'Semasa digantung, ahli tidak boleh membuat perubahan dan cawangan tidak nampak harga. Sebab disimpan dalam log audit.';
+
+  @override
+  String get coRestore => 'Pulihkan';
+
+  @override
+  String coSuspendedBecause(String note) {
+    return 'Digantung: $note';
+  }
+
+  @override
+  String coMarkPaidHelp(String amount) {
+    return 'Guna ini selepas syarikat memindahkan $amount kepada kami. Langganan dilanjutkan satu tempoh, sama seperti bayaran dalam talian.';
+  }
+
+  @override
+  String get coSectionProfile => 'Profil';
+
+  @override
+  String get coTin => 'No. cukai (TIN)';
+
+  @override
+  String get coBillingAddress => 'Alamat bil';
+
+  @override
+  String get coRegion => 'Wilayah';
+
+  @override
+  String get coSectionSubscription => 'Pelan';
+
+  @override
+  String get coCustomPrice => 'Harga khas';
+
+  @override
+  String get coLockedPrice => 'Harga terkunci';
+
+  @override
+  String get coGraceUntil => 'Tangguh hingga';
+
+  @override
+  String get coPendingPlan => 'Tempoh seterusnya';
+
+  @override
+  String get coLimits => 'Had';
+
+  @override
+  String coLimitsValue(String sites, String users) {
+    return '$sites cawangan / $users pengguna';
+  }
+
+  @override
+  String get coSetPlan => 'Tetapkan pelan';
+
+  @override
+  String get coSetPlanHelp =>
+      'Berkuat kuasa sekarang (Perusahaan hanya boleh ditetapkan di sini). Invois belum bayar dibatalkan dan dikeluarkan semula pada harga baharu.';
+
+  @override
+  String get coPlan => 'Pelan';
+
+  @override
+  String get coCustomPriceLabel => 'Harga khas RM setempoh (kosong = harga semasa; wajib untuk Perusahaan)';
+
+  @override
+  String get coInvoiceIssued => 'Invois dikeluarkan';
+
+  @override
+  String get coSectionSites => 'Cawangan / tapak';
+
+  @override
+  String get coNoSites => 'Belum ada cawangan';
+
+  @override
+  String get coCostCenter => 'Pusat kos';
+
+  @override
+  String get coArchived => 'Diarkibkan';
+
+  @override
+  String get coSectionMembers => 'Ahli';
+
+  @override
+  String get coAllSites => 'Semua cawangan';
+
+  @override
+  String get coInactive => 'Tidak aktif';
+
+  @override
+  String get coInvites => 'Jemputan belum diterima';
+
+  @override
+  String get coInviteExpired => 'Tamat tempoh';
+
+  @override
+  String coInviteUntil(String time) {
+    return 'Sah hingga $time';
+  }
+
+  @override
+  String get coSectionInvoices => 'Invois pelan';
+
+  @override
+  String coDue(String date) {
+    return 'Tarikh akhir $date';
+  }
+
+  @override
+  String get coSectionPayments => 'Bayaran';
+
+  @override
+  String get coNoPayments => 'Belum ada bayaran';
+
+  @override
+  String get coStatusActive => 'Aktif';
+
+  @override
+  String get coStatusSuspended => 'Digantung';
+
+  @override
+  String get coTypeCorporate => 'Korporat';
+
+  @override
+  String get coTypeFactory => 'Kilang';
+
+  @override
+  String get coTypeHotel => 'Hotel';
+
+  @override
+  String get coTypeRestaurantChain => 'Rangkaian restoran';
+
+  @override
+  String get coTypeGlc => 'GLC';
+
+  @override
+  String get coTypeOther => 'Lain-lain';
+
+  @override
+  String get coRoleAdmin => 'Pentadbir';
+
+  @override
+  String get coRoleApprover => 'Pelulus';
+
+  @override
+  String get coRoleFinance => 'Kewangan';
+
+  @override
+  String get coRoleRequester => 'Pemohon';
+
+  @override
+  String get coCycleMonthly => 'Bulanan';
+
+  @override
+  String get coCycleAnnual => 'Tahunan';
+
+  @override
+  String get coPlanTrial => 'Percubaan';
+
+  @override
+  String get coPlanStarter => 'Permulaan';
+
+  @override
+  String get coPlanPro => 'Pro';
+
+  @override
+  String get coPlanEnterprise => 'Perusahaan';
+
+  @override
+  String get purposeCompanyPlan => 'Pelan syarikat';
+
+  @override
+  String get errCompanyNotFound => 'Syarikat tidak dijumpai';
+
+  @override
+  String get auditActCompanyStatus => 'Syarikat digantung / dipulihkan';
+
+  @override
+  String get auditActCompanyPlan => 'Pelan syarikat ditetapkan';
+
+  @override
+  String get auditActCompanyTrial => 'Percubaan syarikat dilanjutkan';
+
+  @override
+  String get auditActCompanyInvoice => 'Invois syarikat dikeluarkan';
+
+  @override
+  String get auditActCompanyInvoicePaid => 'Invois syarikat dibayar';
+
+  @override
+  String get auditActCompanyEdit => 'Profil / cawangan / ahli syarikat diubah';
 }

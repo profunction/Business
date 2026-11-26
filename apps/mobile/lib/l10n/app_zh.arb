@@ -663,5 +663,16 @@
   "plErrImportNotFound": "找不到这份价目表（可能已经删掉了）。请重新上传。",
   "plErrImportNotProcessing": "这份价目表已经读过了。请回首页看结果，或上传新的一份。",
   "plErrConfigMissing": "价目表功能的设定还没弄好（不是你的错）。请联系客服。",
-  "plErrMethodNotAllowed": "App 版本太旧了。请更新 App 再上传。"
+  "plErrMethodNotAllowed": "App 版本太旧了。请更新 App 再上传。",
+
+  "companySectionTitle": "我的公司",
+  "companyMemberOf": "你是这家公司的成员：{roles}",
+  "@companyMemberOf": {"placeholders": {"roles": {"type": "String"}}},
+  "companyComingSoon": "公司采购（审批、收货、申请）的功能即将在 App 里推出。",
+  "companyPlanManaged": "方案由贵公司管理",
+  "companySuspended": "公司已停权",
+  "companyRoleAdmin": "管理员",
+  "companyRoleApprover": "审批",
+  "companyRoleFinance": "财务",
+  "companyRoleRequester": "申请人"
 }

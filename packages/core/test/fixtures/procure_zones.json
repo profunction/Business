@@ -1,0 +1,74 @@
+[
+    {
+        "id": "3880c4f9-f729-49af-87e1-7cdf63b87825",
+        "code": "jb_city",
+        "name": {
+            "en": "JB City Centre",
+            "ms": "Pusat Bandar JB",
+            "zh": "新山市区"
+        }
+    },
+    {
+        "id": "d9a50cf9-02cc-40cc-b2f6-da2bd4b91193",
+        "code": "tebrau",
+        "name": {
+            "en": "Tebrau / Johor Jaya / Mount Austin",
+            "ms": "Tebrau / Johor Jaya / Mount Austin",
+            "zh": "地不佬 / 柔佛再也 / 奥斯汀"
+        }
+    },
+    {
+        "id": "6d9b7022-95fe-4a27-8e50-63732afb3916",
+        "code": "skudai",
+        "name": {
+            "en": "Skudai",
+            "ms": "Skudai",
+            "zh": "士古来"
+        }
+    },
+    {
+        "id": "f4fd5472-92ba-448e-ad80-40b95c2b2ab8",
+        "code": "bukit_indah",
+        "name": {
+            "en": "Bukit Indah / Tampoi",
+            "ms": "Bukit Indah / Tampoi",
+            "zh": "武吉英达 / 淡杯"
+        }
+    },
+    {
+        "id": "f1120a00-8f8c-4a15-973d-f49e821ded2f",
+        "code": "permas_masai",
+        "name": {
+            "en": "Permas Jaya / Masai",
+            "ms": "Permas Jaya / Masai",
+            "zh": "百万镇 / 马西"
+        }
+    },
+    {
+        "id": "bbbf071c-80ab-472b-992a-cfb4fc98778b",
+        "code": "pasir_gudang",
+        "name": {
+            "en": "Pasir Gudang",
+            "ms": "Pasir Gudang",
+            "zh": "巴西古当"
+        }
+    },
+    {
+        "id": "7dc7d483-c56a-49a2-bdf7-e241475a9d0d",
+        "code": "kulai",
+        "name": {
+            "en": "Kulai",
+            "ms": "Kulai",
+            "zh": "古来"
+        }
+    },
+    {
+        "id": "9e2079c6-732a-48f8-b775-bda004ef78c4",
+        "code": "iskandar_puteri",
+        "name": {
+            "en": "Iskandar Puteri",
+            "ms": "Iskandar Puteri",
+            "zh": "依斯干达公主城"
+        }
+    }
+]

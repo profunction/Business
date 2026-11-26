@@ -2,7 +2,7 @@
 
 > 这份是给实现用的「合同」：表、数据库函数、Edge Functions、画面之间的接口都以这里为准。分 5 期做（第 12 节），每一期自己能测。
 > 参考的是别人平台的**功能**（`ref/*.txt` 只当资料），名字、文字、样子都不照抄。
-> 状态：设计稿，还没写代码。
+> 状态：第 1 期（公司账号和方案）已实现，实现时的小决定见第 14 节；第 2–5 期还是设计稿。
 
 ## 0. 要做什么（一句话）
 
@@ -630,3 +630,23 @@ Realtime：publication 加 `rfq_live_status`。
 8. **公司方案**：试用 30 天、Starter RM290 / 月、Pro RM790 / 月、企业报价；只在网页付款，手机 App 不卖。
 9. **公司员工的通知**：手机推送 + 网页收件箱，第一版不发电邮、不发 WhatsApp。
 10. 第一版**不做**：改单（改数量要取消重开）、电邮通知、公司自己上传 ERP 历史资料做开支分析、自动帮公司去找平台以外的供应商。
+
+## 14. 实现备注（第 1 期，写代码时定的）
+
+- `notifications.read_at` 第二步就有了，不用加。`list_my_inbox` 回传 `{items, unread_count}`；`mark_inbox_read(null)` = 全部。
+- 方案价目放在迁移里（跟 `app_settings` 一样是设定）：`co_trial` 不公开；`co_enterprise` 公开（网站显示「联系我们」）但没有价钱。
+- 订阅多几栏：`pending_plan_code / pending_billing_cycle / pending_price_sen`（公司自己换的方案，下一期生效）、`trial_reminded`；
+  账单多 `void_reason`、`overdue_notified_at`；`companies` 多 `status_note`（停权原因）。
+- 试用结束：选了方案、账单开了没付 → `past_due`（宽限 14 天）；没选方案（没有账单）→ 直接 `lapsed`。
+  没送试用的公司：注册时订阅就是 `lapsed`，马上开第一期 Starter 账单（今天到期）。
+- 停了（过宽限期）→ 没付的账单作废（`LAPSED`）；回来时按当时的价钱开新账单，付了新建订阅。换方案 / 客服改方案也会把没付的账单作废重开。
+- `admin_set_company_plan` 马上生效（企业方案只能这样设，一定要给价钱）；公司 `change_company_plan` 选 `co_enterprise` → `NOT_ALLOWED`，不存在 / 不公开的方案 → `INVALID_VALUE`。
+- 方案上限看现在的方案（试用 3 个分店 / 10 个用户），不看下一期换的。
+- `USE_REQUISITION`：`place_order`、`reorder_last`、`reserve_voice_order_run` 一开头检查；购物车用 trigger（RLS 的 with check 给不出错误代码），
+  `checkouts` 也加 trigger（`source = 'procurement'` 除外）。`admin_place_order`、`admin_set_cart_item`、`submit_order_draft` 都经过这些。
+- `invite_company_member` 一定回传邀请 id（号码已经有账号的，邀请当场接受）。`shops.company_id` 是受保护栏位。
+- `register_wholesaler` 也挡公司成员（`ROLE_MISMATCH`）。`archive_company_site` 第 1 期只看没完成的订单（第 2 期加申请单、采购单）。
+- 新错误代码：`ALREADY_MEMBER`、`MEMBER_NOT_FOUND`、`INVALID_PHONE`、`SSM_ALREADY_REGISTERED`。
+- `_schedule_procurement_jobs()` 第 1 期只排 `procurement-daily`（`run_company_billing_daily`），之后几期同名更新。
+- 手机 App：设定页和开店页显示「我的公司」（角色、「方案由贵公司管理」），没有新功能、没有付款。
+

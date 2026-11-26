@@ -225,6 +225,64 @@ class AdminApi extends WholesaleApi {
     }),
   );
 
+  // ---------------- 公司（第八步） ----------------
+
+  Future<List<AdminCompany>> listCompanies({String? search, CompanyStatus? status, int limit = 50}) async =>
+      (await _rpcList('admin_list_companies', {
+        'p_search': search,
+        'p_status': status?.name,
+        'p_limit': limit,
+      })).map(AdminCompany.fromJson).toList();
+
+  Future<AdminCompanyDetail> getCompanyAsAdmin(String companyId) async =>
+      AdminCompanyDetail.fromJson(await _rpcJson('admin_get_company', {'p_company_id': companyId}));
+
+  /// 停权一定要写原因（INVALID_NOTE）
+  Future<AdminCompanyDetail> setCompanyStatus(String companyId, CompanyStatus status, {String? note}) async =>
+      AdminCompanyDetail.fromJson(
+        await _rpcJson('admin_set_company_status', {
+          'p_company_id': companyId,
+          'p_status': status.name,
+          'p_note': note,
+        }),
+      );
+
+  /// 马上生效（包括企业方案）。priceSen = 自订价（企业方案一定要给）；null = 现在的价钱
+  Future<AdminCompanyDetail> setCompanyPlan(
+    String companyId,
+    String planCode,
+    BillingCycle cycle, {
+    int? priceSen,
+  }) async => AdminCompanyDetail.fromJson(
+    await _rpcJson('admin_set_company_plan', {
+      'p_company_id': companyId,
+      'p_plan_code': planCode,
+      'p_billing_cycle': cycle.name,
+      'p_price_sen': priceSen,
+    }),
+  );
+
+  Future<AdminCompanyDetail> extendCompanyTrial(String companyId, int days) async => AdminCompanyDetail.fromJson(
+    await _rpcJson('admin_extend_company_trial', {'p_company_id': companyId, 'p_days': days}),
+  );
+
+  /// 马上开下一期账单（已经有没付的就回传那一张；没得收 → NOTHING_DUE）
+  Future<CompanyInvoice> issueCompanyInvoice(String companyId) async =>
+      CompanyInvoice.fromJson(await _rpcJson('admin_issue_company_invoice', {'p_company_id': companyId}));
+
+  /// 公司银行转账：标记已付（订阅跟网关付款一样延长一期）
+  Future<CompanyInvoice> markCompanyInvoicePaid(
+    String invoiceId, {
+    PaymentMethod method = PaymentMethod.other,
+    String? reference,
+  }) async => CompanyInvoice.fromJson(
+    await _rpcJson('admin_mark_company_invoice_paid', {
+      'p_invoice_id': invoiceId,
+      'p_method': method.name,
+      'p_reference': reference,
+    }),
+  );
+
   Future<List<AuditEntry>> listAuditLogs({
     String? action,
     String? tableName,

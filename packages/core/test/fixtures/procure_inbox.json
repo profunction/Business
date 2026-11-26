@@ -1,0 +1,34 @@
+{
+    "items": [
+        {
+            "id": "24715602-4646-448f-8e57-d6b8eb416363",
+            "payload": {
+                "due_date": "2026-12-01",
+                "plan_code": "co_pro",
+                "amount_sen": 79000,
+                "company_id": "bfb532d1-4c14-43c5-b817-5b178482e9bb",
+                "invoice_id": "1c166807-0c09-42d0-be64-1f71e0dfc47d",
+                "invoice_no": "CI2611-0001",
+                "company_name": "Grand Hotel Johor Bahru"
+            },
+            "read_at": null,
+            "created_at": "2026-11-26T14:41:15.514994+00:00",
+            "event_type": "company_invoice_issued"
+        },
+        {
+            "id": "33e4ad1a-4e26-4268-944e-ce5248d7cce6",
+            "payload": {
+                "days": 7,
+                "company_id": "bfb532d1-4c14-43c5-b817-5b178482e9bb",
+                "plan_chosen": true,
+                "company_name": "Grand Hotel Johor Bahru",
+                "trial_ends_at": "2026-12-01T14:41:15.514475+00:00",
+                "subscription_id": "a346f9ad-0fa9-4687-a843-708480103a7e"
+            },
+            "read_at": "2026-11-26T14:41:15.520382+00:00",
+            "created_at": "2026-11-26T14:41:15.514994+00:00",
+            "event_type": "company_trial_ending"
+        }
+    ],
+    "unread_count": 1
+}

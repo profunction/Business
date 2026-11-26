@@ -75,3 +75,15 @@ typedef PaymentQuery = ({PaymentPurpose? purpose, bool reviewOnly});
 final paymentsProvider = FutureProvider.autoDispose.family<List<PaymentInfo>, PaymentQuery>(
   (ref, q) => ref.watch(apiProvider).listPayments(purpose: q.purpose, reviewOnly: q.reviewOnly),
 );
+
+typedef CompanyQuery = ({CompanyStatus? status, String search});
+
+/// 公司（第八步）
+final companiesProvider = FutureProvider.autoDispose.family<List<AdminCompany>, CompanyQuery>(
+  (ref, q) =>
+      ref.watch(apiProvider).listCompanies(status: q.status, search: q.search.trim().isEmpty ? null : q.search.trim()),
+);
+
+final companyDetailProvider = FutureProvider.autoDispose.family<AdminCompanyDetail, String>(
+  (ref, id) => ref.watch(apiProvider).getCompanyAsAdmin(id),
+);

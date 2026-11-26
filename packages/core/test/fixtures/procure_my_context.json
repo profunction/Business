@@ -1,0 +1,39 @@
+{
+    "shops": [
+    ],
+    "profile": {
+        "id": "22222222-2222-4222-8222-222222222201",
+        "role": "buyer",
+        "phone": "60120000005",
+        "locale": "zh",
+        "full_name": "林美玲"
+    },
+    "companies": [
+        {
+            "id": "bfb532d1-4c14-43c5-b817-5b178482e9bb",
+            "name": "Grand Hotel Johor Bahru",
+            "roles": [
+                "admin",
+                "approver",
+                "finance",
+                "requester"
+            ],
+            "sites": [
+                {
+                    "id": "5b941de8-0f38-4279-bbe5-fc3c71e77c08",
+                    "name": "Grand Hotel 中央厨房"
+                },
+                {
+                    "id": "ac429339-14e1-4dde-b31d-a64b13e0cead",
+                    "name": "Grand Hotel 宴会厅"
+                }
+            ],
+            "status": "active",
+            "all_sites": true,
+            "has_access": true,
+            "plan_status": "trialing"
+        }
+    ],
+    "wholesalers": [
+    ]
+}

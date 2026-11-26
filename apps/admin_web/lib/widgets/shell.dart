@@ -16,6 +16,7 @@ final List<_Dest> _destinations = [
   (path: '/place-order', icon: Icons.add_shopping_cart, label: (l) => l.navPlaceOrder),
   (path: '/wholesalers', icon: Icons.store_outlined, label: (l) => l.navWholesalers),
   (path: '/subscriptions', icon: Icons.card_membership_outlined, label: (l) => l.navSubscriptions),
+  (path: '/companies', icon: Icons.apartment_outlined, label: (l) => l.navCompanies),
   (path: '/commission', icon: Icons.request_quote_outlined, label: (l) => l.navCommission),
   (path: '/payments', icon: Icons.payments_outlined, label: (l) => l.navPayments),
   (path: '/audit', icon: Icons.history, label: (l) => l.navAudit),

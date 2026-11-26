@@ -1,6 +1,7 @@
 // payment-webhook：HitPay 叫（Dashboard → Developers → Webhook endpoints，事件 payment_request.completed）。
 // config.toml 里 verify_jwt = false；先验 Hitpay-Signature（HMAC-SHA256(HITPAY_SALT, 原始 body)），不对 401，验过才 JSON.parse。
-// 已付 → mark_payment_paid（数据库：同一笔只算一次；月费从对的日子延长、锁定价不变；上架费；账单已付）。
+// 已付 → mark_payment_paid（数据库：同一笔只算一次；月费从对的日子延长、锁定价不变；上架费；账单已付；
+//         公司方案账单 company_plan → 账单已付、公司订阅延长一期）。
 // 失败 / 过期 → fail_payment。
 // 回应：200 {result}（paid / already_paid / mismatch / not_found / failed / ignored：网关不用再送）；
 //       401 BAD_SIGNATURE；413 BODY_TOO_LARGE；400 INVALID_JSON；

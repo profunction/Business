@@ -1149,4 +1149,230 @@ class L10nEn extends L10n {
 
   @override
   String get errTooManyPayments => 'Too many payment links, please wait';
+
+  @override
+  String get navCompanies => 'Companies';
+
+  @override
+  String get coHint =>
+      'Company accounts (hotels, factories, chains…): plans, trials, invoices, suspension. Companies manage their own sites and members on the procurement web app.';
+
+  @override
+  String get coSearchHint => 'Company name, SSM or phone';
+
+  @override
+  String get coEmpty => 'No companies';
+
+  @override
+  String get coLegalName => 'Legal name';
+
+  @override
+  String get coType => 'Type';
+
+  @override
+  String get coSitesLabel => 'Sites';
+
+  @override
+  String get coMembersLabel => 'Members';
+
+  @override
+  String get coAccessUntil => 'Access until';
+
+  @override
+  String get coOpenInvoices => 'Unpaid invoices';
+
+  @override
+  String get coSuspend => 'Suspend';
+
+  @override
+  String get coSuspendHelp =>
+      'While suspended, members cannot make changes and sites cannot see prices. The reason is kept in the audit log.';
+
+  @override
+  String get coRestore => 'Restore';
+
+  @override
+  String coSuspendedBecause(String note) {
+    return 'Suspended: $note';
+  }
+
+  @override
+  String coMarkPaidHelp(String amount) {
+    return 'Use this after the company transfers $amount to us. The subscription is extended one period, same as an online payment.';
+  }
+
+  @override
+  String get coSectionProfile => 'Profile';
+
+  @override
+  String get coTin => 'Tax ID (TIN)';
+
+  @override
+  String get coBillingAddress => 'Billing address';
+
+  @override
+  String get coRegion => 'Region';
+
+  @override
+  String get coSectionSubscription => 'Plan';
+
+  @override
+  String get coCustomPrice => 'Custom price';
+
+  @override
+  String get coLockedPrice => 'Locked price';
+
+  @override
+  String get coGraceUntil => 'Grace until';
+
+  @override
+  String get coPendingPlan => 'Next period';
+
+  @override
+  String get coLimits => 'Limits';
+
+  @override
+  String coLimitsValue(String sites, String users) {
+    return '$sites sites / $users users';
+  }
+
+  @override
+  String get coSetPlan => 'Set plan';
+
+  @override
+  String get coSetPlanHelp =>
+      'Takes effect now (Enterprise can only be set here). Unpaid invoices are voided and reissued at the new price.';
+
+  @override
+  String get coPlan => 'Plan';
+
+  @override
+  String get coCustomPriceLabel => 'Custom price RM per period (empty = current price; required for Enterprise)';
+
+  @override
+  String get coInvoiceIssued => 'Invoice issued';
+
+  @override
+  String get coSectionSites => 'Sites';
+
+  @override
+  String get coNoSites => 'No sites yet';
+
+  @override
+  String get coCostCenter => 'Cost centre';
+
+  @override
+  String get coArchived => 'Archived';
+
+  @override
+  String get coSectionMembers => 'Members';
+
+  @override
+  String get coAllSites => 'All sites';
+
+  @override
+  String get coInactive => 'Inactive';
+
+  @override
+  String get coInvites => 'Pending invites';
+
+  @override
+  String get coInviteExpired => 'Expired';
+
+  @override
+  String coInviteUntil(String time) {
+    return 'Valid until $time';
+  }
+
+  @override
+  String get coSectionInvoices => 'Plan invoices';
+
+  @override
+  String coDue(String date) {
+    return 'Due $date';
+  }
+
+  @override
+  String get coSectionPayments => 'Payments';
+
+  @override
+  String get coNoPayments => 'No payments yet';
+
+  @override
+  String get coStatusActive => 'Active';
+
+  @override
+  String get coStatusSuspended => 'Suspended';
+
+  @override
+  String get coTypeCorporate => 'Corporate';
+
+  @override
+  String get coTypeFactory => 'Factory';
+
+  @override
+  String get coTypeHotel => 'Hotel';
+
+  @override
+  String get coTypeRestaurantChain => 'Restaurant chain';
+
+  @override
+  String get coTypeGlc => 'GLC';
+
+  @override
+  String get coTypeOther => 'Other';
+
+  @override
+  String get coRoleAdmin => 'Admin';
+
+  @override
+  String get coRoleApprover => 'Approver';
+
+  @override
+  String get coRoleFinance => 'Finance';
+
+  @override
+  String get coRoleRequester => 'Requester';
+
+  @override
+  String get coCycleMonthly => 'Monthly';
+
+  @override
+  String get coCycleAnnual => 'Annual';
+
+  @override
+  String get coPlanTrial => 'Trial';
+
+  @override
+  String get coPlanStarter => 'Starter';
+
+  @override
+  String get coPlanPro => 'Pro';
+
+  @override
+  String get coPlanEnterprise => 'Enterprise';
+
+  @override
+  String get purposeCompanyPlan => 'Company plan';
+
+  @override
+  String get errCompanyNotFound => 'Company not found';
+
+  @override
+  String get auditActCompanyStatus => 'Company suspended / restored';
+
+  @override
+  String get auditActCompanyPlan => 'Company plan set';
+
+  @override
+  String get auditActCompanyTrial => 'Company trial extended';
+
+  @override
+  String get auditActCompanyInvoice => 'Company invoice issued';
+
+  @override
+  String get auditActCompanyInvoicePaid => 'Company invoice paid';
+
+  @override
+  String get auditActCompanyEdit => 'Company profile / sites / members changed';
 }

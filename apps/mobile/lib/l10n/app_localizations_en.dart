@@ -1912,4 +1912,33 @@ class L10nEn extends L10n {
 
   @override
   String get plErrMethodNotAllowed => 'Your app version is too old. Please update the app and upload again.';
+
+  @override
+  String get companySectionTitle => 'My companies';
+
+  @override
+  String companyMemberOf(String roles) {
+    return 'You are a member: $roles';
+  }
+
+  @override
+  String get companyComingSoon => 'Company procurement (approvals, receiving, requests) is coming to the app soon.';
+
+  @override
+  String get companyPlanManaged => 'Your company manages its plan';
+
+  @override
+  String get companySuspended => 'Company suspended';
+
+  @override
+  String get companyRoleAdmin => 'Admin';
+
+  @override
+  String get companyRoleApprover => 'Approver';
+
+  @override
+  String get companyRoleFinance => 'Finance';
+
+  @override
+  String get companyRoleRequester => 'Requester';
 }

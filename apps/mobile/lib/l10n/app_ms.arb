@@ -551,5 +551,15 @@
   "plErrImportNotFound": "Senarai harga ini tidak dijumpai (mungkin sudah dipadam). Sila muat naik semula.",
   "plErrImportNotProcessing": "Senarai harga ini sudah dibaca. Lihat keputusan di halaman utama, atau muat naik yang baharu.",
   "plErrConfigMissing": "Ciri senarai harga belum disediakan (bukan salah anda). Sila hubungi khidmat pelanggan.",
-  "plErrMethodNotAllowed": "Versi aplikasi anda terlalu lama. Sila kemas kini aplikasi dan muat naik semula."
+  "plErrMethodNotAllowed": "Versi aplikasi anda terlalu lama. Sila kemas kini aplikasi dan muat naik semula.",
+
+  "companySectionTitle": "Syarikat saya",
+  "companyMemberOf": "Anda ahli: {roles}",
+  "companyComingSoon": "Perolehan syarikat (kelulusan, penerimaan, permohonan) akan datang ke aplikasi tidak lama lagi.",
+  "companyPlanManaged": "Pelan diurus oleh syarikat anda",
+  "companySuspended": "Syarikat digantung",
+  "companyRoleAdmin": "Pentadbir",
+  "companyRoleApprover": "Pelulus",
+  "companyRoleFinance": "Kewangan",
+  "companyRoleRequester": "Pemohon"
 }

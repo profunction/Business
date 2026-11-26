@@ -122,6 +122,12 @@ Flutter 里用 `supabase.rpc('函数名', params: {...})` 调用。每个函数�
 - App：`get_buyer_billing`、`get_seller_billing`、`get_commission_invoice`、`get_payment`。客服：`admin_list_payments`、`admin_mark_listing_fee_paid`。
 - 新的错误代码：`PAYMENT_NOT_FOUND`、`LISTING_FEE_ALREADY_PAID`、`INVALID_CHECKOUT`。规则和网关见 [`07-billing.md`](07-billing.md)。
 
+### 公司账号（第八步第 1 期，`…20261202000100_procure_enums.sql`、`…20261202000200_company_accounts.sql`）
+
+公司、分店（`shops.company_id`）、成员和角色、邀请、公司方案和账单、收件箱、客服的「公司」。函数、规则和错误代码见
+[`08-procurement-spec.md`](08-procurement-spec.md) 第 7.1 节和第 14 节（实现备注），测试 `12_company_accounts.test.sql`。
+小店的规则不变；公司分店不能走小店的下单路（`USE_REQUISITION`）。
+
 ## 4. 错误代码
 
 函数出错时返回英文代码，App 按代码显示三语提示（第三步会做）。

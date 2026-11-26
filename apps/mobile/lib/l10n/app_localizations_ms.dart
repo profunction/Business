@@ -1883,4 +1883,34 @@ class L10nMs extends L10n {
   @override
   String get plErrMethodNotAllowed =>
       'Versi aplikasi anda terlalu lama. Sila kemas kini aplikasi dan muat naik semula.';
+
+  @override
+  String get companySectionTitle => 'Syarikat saya';
+
+  @override
+  String companyMemberOf(String roles) {
+    return 'Anda ahli: $roles';
+  }
+
+  @override
+  String get companyComingSoon =>
+      'Perolehan syarikat (kelulusan, penerimaan, permohonan) akan datang ke aplikasi tidak lama lagi.';
+
+  @override
+  String get companyPlanManaged => 'Pelan diurus oleh syarikat anda';
+
+  @override
+  String get companySuspended => 'Syarikat digantung';
+
+  @override
+  String get companyRoleAdmin => 'Pentadbir';
+
+  @override
+  String get companyRoleApprover => 'Pelulus';
+
+  @override
+  String get companyRoleFinance => 'Kewangan';
+
+  @override
+  String get companyRoleRequester => 'Pemohon';
 }

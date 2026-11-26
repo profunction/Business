@@ -1,5 +1,6 @@
 import '../json.dart';
 import 'common.dart';
+import 'company.dart';
 
 enum UserRole { buyer, seller, admin }
 
@@ -66,19 +67,23 @@ class MyWholesaler {
   bool get isOwner => memberRole == 'owner';
 }
 
-/// get_my_context()：登录后我是谁、我有哪些店和批发商
+/// get_my_context()：登录后我是谁、我有哪些店、批发商和公司
 class MyContext {
-  const MyContext({required this.profile, required this.shops, required this.wholesalers});
+  const MyContext({required this.profile, required this.shops, required this.wholesalers, this.companies = const []});
 
   factory MyContext.fromJson(Json j) => MyContext(
     profile: Profile.fromJson(asJson(j['profile'])),
     shops: asJsonList(j['shops']).map(MyShop.fromJson).toList(),
     wholesalers: asJsonList(j['wholesalers']).map(MyWholesaler.fromJson).toList(),
+    companies: asJsonList(j['companies']).map(MyCompany.fromJson).toList(),
   );
 
   final Profile profile;
   final List<MyShop> shops;
   final List<MyWholesaler> wholesalers;
+
+  /// 我是成员的公司（第八步）。公司分店不放在 shops 里
+  final List<MyCompany> companies;
 }
 
 enum SubscriptionState { trialing, active, pastDue, lapsed, none }

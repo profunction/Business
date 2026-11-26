@@ -1,6 +1,7 @@
 // create-payment：App / 客服后台按「付款」。开一张付款单，去网关（HitPay）开付款页，回传网址（App 用浏览器打开）。
 //   supabase.functions.invoke('create-payment', body: {purpose, target_id, months?})（自动带用户 JWT）
 //   purpose = subscription（target_id = 店 id，months 1–12）| listing_fee（批发商 id）| commission_invoice（账单 id）
+//           | company_plan（公司方案账单 company_invoices.id；只有那家公司的 admin / finance，procure_web 用）
 // config.toml 里 verify_jwt = false；这里自己验 auth.getUser(jwt)。金额由数据库算（create_payment_intent），App 送的不算数。
 // 同样的东西、付款页还有效 → 拿回同一个网址（不会在网关重复开单）。
 // 回应：200 {payment_id, checkout_url, amount_sen, expires_at, reuse}；400 INVALID_REQUEST；401 UNAUTHORIZED；
@@ -15,7 +16,7 @@ import { bearerToken, CORS_HEADERS, errorMessage, json, log, UUID_RE } from "../
 import { createCheckout } from "../_shared/payments.ts";
 import { adminClient, authUnavailable, rpc } from "../_shared/supabase.ts";
 
-const PURPOSES = new Set(["subscription", "listing_fee", "commission_invoice"]);
+const PURPOSES = new Set(["subscription", "listing_fee", "commission_invoice", "company_plan"]);
 
 const RESULT_STATUS: Record<string, [number, string]> = {
   not_found: [404, "NOT_FOUND"],
@@ -39,11 +40,16 @@ interface Payment {
   expires_at: string | null;
   shop_id: string | null;
   wholesaler_id: string | null;
+  company_id?: string | null;
 }
 
-/** 网关页显示的名字：店名 / 批发商名（不送电话、电邮） */
+/** 网关页显示的名字：店名 / 批发商名 / 公司名（不送电话、电邮） */
 async function payerName(admin: SupabaseClient, p: Payment): Promise<string | null> {
-  const [table, id] = p.shop_id ? ["shops", p.shop_id] : ["wholesalers", p.wholesaler_id];
+  const [table, id] = p.shop_id
+    ? ["shops", p.shop_id]
+    : p.company_id
+    ? ["companies", p.company_id]
+    : ["wholesalers", p.wholesaler_id];
   if (!id) return null;
   const { data } = await admin.from(table).select("name").eq("id", id).maybeSingle();
   return typeof data?.name === "string" ? data.name : null;

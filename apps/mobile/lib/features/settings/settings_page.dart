@@ -7,6 +7,7 @@ import '../../app/l10n_x.dart';
 import '../../l10n/app_localizations.dart';
 import '../../app/providers.dart';
 import '../../widgets/common.dart';
+import '../../widgets/company_card.dart';
 import 'settings_widgets.dart';
 
 /// 设定：语言、我的店、订阅状态、登出
@@ -80,6 +81,12 @@ class SettingsPage extends ConsumerWidget {
               ),
             ),
           ),
+          if (session.context?.companies.isNotEmpty ?? false) ...[
+            const SizedBox(height: 20),
+            Text(l.companySectionTitle, style: t.titleMedium),
+            const SizedBox(height: 8),
+            CompanyMembershipCard(companies: session.context!.companies),
+          ],
           const SizedBox(height: 28),
           const LogoutButton(),
         ],

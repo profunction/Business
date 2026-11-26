@@ -5,6 +5,7 @@ import 'package:wholesale_core/wholesale_core.dart';
 import '../../app/l10n_x.dart';
 import '../../app/providers.dart';
 import '../../widgets/common.dart';
+import '../../widgets/company_card.dart';
 
 /// 开店向导：一页一个问题。店名 -> 做什么的 -> 哪一区 -> 地址（可以不填）
 class RegisterShopPage extends ConsumerStatefulWidget {
@@ -97,6 +98,11 @@ class _RegisterShopPageState extends ConsumerState<RegisterShopPage> {
         return ListView(
           padding: const EdgeInsets.all(24),
           children: [
+            // 公司员工（不是小店老板）登录：先告诉他是哪家公司的成员（公司采购功能之后会放在 App）
+            if (ref.watch(sessionProvider).context?.companies.isNotEmpty ?? false) ...[
+              CompanyMembershipCard(companies: ref.watch(sessionProvider).context!.companies),
+              const SizedBox(height: 24),
+            ],
             Text(l.shopNameQuestion, style: t.headlineSmall),
             const SizedBox(height: 20),
             TextField(

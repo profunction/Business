@@ -17,4 +17,6 @@
 - `apps/admin_web/`：Flutter Web 客服后台（怎么跑见 [`apps/admin_web/README.md`](apps/admin_web/README.md)）
 - 语音下单、WhatsApp 下单（第六步）：[`docs/06-voice-whatsapp.md`](docs/06-voice-whatsapp.md)
 - 收费（第七步：月费、佣金账单、付款网关、App Store / Google Play 规定）：[`docs/07-billing.md`](docs/07-billing.md)
+- 公司采购（第八步，分 5 期；第 1 期公司账号和方案已做）：[`docs/08-procurement-spec.md`](docs/08-procurement-spec.md)；
+  `apps/procure_web/`：Flutter Web 公司采购网页（怎么跑见 [`apps/procure_web/README.md`](apps/procure_web/README.md)）
 - `scripts/test-db.sh`：不用 Docker 的数据库测试（`./scripts/test-db.sh`）

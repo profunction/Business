@@ -1831,4 +1831,33 @@ class L10nZh extends L10n {
 
   @override
   String get plErrMethodNotAllowed => 'App 版本太旧了。请更新 App 再上传。';
+
+  @override
+  String get companySectionTitle => '我的公司';
+
+  @override
+  String companyMemberOf(String roles) {
+    return '你是这家公司的成员：$roles';
+  }
+
+  @override
+  String get companyComingSoon => '公司采购（审批、收货、申请）的功能即将在 App 里推出。';
+
+  @override
+  String get companyPlanManaged => '方案由贵公司管理';
+
+  @override
+  String get companySuspended => '公司已停权';
+
+  @override
+  String get companyRoleAdmin => '管理员';
+
+  @override
+  String get companyRoleApprover => '审批';
+
+  @override
+  String get companyRoleFinance => '财务';
+
+  @override
+  String get companyRoleRequester => '申请人';
 }

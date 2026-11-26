@@ -21,6 +21,7 @@ class DemoAdminApi extends AdminApi {
     _report = _j('admin_commission_report') as Json;
     _audit = _list('admin_audit_logs');
     _payments = _list('admin_payments');
+    _company = _j('admin_company_detail') as Json;
     final detail = _j('admin_order_detail') as Json;
     _details[detail['id'] as String] = detail;
     _products['00000000-0000-4000-a000-00000000000a'] = _list('admin_products');
@@ -51,6 +52,7 @@ class DemoAdminApi extends AdminApi {
   late final Json _report;
   late final List<Json> _audit;
   late final List<Json> _payments;
+  late final Json _company;
   final _details = <String, Json>{};
   final _products = <String, List<Json>>{};
   final _carts = <String, Map<String, int>>{};
@@ -1220,6 +1222,7 @@ class DemoAdminApi extends AdminApi {
                 .map((w) => asJson(w['invoice']))
                 .firstWhere((i) => i['id'] == targetId, orElse: () => {'commission_sen': 0})['commission_sen'],
           ),
+          PaymentPurpose.companyPlan => asInt(_companyInvoice(targetId)['total_sen']),
         };
         final id = _id('pay');
         _payments.insert(0, {
@@ -1239,6 +1242,7 @@ class DemoAdminApi extends AdminApi {
               orElse: () => {'name': null},
             )['name'],
             PaymentPurpose.commissionInvoice => null,
+            PaymentPurpose.companyPlan => _company['name'],
           },
         });
         return PaymentCheckout(
@@ -1285,5 +1289,232 @@ class DemoAdminApi extends AdminApi {
       after: {'payment_id': id, 'amount_sen': 10000, 'reference': reference},
     );
     return AdminWholesaler.fromJson(w);
+  });
+
+  // ---------------- 公司（第八步） ----------------
+
+  static const _planPrices = {'co_starter': (29000, 290000), 'co_pro': (79000, 790000)};
+  static const _planNames = {
+    'co_starter': {'zh': '入门版', 'en': 'Starter', 'ms': 'Permulaan'},
+    'co_pro': {'zh': '专业版', 'en': 'Pro', 'ms': 'Pro'},
+    'co_enterprise': {'zh': '企业版', 'en': 'Enterprise', 'ms': 'Perusahaan'},
+  };
+
+  Json get _companySub => asJson(_company['subscription']);
+
+  List<Json> get _companyInvoices => asJsonList(_company['invoices']);
+
+  Json _companyInvoice(String id) =>
+      _companyInvoices.firstWhere((i) => i['id'] == id, orElse: () => throw const AppError('INVOICE_NOT_FOUND'));
+
+  void _checkCompany(String id) {
+    if (_company['id'] != id) throw const AppError('COMPANY_NOT_FOUND');
+  }
+
+  /// 列表那一行 = 详情的表头（跟数据库的 _admin_company_row 一样）
+  Json _companyRow() => {
+    for (final k in [
+      'id',
+      'name',
+      'legal_name',
+      'ssm_no',
+      'company_type',
+      'status',
+      'status_note',
+      'phone',
+      'billing_email',
+      'region_id',
+      'created_at',
+      'site_count',
+      'member_count',
+      'subscription',
+    ])
+      k: _company[k],
+    'open_invoice_sen': _companyInvoices
+        .where((i) => i['status'] == 'issued' || i['status'] == 'overdue')
+        .fold<int>(0, (a, i) => a + asInt(i['total_sen'])),
+  };
+
+  void _saveCompanyInvoices(List<Json> invoices) => _company['invoices'] = invoices;
+
+  Json _newCompanyInvoice() {
+    final sub = _companySub;
+    final plan = (sub['pending_plan_code'] ?? sub['plan_code']) as String;
+    final amount = asInt(sub['pending_price_sen'] ?? sub['locked_price_sen']);
+    if (plan == 'co_trial' || amount <= 0) throw const AppError('NOTHING_DUE');
+    final id = _id('cinv');
+    final inv = {
+      'id': id,
+      'invoice_no': 'CI2612-${(_companyInvoices.length + 1).toString().padLeft(4, '0')}',
+      'company_id': _company['id'],
+      'subscription_id': sub['id'],
+      'plan_code': plan,
+      'plan_name': _planNames[plan],
+      'billing_cycle': sub['pending_billing_cycle'] ?? sub['billing_cycle'],
+      'amount_sen': amount,
+      'sst_sen': 0,
+      'total_sen': amount,
+      'status': 'issued',
+      'due_date': (asDateTimeOrNull(sub['trial_ends_at'] ?? sub['current_period_end']) ?? DateTime.now())
+          .toIso8601String()
+          .substring(0, 10),
+      'issued_at': _now,
+      'created_at': _now,
+    };
+    _saveCompanyInvoices([inv, ..._companyInvoices]);
+    return inv;
+  }
+
+  void _logCompany(String action, {Json? before, Json? after}) =>
+      _log(action, 'companies', _company['id'] as String, before: before, after: after);
+
+  @override
+  Future<List<AdminCompany>> listCompanies({String? search, CompanyStatus? status, int limit = 50}) =>
+      _later('listCompanies', () {
+        final row = _companyRow();
+        final q = search?.trim().toLowerCase() ?? '';
+        final hit =
+            q.isEmpty ||
+            '${row['name']} ${row['legal_name'] ?? ''} ${row['ssm_no'] ?? ''} ${row['phone'] ?? ''}'
+                .toLowerCase()
+                .contains(q);
+        final statusOk = status == null || row['status'] == status.name;
+        return [if (hit && statusOk) AdminCompany.fromJson(row)];
+      });
+
+  @override
+  Future<AdminCompanyDetail> getCompanyAsAdmin(String companyId) => _later('getCompany', () {
+    _checkCompany(companyId);
+    return AdminCompanyDetail.fromJson({..._company, ..._companyRow()});
+  });
+
+  @override
+  Future<AdminCompanyDetail> setCompanyStatus(String companyId, CompanyStatus status, {String? note}) =>
+      _later('setCompanyStatus ${status.name}', () {
+        _checkCompany(companyId);
+        final n = note?.trim() ?? '';
+        if (status == CompanyStatus.suspended && n.isEmpty) throw const AppError('INVALID_NOTE');
+        final before = {'status': _company['status']};
+        _company['status'] = status.name;
+        _company['status_note'] = status == CompanyStatus.suspended ? n : null;
+        _company['company'] = {
+          ...asJson(_company['company']),
+          'status': status.name,
+          'status_note': _company['status_note'],
+        };
+        _company['subscription'] = {..._companySub, 'has_access': status == CompanyStatus.active};
+        _logCompany('admin_set_company_status', before: before, after: {'status': status.name, 'note': n});
+        return AdminCompanyDetail.fromJson({..._company, ..._companyRow()});
+      });
+
+  @override
+  Future<AdminCompanyDetail> setCompanyPlan(String companyId, String planCode, BillingCycle cycle, {int? priceSen}) =>
+      _later('setCompanyPlan $planCode ${cycle.name} ${priceSen ?? ''}', () {
+        _checkCompany(companyId);
+        final listed = _planPrices[planCode];
+        final price = priceSen ?? (listed == null ? null : (cycle == BillingCycle.annual ? listed.$2 : listed.$1));
+        if (price == null || price <= 0) throw const AppError('INVALID_AMOUNT');
+        final sub = _companySub;
+        _company['subscription'] = {
+          ...sub,
+          'plan_code': planCode,
+          'plan_name': _planNames[planCode],
+          'billing_cycle': cycle.name,
+          'locked_price_sen': price,
+          'custom_price': priceSen != null,
+          'pending_plan_code': null,
+          'pending_billing_cycle': null,
+          'pending_price_sen': null,
+          'max_sites': planCode == 'co_enterprise' ? null : sub['max_sites'],
+          'max_users': planCode == 'co_enterprise' ? null : sub['max_users'],
+        };
+        var voided = false;
+        _saveCompanyInvoices([
+          for (final i in _companyInvoices)
+            if (i['status'] == 'issued' || i['status'] == 'overdue')
+              (() {
+                voided = true;
+                return {...i, 'status': 'void', 'void_reason': 'PLAN_CHANGED'};
+              })()
+            else
+              i,
+        ]);
+        if (voided) _newCompanyInvoice();
+        _logCompany('admin_set_company_plan', after: {'plan_code': planCode, 'locked_price_sen': price});
+        return AdminCompanyDetail.fromJson({..._company, ..._companyRow()});
+      });
+
+  @override
+  Future<AdminCompanyDetail> extendCompanyTrial(String companyId, int days) => _later('extendCompanyTrial $days', () {
+    _checkCompany(companyId);
+    if (days < 1 || days > 90) throw const AppError('INVALID_DAYS');
+    final sub = _companySub;
+    if (sub['status'] != 'trialing') throw const AppError('INVALID_SUBSCRIPTION_STATE');
+    final end = (asDateTimeOrNull(sub['trial_ends_at']) ?? DateTime.now()).add(Duration(days: days));
+    _company['subscription'] = {...sub, 'trial_ends_at': end.toUtc().toIso8601String()};
+    _logCompany('admin_extend_company_trial', after: {'days': days});
+    return AdminCompanyDetail.fromJson({..._company, ..._companyRow()});
+  });
+
+  @override
+  Future<CompanyInvoice> issueCompanyInvoice(String companyId) => _later('issueCompanyInvoice', () {
+    _checkCompany(companyId);
+    final open = _companyInvoices.where((i) => i['status'] == 'issued' || i['status'] == 'overdue').firstOrNull;
+    final inv = open ?? _newCompanyInvoice();
+    if (open == null) _logCompany('admin_issue_company_invoice', after: {'invoice_no': inv['invoice_no']});
+    return CompanyInvoice.fromJson(inv);
+  });
+
+  @override
+  Future<CompanyInvoice> markCompanyInvoicePaid(
+    String invoiceId, {
+    PaymentMethod method = PaymentMethod.other,
+    String? reference,
+  }) => _later('markCompanyInvoicePaid', () {
+    final inv = _companyInvoice(invoiceId);
+    if (inv['status'] != 'issued' && inv['status'] != 'overdue') {
+      throw AppError('INVALID_INVOICE_STATE', detail: '${inv['status']}');
+    }
+    if (reference != null && !_references.add(reference)) throw const AppError('DUPLICATE_PAYMENT_REFERENCE');
+    final paid = {...inv, 'status': 'paid', 'paid_at': _now};
+    _saveCompanyInvoices([for (final i in _companyInvoices) i['id'] == invoiceId ? paid : i]);
+    final sub = _companySub;
+    final start =
+        asDateTimeOrNull(sub['status'] == 'trialing' ? sub['trial_ends_at'] : sub['current_period_end']) ??
+        DateTime.now();
+    final end = inv['billing_cycle'] == 'annual'
+        ? DateTime.utc(start.year + 1, start.month, start.day, start.hour, start.minute)
+        : DateTime.utc(start.year, start.month + 1, start.day, start.hour, start.minute);
+    _company['subscription'] = {
+      ...sub,
+      'status': 'active',
+      'plan_code': inv['plan_code'],
+      'plan_name': inv['plan_name'],
+      'billing_cycle': inv['billing_cycle'],
+      'locked_price_sen': inv['amount_sen'],
+      'current_period_start': start.toUtc().toIso8601String(),
+      'current_period_end': end.toIso8601String(),
+      'grace_until': null,
+      'pending_plan_code': null,
+      'pending_billing_cycle': null,
+      'pending_price_sen': null,
+    };
+    final pay = {
+      'id': _id('pay'),
+      'purpose': 'company_plan',
+      'status': 'paid',
+      'amount_sen': inv['total_sen'],
+      'gateway': 'manual',
+      'method': method.name,
+      'gateway_ref': reference,
+      'company_id': _company['id'],
+      'paid_at': _now,
+      'period_end': end.toIso8601String(),
+      'created_at': _now,
+    };
+    _company['payments'] = [pay, ...asJsonList(_company['payments'])];
+    _payments.insert(0, {...pay, 'payer_name': _company['name'], 'invoice_no': inv['invoice_no']});
+    _logCompany('admin_mark_company_invoice_paid', after: {'invoice_no': inv['invoice_no'], 'reference': reference});
+    return CompanyInvoice.fromJson(paid);
   });
 }

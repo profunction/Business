@@ -11,6 +11,7 @@ export 'src/models/admin.dart';
 export 'src/models/billing.dart';
 export 'src/models/catalog.dart';
 export 'src/models/common.dart';
+export 'src/models/company.dart';
 export 'src/models/drafts.dart';
 export 'src/models/orders.dart';
 export 'src/models/seller.dart';

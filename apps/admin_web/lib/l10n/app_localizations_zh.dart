@@ -1143,4 +1143,227 @@ class L10nZh extends L10n {
 
   @override
   String get errTooManyPayments => '开太多付款链接了，请等一下';
+
+  @override
+  String get navCompanies => '公司';
+
+  @override
+  String get coHint => '公司账号（酒店、工厂、连锁餐厅……）：方案、试用、账单、停权。公司自己在采购网页管分店和成员。';
+
+  @override
+  String get coSearchHint => '公司名字、SSM 或电话';
+
+  @override
+  String get coEmpty => '没有公司';
+
+  @override
+  String get coLegalName => '公司全名';
+
+  @override
+  String get coType => '类型';
+
+  @override
+  String get coSitesLabel => '分店';
+
+  @override
+  String get coMembersLabel => '成员';
+
+  @override
+  String get coAccessUntil => '能用到';
+
+  @override
+  String get coOpenInvoices => '没付的账单';
+
+  @override
+  String get coSuspend => '停权';
+
+  @override
+  String get coSuspendHelp => '停权后公司的人不能改东西，分店也看不到价钱。原因会记在操作记录。';
+
+  @override
+  String get coRestore => '恢复';
+
+  @override
+  String coSuspendedBecause(String note) {
+    return '已停权：$note';
+  }
+
+  @override
+  String coMarkPaidHelp(String amount) {
+    return '公司转账 $amount 给我们之后按这个。订阅会跟网上付款一样延长一期。';
+  }
+
+  @override
+  String get coSectionProfile => '资料';
+
+  @override
+  String get coTin => '报税号（TIN）';
+
+  @override
+  String get coBillingAddress => '账单地址';
+
+  @override
+  String get coRegion => '地区';
+
+  @override
+  String get coSectionSubscription => '方案';
+
+  @override
+  String get coCustomPrice => '自订价';
+
+  @override
+  String get coLockedPrice => '锁定价';
+
+  @override
+  String get coGraceUntil => '宽限到';
+
+  @override
+  String get coPendingPlan => '下一期换成';
+
+  @override
+  String get coLimits => '上限';
+
+  @override
+  String coLimitsValue(String sites, String users) {
+    return '$sites 个分店 / $users 个用户';
+  }
+
+  @override
+  String get coSetPlan => '设方案';
+
+  @override
+  String get coSetPlanHelp => '马上生效（企业方案只能在这里设）。没付的账单会作废，照新的价钱重开。';
+
+  @override
+  String get coPlan => '方案';
+
+  @override
+  String get coCustomPriceLabel => '自订价 RM（一期；空的 = 现在的价钱，企业方案一定要填）';
+
+  @override
+  String get coInvoiceIssued => '已开账单';
+
+  @override
+  String get coSectionSites => '分店 / 工地';
+
+  @override
+  String get coNoSites => '还没有分店';
+
+  @override
+  String get coCostCenter => '成本中心';
+
+  @override
+  String get coArchived => '已封存';
+
+  @override
+  String get coSectionMembers => '成员';
+
+  @override
+  String get coAllSites => '全部分店';
+
+  @override
+  String get coInactive => '停用';
+
+  @override
+  String get coInvites => '还没接受的邀请';
+
+  @override
+  String get coInviteExpired => '过期了';
+
+  @override
+  String coInviteUntil(String time) {
+    return '$time 前有效';
+  }
+
+  @override
+  String get coSectionInvoices => '方案账单';
+
+  @override
+  String coDue(String date) {
+    return '$date 到期';
+  }
+
+  @override
+  String get coSectionPayments => '付款';
+
+  @override
+  String get coNoPayments => '还没有付款';
+
+  @override
+  String get coStatusActive => '正常';
+
+  @override
+  String get coStatusSuspended => '已停权';
+
+  @override
+  String get coTypeCorporate => '公司';
+
+  @override
+  String get coTypeFactory => '工厂';
+
+  @override
+  String get coTypeHotel => '酒店';
+
+  @override
+  String get coTypeRestaurantChain => '连锁餐厅';
+
+  @override
+  String get coTypeGlc => 'GLC';
+
+  @override
+  String get coTypeOther => '其他';
+
+  @override
+  String get coRoleAdmin => '管理员';
+
+  @override
+  String get coRoleApprover => '审批';
+
+  @override
+  String get coRoleFinance => '财务';
+
+  @override
+  String get coRoleRequester => '申请人';
+
+  @override
+  String get coCycleMonthly => '月付';
+
+  @override
+  String get coCycleAnnual => '年付';
+
+  @override
+  String get coPlanTrial => '试用';
+
+  @override
+  String get coPlanStarter => '入门版';
+
+  @override
+  String get coPlanPro => '专业版';
+
+  @override
+  String get coPlanEnterprise => '企业版';
+
+  @override
+  String get purposeCompanyPlan => '公司方案';
+
+  @override
+  String get errCompanyNotFound => '找不到这家公司';
+
+  @override
+  String get auditActCompanyStatus => '公司停权 / 恢复';
+
+  @override
+  String get auditActCompanyPlan => '设公司方案';
+
+  @override
+  String get auditActCompanyTrial => '延长公司试用';
+
+  @override
+  String get auditActCompanyInvoice => '开公司账单';
+
+  @override
+  String get auditActCompanyInvoicePaid => '公司账单已付';
+
+  @override
+  String get auditActCompanyEdit => '代公司改资料 / 分店 / 成员';
 }

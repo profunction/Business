@@ -1,0 +1,541 @@
+{
+  "@@locale": "zh",
+  "appTitle": "新山批发 · 公司采购",
+  "language": "语言",
+  "signOut": "登出",
+  "retry": "再试一次",
+  "cancel": "取消",
+  "save": "保存",
+  "saved": "已保存",
+  "confirm": "确定",
+  "edit": "修改",
+  "back": "返回",
+  "copied": "已复制：{text}",
+  "@copied": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "demoBanner": "示范模式：资料是样本，按了不会真的改服务器",
+  "errNetwork": "连不上服务器，请检查网络",
+  "errAuth": "验证码不对，或者登录过期了",
+  "errNotAllowed": "没有权限（你的角色不能做这个）",
+  "errRoleMismatch": "批发商的账号不能当公司成员",
+  "errCompanyNotFound": "找不到这家公司",
+  "errCompanySuspended": "公司已停权，请联络我们的客服",
+  "errPlanInactive": "公司方案停了，请先付款",
+  "errPlanFeature": "你们的方案没有这个功能",
+  "errPlanLimitSites": "方案最多 {max} 个分店，请换方案",
+  "@errPlanLimitSites": {
+    "placeholders": {
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "errPlanLimitUsers": "方案最多 {max} 个用户（成员 + 邀请），请换方案",
+  "@errPlanLimitUsers": {
+    "placeholders": {
+      "max": {
+        "type": "String"
+      }
+    }
+  },
+  "errLastAdmin": "公司至少要有一个管理员",
+  "errSiteOpenDocuments": "这个分店还有没完成的单，不能封存",
+  "errNotFound": "找不到（可能已经被别人改了）",
+  "errAlreadyMember": "这个号码已经是成员了",
+  "errSsmRegistered": "这个 SSM 号码已经注册过了",
+  "errInvalidZone": "请选送货区",
+  "errInvalidValue": "资料不对，请检查一下",
+  "errNothingDue": "没有要付的",
+  "errPaymentNotConfigured": "网上付款还没开通，请用银行转账（账单上有资料）",
+  "errGateway": "付款网关暂时用不了，请等一下再试",
+  "errTooManyPayments": "开太多付款页了，请等一下",
+  "errUseRequisition": "公司分店要开申请单才能下单",
+  "errUnknown": "出错了（{code}）",
+  "@errUnknown": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "loginTitle": "公司采购登录",
+  "loginSubtitle": "用手机号和验证码登录。公司的成员、还没有公司的人都可以（登录后注册公司）。",
+  "phoneLabel": "手机号",
+  "phoneInvalid": "请输入马来西亚手机号，例如 012-345 6789",
+  "sendCode": "发验证码",
+  "otpTitle": "输入验证码",
+  "otpSentTo": "验证码已发到 {phone}",
+  "@otpSentTo": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "otpLogin": "登录",
+  "otpResend": "重新发送",
+  "otpResendIn": "{seconds} 秒后可以重新发送",
+  "@otpResendIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "changePhone": "换号码",
+  "loadingContext": "正在读取资料…",
+  "deniedTitle": "这个账号是批发商",
+  "deniedBody": "公司采购网页给公司的员工用。批发商请用手机 App 接单。",
+  "regTitle": "注册公司",
+  "regSubtitle": "你还不是任何公司的成员。注册公司（你会是管理员），或者请公司的管理员用你的手机号邀请你。",
+  "regAnotherSubtitle": "再注册一家公司（你会是管理员）。",
+  "regName": "公司名字",
+  "regType": "公司类型",
+  "regRegion": "地区",
+  "regSsm": "SSM 号码（可以不填）",
+  "regSsmHelp": "一家公司只能注册一次，试用也只送一次",
+  "regBillingEmail": "账单电邮",
+  "regFirstSite": "第一个分店 / 工地",
+  "regFirstSiteHelp": "货送到哪里（可以之后再加）",
+  "regNameRequired": "请填公司名字",
+  "regZoneRequired": "请选分店的送货区",
+  "regSubmit": "注册公司",
+  "regTrialNote": "第一次注册送 30 天试用（Pro 的全部功能）。同一个手机号或 SSM 拿过试用的，要先付第一期。",
+  "registerAnother": "注册另一家公司",
+  "switchCompany": "换公司",
+  "navHome": "首页",
+  "navBrowse": "商品比价",
+  "navSites": "分店",
+  "navMembers": "成员",
+  "navBilling": "方案和付款",
+  "navInbox": "收件箱",
+  "navCompany": "公司资料",
+  "homeRoles": "我的角色：{roles}",
+  "@homeRoles": {
+    "placeholders": {
+      "roles": {
+        "type": "String"
+      }
+    }
+  },
+  "homeSuspended": "公司已停权：不能改东西，分店也看不到价钱。请联络我们的客服。",
+  "homeTrial": "试用中，到 {date}",
+  "@homeTrial": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "homeActive": "{plan}，用到 {date}",
+  "@homeActive": {
+    "placeholders": {
+      "plan": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "homePastDue": "账单逾期，宽限到 {date}",
+  "@homePastDue": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "homeLapsed": "方案停了：分店看不到价钱，请先付款",
+  "homeManagePlan": "看方案和账单",
+  "homePlanManaged": "方案由贵公司的管理员 / 财务管理",
+  "homePendingApprovals": "待我审批",
+  "homeComingSoon": "申请单和审批即将推出",
+  "homeOpenInvites": "{count} 个邀请还没接受",
+  "@homeOpenInvites": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "homeUnread": "没看的通知",
+  "homeQuickActions": "常用",
+  "homeMySites": "我能管的分店",
+  "browseHint": "选一个分店：送货区和运费照那个分店。同一样东西几家放在一起，按「每个多少钱」排。",
+  "browseSite": "分店",
+  "browseSearch": "搜商品或批发商",
+  "browseNoSite": "还没有分店：先加一个分店才能比价",
+  "browseEmpty": "没有送到这个分店的商品",
+  "browsePricesHidden": "公司方案停了：价钱看不到。请先付款。",
+  "browseCompareCount": "{name}（{count} 家）",
+  "@browseCompareCount": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "browsePack": "{count} 个 / {unit}",
+  "@browsePack": {
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "browsePriceHidden": "看不到价钱",
+  "browsePerPiece": "每个 {sen} 仙",
+  "@browsePerPiece": {
+    "placeholders": {
+      "sen": {
+        "type": "String"
+      }
+    }
+  },
+  "browseMinQty": "起订 {qty}",
+  "@browseMinQty": {
+    "placeholders": {
+      "qty": {
+        "type": "int"
+      }
+    }
+  },
+  "browseShipping": "运费 {fee}，{days} 天送到",
+  "@browseShipping": {
+    "placeholders": {
+      "fee": {
+        "type": "String"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "browseOutOfStock": "缺货",
+  "browseCheapest": "最便宜",
+  "sitesHint": "每个分店 / 工地有自己的送货区、地址和运费。",
+  "sitesLimit": "（{count} / {max} 个）",
+  "@sitesLimit": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "sitesAdd": "加分店",
+  "sitesEdit": "改分店",
+  "sitesAdded": "分店加好了",
+  "sitesArchive": "封存",
+  "sitesArchived": "分店封存了",
+  "sitesArchivedTag": "已封存",
+  "sitesArchiveTitle": "封存「{name}」？",
+  "@sitesArchiveTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "sitesArchiveBody": "封存后不能再用这个分店下单（以前的记录留着），也不算在方案的分店数里。",
+  "sitesEmpty": "你还没有可以管的分店",
+  "sitesEmptyAdmin": "还没有分店，按「加分店」",
+  "siteName": "分店名字",
+  "siteZone": "送货区",
+  "siteAddress": "地址",
+  "siteContact": "联络人",
+  "sitePhone": "分店电话",
+  "siteCode": "分店代号（例如 KL01）",
+  "siteCostCenter": "成本中心",
+  "siteRequired": "请填分店名字、选送货区",
+  "membersHint": "角色决定能做什么；不是全部分店的人只能管选的分店。",
+  "membersLimit": "（方案最多 {max} 个用户）",
+  "@membersLimit": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
+  "membersTitle": "成员",
+  "membersInvite": "邀请成员",
+  "membersEdit": "改 {name}",
+  "@membersEdit": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "membersInvited": "邀请好了：这个号码登录后自动加入（已经有账号的已经加好了）",
+  "membersRoles": "角色（可以选几个）",
+  "membersAllSites": "全部分店",
+  "membersAllSitesForced": "管理员、财务永远看全部分店",
+  "membersActive": "启用",
+  "membersInactive": "停用",
+  "membersRemove": "拿掉",
+  "membersRemoveTitle": "把 {name} 拿掉？",
+  "@membersRemoveTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "membersRemoveBody": "他之后不能再看这家公司。以前做的记录照样留着。",
+  "membersRemoved": "拿掉了",
+  "membersInvites": "还没接受的邀请",
+  "membersNoInvites": "没有",
+  "membersInviteExpired": "过期了",
+  "membersInviteUntil": "{time} 前有效",
+  "@membersInviteUntil": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "membersCancelInvite": "取消邀请",
+  "membersInviteCancelled": "邀请取消了",
+  "membersInviteHelp": "邀请 14 天内有效。对方用这个手机号登录公司采购网页（或手机 App）就会自动加入。",
+  "membersSendInvite": "发邀请",
+  "membersRoleRequired": "至少选一个角色",
+  "membersSiteRequired": "选他能管的分店，或者开「全部分店」",
+  "roleAdmin": "管理员",
+  "roleApprover": "审批",
+  "roleFinance": "财务",
+  "roleRequester": "申请人",
+  "roleAdminHelp": "公司资料、分店、成员、方案；全部看得到",
+  "roleApproverHelp": "审批自己分店的申请单",
+  "roleFinanceHelp": "账单、付款、对账；全部看得到",
+  "roleRequesterHelp": "开申请单、收货（只限自己的分店）",
+  "typeCorporate": "公司",
+  "typeFactory": "工厂",
+  "typeHotel": "酒店",
+  "typeRestaurantChain": "连锁餐厅",
+  "typeGlc": "GLC",
+  "typeOther": "其他",
+  "subTrialing": "试用中",
+  "subActive": "有效",
+  "subPastDue": "逾期",
+  "subLapsed": "已停",
+  "subNone": "没有方案",
+  "cycleMonthly": "月付",
+  "cycleAnnual": "年付",
+  "perMonth": "/ 月",
+  "perYear": "/ 年",
+  "planTrial": "试用",
+  "planStarter": "入门版",
+  "planPro": "专业版",
+  "planEnterprise": "企业版",
+  "featRequisitions": "申请单和审批",
+  "featMultiTier": "多层审批",
+  "featBudgets": "预算",
+  "featRfq": "询价",
+  "featReverseAuction": "反向竞价",
+  "featAiInsights": "AI 审批助手",
+  "featAiSpend": "AI 开支分析",
+  "featStatements": "月结单和对账",
+  "billingHint": "价钱跟着账号锁定：一直续费就一直是这个价。换方案下一期生效。",
+  "billingCurrent": "现在的方案",
+  "billingCustomPrice": "自订价",
+  "billingUntil": "用到",
+  "billingLocked": "锁定价",
+  "billingLimits": "上限",
+  "billingLimitsValue": "{sites} 个分店 · {users} 个用户",
+  "@billingLimitsValue": {
+    "placeholders": {
+      "sites": {
+        "type": "String"
+      },
+      "users": {
+        "type": "String"
+      }
+    }
+  },
+  "billingNext": "下一期换成",
+  "billingNoAccess": "现在不能用：分店看不到价钱。付清账单就恢复。",
+  "billingPlans": "方案",
+  "billingQuote": "报价（联系我们）",
+  "billingContactUs": "企业方案请联系我们，客服帮你设定",
+  "billingChoose": "选这个",
+  "billingChooseTitle": "换成{plan}？",
+  "@billingChooseTitle": {
+    "placeholders": {
+      "plan": {
+        "type": "String"
+      }
+    }
+  },
+  "billingChooseBody": "下一期开始，{price} {per}（价钱照今天锁定）。",
+  "@billingChooseBody": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      },
+      "per": {
+        "type": "String"
+      }
+    }
+  },
+  "billingPlanChanged": "方案换好了",
+  "billingCurrentTag": "现在的",
+  "billingNextTag": "下一期",
+  "billingInvoices": "账单",
+  "billingNoInvoices": "还没有账单",
+  "billingDue": "{date} 到期",
+  "@billingDue": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "billingPaidAt": "{time} 付了",
+  "@billingPaidAt": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "billingPay": "付款",
+  "billingPayTitle": "付账单 {no}",
+  "@billingPayTitle": {
+    "placeholders": {
+      "no": {
+        "type": "String"
+      }
+    }
+  },
+  "billingPayAmount": "金额 {amount}（服务器算的）",
+  "@billingPayAmount": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "billingPayOpened": "付款页在新分页打开了（FPX、DuitNow、卡）。付好了回到这里按下面的按钮。",
+  "billingPayOpenThis": "请打开这个付款页（FPX、DuitNow、卡）：",
+  "billingPaidRefresh": "我付好了，刷新",
+  "billingBankNote": "也可以银行转账（写账单号码），我们的客服收到后会标记已付。",
+  "billingPayments": "付款记录",
+  "billingNoPayments": "还没有付款",
+  "invIssued": "待付",
+  "invOverdue": "逾期",
+  "invPaid": "已付",
+  "invVoid": "作废",
+  "payPending": "等付款",
+  "payPaid": "已付",
+  "payFailed": "没付成",
+  "payRefunded": "已退款",
+  "inboxHint": "给你的通知（手机推送有没有收到都在这里）",
+  "inboxEmpty": "没有通知",
+  "inboxMarkAll": "全部标已读",
+  "inboxAllRead": "全部标已读了",
+  "inboxUnread": "没看",
+  "inboxGeneric": "通知",
+  "inboxInvoiceIssued": "方案账单 {no}",
+  "@inboxInvoiceIssued": {
+    "placeholders": {
+      "no": {
+        "type": "String"
+      }
+    }
+  },
+  "inboxInvoiceIssuedBody": "金额 {amount}，{date} 到期",
+  "@inboxInvoiceIssuedBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "inboxInvoiceOverdue": "方案账单 {no} 逾期了",
+  "@inboxInvoiceOverdue": {
+    "placeholders": {
+      "no": {
+        "type": "String"
+      }
+    }
+  },
+  "inboxInvoiceOverdueBody": "金额 {amount}，宽限到 {date}",
+  "@inboxInvoiceOverdueBody": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      },
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "inboxTrialEnding": "试用快结束了",
+  "inboxTrialEndingBody": "{date} 结束，请选方案",
+  "@inboxTrialEndingBody": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "inboxTrialEndingChosen": "{date} 结束，之后照选的方案继续",
+  "@inboxTrialEndingChosen": {
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "inboxPaid": "收到付款 {amount}",
+  "@inboxPaid": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "inboxPaidBody": "账单 {no} 已付，谢谢！",
+  "@inboxPaidBody": {
+    "placeholders": {
+      "no": {
+        "type": "String"
+      }
+    }
+  },
+  "companyHint": "开发票、e-Invoice 用的资料。",
+  "companyReadOnly": "只有管理员可以改。",
+  "companyLegalName": "公司全名（SSM 上的）",
+  "companyTin": "报税号（TIN）",
+  "companySst": "SST 号码",
+  "companyBillingContact": "账单联络人",
+  "companyBillingAddress": "账单地址",
+  "companyPhone": "公司电话",
+  "unitCarton": "箱",
+  "unitPack": "包",
+  "unitBag": "袋",
+  "unitRoll": "卷",
+  "unitBundle": "捆",
+  "unitBox": "盒",
+  "unitPiece": "个",
+  "unitDozen": "打",
+  "unitKg": "公斤"
+}

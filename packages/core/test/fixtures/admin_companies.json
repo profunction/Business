@@ -1,0 +1,53 @@
+[
+    {
+        "id": "bfb532d1-4c14-43c5-b817-5b178482e9bb",
+        "name": "Grand Hotel Johor Bahru",
+        "phone": "60120000005",
+        "ssm_no": "2023010123451234567X",
+        "status": "active",
+        "region_id": "4beaf60a-212b-48c1-997b-8d25101307e0",
+        "created_at": "2026-11-26T14:41:15.474943+00:00",
+        "legal_name": "Grand Hotel JB Sdn Bhd",
+        "site_count": 2,
+        "status_note": null,
+        "company_type": "hotel",
+        "member_count": 3,
+        "subscription": {
+            "id": "a346f9ad-0fa9-4687-a843-708480103a7e",
+            "status": "trialing",
+            "features": [
+                "requisitions",
+                "multi_tier",
+                "budgets",
+                "rfq",
+                "reverse_auction",
+                "ai_insights",
+                "ai_spend",
+                "statements"
+            ],
+            "lapsed_at": null,
+            "max_sites": 3,
+            "max_users": 10,
+            "plan_code": "co_trial",
+            "plan_name": {
+                "en": "Trial",
+                "ms": "Percubaan",
+                "zh": "试用"
+            },
+            "has_access": true,
+            "started_at": "2026-11-26T14:41:15.474943+00:00",
+            "grace_until": null,
+            "custom_price": false,
+            "billing_cycle": "monthly",
+            "trial_ends_at": "2026-12-01T14:41:15.514475+00:00",
+            "locked_price_sen": 0,
+            "pending_plan_code": "co_pro",
+            "pending_price_sen": 79000,
+            "current_period_end": null,
+            "current_period_start": "2026-11-26T14:41:15.474943+00:00",
+            "pending_billing_cycle": "monthly"
+        },
+        "billing_email": "ap@grandhotel.example",
+        "open_invoice_sen": 79000
+    }
+]

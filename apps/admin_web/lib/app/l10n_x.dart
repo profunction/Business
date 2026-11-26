@@ -38,6 +38,7 @@ extension L10nText on L10n {
       'INVALID_PRODUCT' || 'INVALID_FIELD' => errInvalidProduct,
       'INVALID_NOTE' => errInvalidNote,
       'NO_PRICING_PLAN' => errNoPricingPlan,
+      'COMPANY_NOT_FOUND' => errCompanyNotFound,
       // WhatsApp 订单（第六步）
       'DRAFT_NOT_PENDING' => waDone,
       'DRAFT_EMPTY' => waEmptyDraft,
@@ -128,6 +129,41 @@ extension L10nText on L10n {
     PaymentPurpose.subscription => purposeSubscription,
     PaymentPurpose.listingFee => purposeListingFee,
     PaymentPurpose.commissionInvoice => purposeCommission,
+    PaymentPurpose.companyPlan => purposeCompanyPlan,
+  };
+
+  String companyStatus(CompanyStatus s) => switch (s) {
+    CompanyStatus.active => coStatusActive,
+    CompanyStatus.suspended => coStatusSuspended,
+  };
+
+  String companyType(CompanyType t) => switch (t) {
+    CompanyType.corporate => coTypeCorporate,
+    CompanyType.factory => coTypeFactory,
+    CompanyType.hotel => coTypeHotel,
+    CompanyType.restaurantChain => coTypeRestaurantChain,
+    CompanyType.glc => coTypeGlc,
+    CompanyType.other => coTypeOther,
+  };
+
+  String companyRole(CompanyRole r) => switch (r) {
+    CompanyRole.admin => coRoleAdmin,
+    CompanyRole.approver => coRoleApprover,
+    CompanyRole.finance => coRoleFinance,
+    CompanyRole.requester => coRoleRequester,
+  };
+
+  String cycle(BillingCycle c) => switch (c) {
+    BillingCycle.monthly => coCycleMonthly,
+    BillingCycle.annual => coCycleAnnual,
+  };
+
+  String planName(String code) => switch (code) {
+    'co_trial' => coPlanTrial,
+    'co_starter' => coPlanStarter,
+    'co_pro' => coPlanPro,
+    'co_enterprise' => coPlanEnterprise,
+    _ => code,
   };
 
   String paymentStatus(PaymentStatus s) => switch (s) {
@@ -170,6 +206,21 @@ extension L10nText on L10n {
     'admin_save_order_draft' => auditActSaveDraft,
     'admin_submit_order_draft' => auditActSubmitDraft,
     'admin_reject_order_draft' => auditActRejectDraft,
+    'admin_set_company_status' => auditActCompanyStatus,
+    'admin_set_company_plan' => auditActCompanyPlan,
+    'admin_extend_company_trial' => auditActCompanyTrial,
+    'admin_issue_company_invoice' => auditActCompanyInvoice,
+    'admin_mark_company_invoice_paid' => auditActCompanyInvoicePaid,
+    'register_company' ||
+    'update_company' ||
+    'add_company_site' ||
+    'update_company_site' ||
+    'archive_company_site' ||
+    'invite_company_member' ||
+    'set_company_member' ||
+    'remove_company_member' ||
+    'cancel_company_invite' ||
+    'change_company_plan' => auditActCompanyEdit,
     'insert' => auditActInsert,
     'update' => auditActUpdate,
     'delete' => auditActDelete,

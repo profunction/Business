@@ -19,6 +19,8 @@ const USER_JWT = "user.jwt.token";
 const USER_ID = "aaaaaaaa-0000-4000-8000-000000000001";
 const SHOP = "dddddddd-0000-4000-8000-000000000001";
 const PAY_ID = "9a9a9a9a-0000-4000-8000-000000000001";
+const COMPANY = "c0c0c0c0-0000-4000-8000-000000000001";
+const INVOICE = "c1c1c1c1-0000-4000-8000-000000000001";
 const SALT = "hitpay-salt";
 const ENV = {
   ...SUPABASE_ENV,
@@ -126,12 +128,15 @@ interface World {
   gateway: () => Response;
   gatewayCalls: number;
   paid?: Response;
+  companyLookups?: number;
+  gatewayBodies?: string[];
 }
 
 function backend(w: World) {
   return (c: Call): Response | undefined => {
     if (c.url.origin === "https://api.sandbox.hit-pay.com") {
       w.gatewayCalls++;
+      (w.gatewayBodies ??= []).push(c.text);
       return w.gateway();
     }
     if (c.url.pathname === "/auth/v1/user") {
@@ -141,6 +146,10 @@ function backend(w: World) {
       return Response.json({ id: USER_ID, aud: "authenticated", role: "authenticated" });
     }
     if (c.url.origin === SB_URL && c.url.pathname === "/rest/v1/shops") return Response.json({ name: "阿明茶餐室" });
+    if (c.url.origin === SB_URL && c.url.pathname === "/rest/v1/companies") {
+      w.companyLookups = (w.companyLookups ?? 0) + 1;
+      return Response.json({ name: "Grand Hotel JB" });
+    }
     const name = rpcName(c);
     if (name) {
       if (!isService(c)) return pgError("NOT_ALLOWED", "42501", 403);
@@ -264,6 +273,44 @@ Deno.test("create-payment：网关失败 → 付款单标失败、回 503 / 502"
   w = world({ gateway: () => new Response("bad", { status: 422 }) });
   r = await runPay(w, { purpose: "commission_invoice", target_id: SHOP });
   assertEquals([r.status, r.body.error], [502, "GATEWAY_REJECTED"]);
+});
+
+Deno.test("create-payment：公司方案账单（company_plan）→ 网关页显示公司名字", async () => {
+  const w = world({
+    intent: {
+      result: "ok",
+      reuse: false,
+      payment: {
+        ...PAYMENT,
+        amount_sen: 29000,
+        description: "Company plan invoice CI2612-0001",
+        shop_id: null,
+        company_id: COMPANY,
+      },
+    },
+  });
+  const r = await runPay(w, { purpose: "company_plan", target_id: INVOICE });
+  assertEquals(r.status, 200);
+  assertEquals(r.body.amount_sen, 29000);
+  assertEquals(w.rpc[0].params, {
+    p_user_id: USER_ID,
+    p_purpose: "company_plan",
+    p_target_id: INVOICE,
+    p_months: 1,
+    p_gateway: "hitpay",
+  });
+  assertEquals(w.companyLookups, 1);
+  const form = new URLSearchParams(w.gatewayBodies?.[0] ?? "");
+  assertEquals(form.get("name"), "Grand Hotel JB");
+  assertEquals(form.get("amount"), "290.00");
+  assertEquals(r.unexpected, []);
+
+  // 不是那家公司的 admin / finance：数据库回 not_allowed
+  const denied = await runPay(world({ intent: { result: "not_allowed" } }), {
+    purpose: "company_plan",
+    target_id: INVOICE,
+  });
+  assertEquals([denied.status, denied.body.error], [403, "NOT_ALLOWED"]);
 });
 
 Deno.test("create-payment：没登录 / 请求不对", async () => {
@@ -468,4 +515,39 @@ Deno.test("收费推送：新账单 / 逾期 / 快到期 / 收到付款（三种
   );
   assertEquals(paid.title, "Payment received RM50.00");
   assertEquals(paid.data.payment_id, "p1");
+});
+
+Deno.test("公司方案推送：试用快结束 / 新账单 / 逾期 / 收到付款（三种语言，不叫人去哪里付钱）", () => {
+  const co = { company_id: "co-1", company_name: "Grand Hotel JB" };
+  const trial = pushContent(
+    item("company_trial_ending", { ...co, trial_ends_at: "2026-12-20T04:00:00Z", plan_chosen: false }),
+  );
+  assertEquals(trial.title, "Grand Hotel JB 的试用快结束");
+  assertStringIncludes(trial.body, "还没有选方案");
+  assertEquals(trial.data.company_id, "co-1");
+  const chosen = pushContent(
+    item("company_trial_ending", { ...co, trial_ends_at: "2026-12-20T04:00:00Z", plan_chosen: true }, "en"),
+  );
+  assertStringIncludes(chosen.body, "chosen plan continues");
+  const inv = { ...co, invoice_id: "ci-1", invoice_no: "CI2612-0001", amount_sen: 29000, due_date: "2026-12-20" };
+  const issued = pushContent(item("company_invoice_issued", inv, "ms"));
+  assertEquals(issued.title, "Invois pelan Grand Hotel JB CI2612-0001");
+  assertStringIncludes(issued.body, "RM290.00");
+  assertEquals(issued.data.company_invoice_id, "ci-1");
+  const overdue = pushContent(item("company_invoice_overdue", { ...inv, grace_until: "2027-01-03T16:00:00Z" }));
+  assertStringIncludes(overdue.body, "宽限期到");
+  const paid = pushContent(item("payment_received", {
+    ...co,
+    purpose: "company_plan",
+    amount_sen: 29000,
+    invoice_no: "CI2612-0001",
+    period_end: "2027-01-20T04:00:00Z",
+  }, "en"));
+  assertStringIncludes(paid.body, "Grand Hotel JB plan invoice CI2612-0001 is paid");
+  for (const p of [trial, chosen, issued, overdue]) {
+    assert(
+      !/付款|网页|pay (at|on|via|online)|website|laman web|http/i.test(p.body),
+      "手机 App 不卖公司方案：推送不叫人去哪里付钱",
+    );
+  }
 });

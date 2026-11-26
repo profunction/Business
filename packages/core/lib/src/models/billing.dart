@@ -5,11 +5,13 @@ import 'account.dart';
 import 'admin.dart';
 
 /// 付什么（跟数据库 payment_purpose 一样）
-enum PaymentPurpose { subscription, listingFee, commissionInvoice }
+/// companyPlan = 公司方案账单（第八步，只在 procure_web 付）
+enum PaymentPurpose { subscription, listingFee, commissionInvoice, companyPlan }
 
 PaymentPurpose paymentPurposeFrom(Object? v) => switch (v?.toString()) {
   'listing_fee' => PaymentPurpose.listingFee,
   'commission_invoice' => PaymentPurpose.commissionInvoice,
+  'company_plan' => PaymentPurpose.companyPlan,
   _ => PaymentPurpose.subscription,
 };
 
@@ -17,6 +19,7 @@ String paymentPurposeCode(PaymentPurpose p) => switch (p) {
   PaymentPurpose.subscription => 'subscription',
   PaymentPurpose.listingFee => 'listing_fee',
   PaymentPurpose.commissionInvoice => 'commission_invoice',
+  PaymentPurpose.companyPlan => 'company_plan',
 };
 
 enum PaymentStatus { pending, paid, failed, refunded }
@@ -44,6 +47,7 @@ class PaymentInfo {
     this.payerName,
     this.gatewayRef,
     this.invoiceNo,
+    this.companyId,
   });
 
   factory PaymentInfo.fromJson(Json j) => PaymentInfo(
@@ -64,6 +68,7 @@ class PaymentInfo {
     payerName: asStringOrNull(j['payer_name']),
     gatewayRef: asStringOrNull(j['gateway_ref']),
     invoiceNo: asStringOrNull(j['invoice_no']),
+    companyId: asStringOrNull(j['company_id']),
   );
 
   final String id;
@@ -93,6 +98,9 @@ class PaymentInfo {
   final String? payerName;
   final String? gatewayRef;
   final String? invoiceNo;
+
+  /// 公司付的（公司方案）
+  final String? companyId;
 
   bool get isPaid => status == PaymentStatus.paid;
 }

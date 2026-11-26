@@ -1,0 +1,67 @@
+{
+    "invites": [
+        {
+            "id": "e10c1867-c750-45a8-af2f-6c7dfb630558",
+            "phone": "60123334444",
+            "roles": [
+                "approver"
+            ],
+            "title": null,
+            "expired": false,
+            "shop_ids": [
+            ],
+            "all_sites": true,
+            "created_at": "2026-11-26T14:41:15.50586+00:00",
+            "expires_at": "2026-12-10T14:41:15.50586+00:00",
+            "invited_by_name": "林美玲"
+        }
+    ],
+    "members": [
+        {
+            "phone": "60120000005",
+            "roles": [
+                "admin",
+                "approver",
+                "finance",
+                "requester"
+            ],
+            "title": null,
+            "user_id": "22222222-2222-4222-8222-222222222201",
+            "shop_ids": [
+            ],
+            "all_sites": true,
+            "full_name": "林美玲",
+            "is_active": true,
+            "created_at": "2026-11-26T14:41:15.474943+00:00"
+        },
+        {
+            "phone": "60120000006",
+            "roles": [
+                "finance"
+            ],
+            "title": null,
+            "user_id": "22222222-2222-4222-8222-222222222202",
+            "shop_ids": [
+            ],
+            "all_sites": true,
+            "full_name": "Rajesh Kumar",
+            "is_active": true,
+            "created_at": "2026-11-26T14:41:15.493424+00:00"
+        },
+        {
+            "phone": "60120000007",
+            "roles": [
+                "requester"
+            ],
+            "title": null,
+            "user_id": "22222222-2222-4222-8222-222222222203",
+            "shop_ids": [
+                "ac429339-14e1-4dde-b31d-a64b13e0cead"
+            ],
+            "all_sites": false,
+            "full_name": "Aisyah",
+            "is_active": true,
+            "created_at": "2026-11-26T14:41:15.499536+00:00"
+        }
+    ]
+}

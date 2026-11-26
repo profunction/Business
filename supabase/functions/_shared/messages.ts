@@ -349,6 +349,11 @@ const PUSH = {
       en: "Thank you! Subscription active until {date}.",
       ms: "Terima kasih! Langganan aktif hingga {date}.",
     },
+    company_plan: {
+      zh: "谢谢！{company_name} 的方案账单 {invoice_no} 已付，用到 {date}。",
+      en: "Thank you! {company_name} plan invoice {invoice_no} is paid, active until {date}.",
+      ms: "Terima kasih! Invois pelan {company_name} {invoice_no} telah dibayar, aktif hingga {date}.",
+    },
     listing_fee: {
       zh: "谢谢！创始会员上架费已付。",
       en: "Thank you! Founding member listing fee paid.",
@@ -358,6 +363,49 @@ const PUSH = {
       zh: "谢谢！账单 {invoice_no} 已付。",
       en: "Thank you! Invoice {invoice_no} is paid.",
       ms: "Terima kasih! Invois {invoice_no} telah dibayar.",
+    },
+  },
+  // 公司方案（第八步）：收件人是公司的 admin、finance（每个人一条，只用推送 + 网页收件箱）。
+  // 手机 App 不卖公司方案，所以文字不叫人去哪里付钱
+  company_trial_ending: {
+    title: {
+      zh: "{company_name} 的试用快结束",
+      en: "{company_name} trial ending soon",
+      ms: "Percubaan {company_name} hampir tamat",
+    },
+    chosen: {
+      zh: "试用 {date} 结束，之后照你们选的方案继续。",
+      en: "The trial ends on {date}; your chosen plan continues after that.",
+      ms: "Percubaan tamat pada {date}; pelan pilihan anda diteruskan selepas itu.",
+    },
+    not_chosen: {
+      zh: "试用 {date} 结束，还没有选方案。",
+      en: "The trial ends on {date} and no plan has been chosen yet.",
+      ms: "Percubaan tamat pada {date} dan pelan belum dipilih.",
+    },
+  },
+  company_invoice_issued: {
+    title: {
+      zh: "{company_name} 方案账单 {invoice_no}",
+      en: "{company_name} plan invoice {invoice_no}",
+      ms: "Invois pelan {company_name} {invoice_no}",
+    },
+    body: {
+      zh: "金额 {amount}，{date} 到期。",
+      en: "Amount {amount}, due on {date}.",
+      ms: "Jumlah {amount}, perlu dibayar pada {date}.",
+    },
+  },
+  company_invoice_overdue: {
+    title: {
+      zh: "{company_name} 方案账单 {invoice_no} 逾期了",
+      en: "{company_name} plan invoice {invoice_no} is overdue",
+      ms: "Invois pelan {company_name} {invoice_no} telah lewat",
+    },
+    body: {
+      zh: "金额 {amount} 在 {date} 到期，还没收到。宽限期到 {grace}。",
+      en: "Amount {amount} was due on {date} and has not been received. Grace period until {grace}.",
+      ms: "Jumlah {amount} perlu dibayar pada {date} dan belum diterima. Tempoh tangguh hingga {grace}.",
     },
   },
   generic: {
@@ -397,6 +445,9 @@ export function pushContent(item: NotificationItem): PushContent {
   // 收件人是批发商：每一种通知都带 wholesaler_id（App 的 PushNavigator 先换到那一家，再打开页面）
   const recipientWid = str(item.wholesaler_id);
   if (recipientWid) data.wholesaler_id = recipientWid;
+  // 公司的通知（第八步）：带 company_id（网页 / App 先换到那一家公司）
+  const companyId = str(item.payload?.company_id);
+  if (companyId) data.company_id = companyId;
   if (orderId) data.order_id = orderId;
   if (orderNo) data.order_no = orderNo;
   let title: string;
@@ -506,11 +557,14 @@ export function pushContent(item: NotificationItem): PushContent {
     }
     case "payment_received": {
       const purpose = str(item.payload?.purpose);
-      const key = purpose === "listing_fee" || purpose === "commission_invoice" ? purpose : "subscription";
+      const key = purpose === "listing_fee" || purpose === "commission_invoice" || purpose === "company_plan"
+        ? purpose
+        : "subscription";
       const vars = {
         amount: formatMoney(item.payload?.amount_sen),
         date: formatDate(item.payload?.period_end, loc) ?? FALLBACK.date[loc],
         invoice_no: str(item.payload?.invoice_no) ?? "",
+        company_name: str(item.payload?.company_name) ?? "",
       };
       title = tpl(PUSH.payment_received.title[loc], vars);
       body = tpl(PUSH.payment_received[key][loc], vars);
@@ -518,6 +572,33 @@ export function pushContent(item: NotificationItem): PushContent {
       if (paymentId) data.payment_id = paymentId;
       const invoiceId = str(item.payload?.invoice_id);
       if (invoiceId) data.invoice_id = invoiceId;
+      break;
+    }
+    case "company_trial_ending": {
+      const vars = {
+        company_name: str(item.payload?.company_name) ?? "",
+        date: formatDate(item.payload?.trial_ends_at, loc) ?? FALLBACK.date[loc],
+      };
+      title = tpl(PUSH.company_trial_ending.title[loc], vars);
+      body = tpl(PUSH.company_trial_ending[item.payload?.plan_chosen === true ? "chosen" : "not_chosen"][loc], vars);
+      tag = `company-trial-${str(item.payload?.company_id) ?? ""}`;
+      break;
+    }
+    case "company_invoice_issued":
+    case "company_invoice_overdue": {
+      const key = item.event_type as "company_invoice_issued" | "company_invoice_overdue";
+      const vars = {
+        company_name: str(item.payload?.company_name) ?? "",
+        invoice_no: str(item.payload?.invoice_no) ?? "",
+        amount: formatMoney(item.payload?.amount_sen),
+        date: formatDate(item.payload?.due_date, loc) ?? FALLBACK.date[loc],
+        grace: formatDate(item.payload?.grace_until, loc) ?? FALLBACK.date[loc],
+      };
+      title = tpl(PUSH[key].title[loc], vars);
+      body = tpl(PUSH[key].body[loc], vars);
+      const invoiceId = str(item.payload?.invoice_id);
+      if (invoiceId) data.company_invoice_id = invoiceId;
+      tag = invoiceId ? `company-invoice-${invoiceId}` : null;
       break;
     }
     default: {

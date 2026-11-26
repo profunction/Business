@@ -551,5 +551,15 @@
   "plErrImportNotFound": "This price list cannot be found (it may have been deleted). Please upload again.",
   "plErrImportNotProcessing": "This price list has already been read. Check the result on the home page, or upload a new one.",
   "plErrConfigMissing": "The price-list feature is not set up yet (not your fault). Please contact support.",
-  "plErrMethodNotAllowed": "Your app version is too old. Please update the app and upload again."
+  "plErrMethodNotAllowed": "Your app version is too old. Please update the app and upload again.",
+
+  "companySectionTitle": "My companies",
+  "companyMemberOf": "You are a member: {roles}",
+  "companyComingSoon": "Company procurement (approvals, receiving, requests) is coming to the app soon.",
+  "companyPlanManaged": "Your company manages its plan",
+  "companySuspended": "Company suspended",
+  "companyRoleAdmin": "Admin",
+  "companyRoleApprover": "Approver",
+  "companyRoleFinance": "Finance",
+  "companyRoleRequester": "Requester"
 }

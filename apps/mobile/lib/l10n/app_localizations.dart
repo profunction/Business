@@ -3266,6 +3266,60 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'App 版本太旧了。请更新 App 再上传。'**
   String get plErrMethodNotAllowed;
+
+  /// No description provided for @companySectionTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'我的公司'**
+  String get companySectionTitle;
+
+  /// No description provided for @companyMemberOf.
+  ///
+  /// In zh, this message translates to:
+  /// **'你是这家公司的成员：{roles}'**
+  String companyMemberOf(String roles);
+
+  /// No description provided for @companyComingSoon.
+  ///
+  /// In zh, this message translates to:
+  /// **'公司采购（审批、收货、申请）的功能即将在 App 里推出。'**
+  String get companyComingSoon;
+
+  /// No description provided for @companyPlanManaged.
+  ///
+  /// In zh, this message translates to:
+  /// **'方案由贵公司管理'**
+  String get companyPlanManaged;
+
+  /// No description provided for @companySuspended.
+  ///
+  /// In zh, this message translates to:
+  /// **'公司已停权'**
+  String get companySuspended;
+
+  /// No description provided for @companyRoleAdmin.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理员'**
+  String get companyRoleAdmin;
+
+  /// No description provided for @companyRoleApprover.
+  ///
+  /// In zh, this message translates to:
+  /// **'审批'**
+  String get companyRoleApprover;
+
+  /// No description provided for @companyRoleFinance.
+  ///
+  /// In zh, this message translates to:
+  /// **'财务'**
+  String get companyRoleFinance;
+
+  /// No description provided for @companyRoleRequester.
+  ///
+  /// In zh, this message translates to:
+  /// **'申请人'**
+  String get companyRoleRequester;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

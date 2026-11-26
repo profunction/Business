@@ -1,0 +1,130 @@
+{
+    "plans": [
+        {
+            "code": "co_starter",
+            "name": {
+                "en": "Starter",
+                "ms": "Permulaan",
+                "zh": "入门版"
+            },
+            "features": [
+                "requisitions",
+                "rfq",
+                "statements"
+            ],
+            "max_sites": 3,
+            "max_users": 15,
+            "annual_price_sen": 290000,
+            "monthly_price_sen": 29000
+        },
+        {
+            "code": "co_pro",
+            "name": {
+                "en": "Pro",
+                "ms": "Pro",
+                "zh": "专业版"
+            },
+            "features": [
+                "requisitions",
+                "multi_tier",
+                "budgets",
+                "rfq",
+                "reverse_auction",
+                "ai_insights",
+                "ai_spend",
+                "statements"
+            ],
+            "max_sites": 15,
+            "max_users": 60,
+            "annual_price_sen": 790000,
+            "monthly_price_sen": 79000
+        },
+        {
+            "code": "co_enterprise",
+            "name": {
+                "en": "Enterprise",
+                "ms": "Perusahaan",
+                "zh": "企业版"
+            },
+            "features": [
+                "requisitions",
+                "multi_tier",
+                "budgets",
+                "rfq",
+                "reverse_auction",
+                "ai_insights",
+                "ai_spend",
+                "statements"
+            ],
+            "max_sites": null,
+            "max_users": null,
+            "annual_price_sen": null,
+            "monthly_price_sen": null
+        }
+    ],
+    "invoices": [
+        {
+            "id": "1c166807-0c09-42d0-be64-1f71e0dfc47d",
+            "status": "issued",
+            "paid_at": null,
+            "sst_sen": 0,
+            "due_date": "2026-12-01",
+            "pdf_path": null,
+            "issued_at": "2026-11-26T14:41:15.514994+00:00",
+            "plan_code": "co_pro",
+            "plan_name": {
+                "en": "Pro",
+                "ms": "Pro",
+                "zh": "专业版"
+            },
+            "total_sen": 79000,
+            "amount_sen": 79000,
+            "company_id": "bfb532d1-4c14-43c5-b817-5b178482e9bb",
+            "created_at": "2026-11-26T14:41:15.514994+00:00",
+            "invoice_no": "CI2611-0001",
+            "period_end": "2027-01-01T14:41:15.514475+00:00",
+            "void_reason": null,
+            "period_start": "2026-12-01T14:41:15.514475+00:00",
+            "billing_cycle": "monthly",
+            "subscription_id": "a346f9ad-0fa9-4687-a843-708480103a7e"
+        }
+    ],
+    "payments": [
+    ],
+    "company_id": "bfb532d1-4c14-43c5-b817-5b178482e9bb",
+    "subscription": {
+        "id": "a346f9ad-0fa9-4687-a843-708480103a7e",
+        "status": "trialing",
+        "features": [
+            "requisitions",
+            "multi_tier",
+            "budgets",
+            "rfq",
+            "reverse_auction",
+            "ai_insights",
+            "ai_spend",
+            "statements"
+        ],
+        "lapsed_at": null,
+        "max_sites": 3,
+        "max_users": 10,
+        "plan_code": "co_trial",
+        "plan_name": {
+            "en": "Trial",
+            "ms": "Percubaan",
+            "zh": "试用"
+        },
+        "has_access": true,
+        "started_at": "2026-11-26T14:41:15.474943+00:00",
+        "grace_until": null,
+        "custom_price": false,
+        "billing_cycle": "monthly",
+        "trial_ends_at": "2026-12-01T14:41:15.514475+00:00",
+        "locked_price_sen": 0,
+        "pending_plan_code": "co_pro",
+        "pending_price_sen": 79000,
+        "current_period_end": null,
+        "current_period_start": "2026-11-26T14:41:15.474943+00:00",
+        "pending_billing_cycle": "monthly"
+    }
+}

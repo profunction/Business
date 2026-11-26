@@ -614,6 +614,8 @@ class DemoApi extends WholesaleApi {
       PaymentPurpose.subscription => 5000 * months,
       PaymentPurpose.listingFee => 10000,
       PaymentPurpose.commissionInvoice => asInt(asJson(_j('commission_invoice'))['commission_sen']),
+      // 手机 App 不卖公司方案（只在 procure_web 付）
+      PaymentPurpose.companyPlan => throw const AppError('NOT_ALLOWED'),
     };
     return PaymentCheckout(
       paymentId: 'demo-payment-1',
@@ -635,11 +637,14 @@ class DemoApi extends WholesaleApi {
         _listingFeePaid = true;
       case PaymentPurpose.commissionInvoice:
         _invoicePaid = true;
+      case PaymentPurpose.companyPlan:
+        break;
     }
     final amount = switch (p.$1) {
       PaymentPurpose.subscription => 5000 * p.$3,
       PaymentPurpose.listingFee => 10000,
       PaymentPurpose.commissionInvoice => asInt(asJson(_j('commission_invoice'))['commission_sen']),
+      PaymentPurpose.companyPlan => 0,
     };
     return PaymentInfo.fromJson({...paid, 'purpose': paymentPurposeCode(p.$1), 'amount_sen': amount});
   });

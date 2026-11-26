@@ -1,0 +1,239 @@
+{
+    "id": "bfb532d1-4c14-43c5-b817-5b178482e9bb",
+    "name": "Grand Hotel Johor Bahru",
+    "phone": "60120000005",
+    "sites": [
+        {
+            "id": "5b941de8-0f38-4279-bbe5-fc3c71e77c08",
+            "name": "Grand Hotel 中央厨房",
+            "phone": "60123334001",
+            "address": "Jalan Molek 1, Taman Molek",
+            "zone_id": "d9a50cf9-02cc-40cc-b2f6-da2bd4b91193",
+            "is_active": true,
+            "site_code": "CK",
+            "zone_name": {
+                "en": "Tebrau / Johor Jaya / Mount Austin",
+                "ms": "Tebrau / Johor Jaya / Mount Austin",
+                "zh": "地不佬 / 柔佛再也 / 奥斯汀"
+            },
+            "company_id": "bfb532d1-4c14-43c5-b817-5b178482e9bb",
+            "created_at": "2026-11-26T14:41:15.474943+00:00",
+            "cost_center": "CC-100",
+            "contact_name": "Chef Lim"
+        },
+        {
+            "id": "ac429339-14e1-4dde-b31d-a64b13e0cead",
+            "name": "Grand Hotel 宴会厅",
+            "phone": "60123334002",
+            "address": "Jalan Skudai 8",
+            "zone_id": "6d9b7022-95fe-4a27-8e50-63732afb3916",
+            "is_active": true,
+            "site_code": "BQ",
+            "zone_name": {
+                "en": "Skudai",
+                "ms": "Skudai",
+                "zh": "士古来"
+            },
+            "company_id": "bfb532d1-4c14-43c5-b817-5b178482e9bb",
+            "created_at": "2026-11-26T14:41:15.485488+00:00",
+            "cost_center": "CC-200",
+            "contact_name": "Ms Tan"
+        }
+    ],
+    "ssm_no": "2023010123451234567X",
+    "status": "active",
+    "company": {
+        "id": "bfb532d1-4c14-43c5-b817-5b178482e9bb",
+        "tin": "C2581234560",
+        "name": "Grand Hotel Johor Bahru",
+        "phone": "60120000005",
+        "locale": "en",
+        "ssm_no": "2023010123451234567X",
+        "sst_no": null,
+        "status": "active",
+        "region_id": "4beaf60a-212b-48c1-997b-8d25101307e0",
+        "created_at": "2026-11-26T14:41:15.474943+00:00",
+        "created_by": "22222222-2222-4222-8222-222222222201",
+        "legal_name": "Grand Hotel JB Sdn Bhd",
+        "updated_at": "2026-11-26T14:41:15.490097+00:00",
+        "region_name": {
+            "en": "Johor Bahru",
+            "ms": "Johor Bahru",
+            "zh": "新山"
+        },
+        "status_note": null,
+        "company_type": "hotel",
+        "auto_issue_po": true,
+        "billing_email": "ap@grandhotel.example",
+        "billing_address": "Jalan Molek 1, 81100 Johor Bahru",
+        "billing_contact": null,
+        "auto_receive_days": 14,
+        "reissue_tolerance_bp": 0,
+        "benchmark_tolerance_bp": 1000,
+        "match_qty_tolerance_bp": 0,
+        "match_price_tolerance_bp": 0
+    },
+    "invites": [
+        {
+            "id": "e10c1867-c750-45a8-af2f-6c7dfb630558",
+            "phone": "60123334444",
+            "roles": [
+                "approver"
+            ],
+            "title": null,
+            "expired": false,
+            "shop_ids": [
+            ],
+            "all_sites": true,
+            "created_at": "2026-11-26T14:41:15.50586+00:00",
+            "expires_at": "2026-12-10T14:41:15.50586+00:00",
+            "invited_by_name": "林美玲"
+        }
+    ],
+    "members": [
+        {
+            "phone": "60120000005",
+            "roles": [
+                "admin",
+                "approver",
+                "finance",
+                "requester"
+            ],
+            "title": null,
+            "user_id": "22222222-2222-4222-8222-222222222201",
+            "shop_ids": [
+            ],
+            "all_sites": true,
+            "full_name": "林美玲",
+            "is_active": true,
+            "created_at": "2026-11-26T14:41:15.474943+00:00"
+        },
+        {
+            "phone": "60120000006",
+            "roles": [
+                "finance"
+            ],
+            "title": null,
+            "user_id": "22222222-2222-4222-8222-222222222202",
+            "shop_ids": [
+            ],
+            "all_sites": true,
+            "full_name": "Rajesh Kumar",
+            "is_active": true,
+            "created_at": "2026-11-26T14:41:15.493424+00:00"
+        },
+        {
+            "phone": "60120000007",
+            "roles": [
+                "requester"
+            ],
+            "title": null,
+            "user_id": "22222222-2222-4222-8222-222222222203",
+            "shop_ids": [
+                "ac429339-14e1-4dde-b31d-a64b13e0cead"
+            ],
+            "all_sites": false,
+            "full_name": "Aisyah",
+            "is_active": true,
+            "created_at": "2026-11-26T14:41:15.499536+00:00"
+        }
+    ],
+    "invoices": [
+        {
+            "id": "1c166807-0c09-42d0-be64-1f71e0dfc47d",
+            "status": "issued",
+            "paid_at": null,
+            "sst_sen": 0,
+            "due_date": "2026-12-01",
+            "pdf_path": null,
+            "issued_at": "2026-11-26T14:41:15.514994+00:00",
+            "plan_code": "co_pro",
+            "plan_name": {
+                "en": "Pro",
+                "ms": "Pro",
+                "zh": "专业版"
+            },
+            "total_sen": 79000,
+            "amount_sen": 79000,
+            "company_id": "bfb532d1-4c14-43c5-b817-5b178482e9bb",
+            "created_at": "2026-11-26T14:41:15.514994+00:00",
+            "invoice_no": "CI2611-0001",
+            "period_end": "2027-01-01T14:41:15.514475+00:00",
+            "void_reason": null,
+            "period_start": "2026-12-01T14:41:15.514475+00:00",
+            "billing_cycle": "monthly",
+            "subscription_id": "a346f9ad-0fa9-4687-a843-708480103a7e"
+        }
+    ],
+    "payments": [
+    ],
+    "region_id": "4beaf60a-212b-48c1-997b-8d25101307e0",
+    "created_at": "2026-11-26T14:41:15.474943+00:00",
+    "legal_name": "Grand Hotel JB Sdn Bhd",
+    "site_count": 2,
+    "status_note": null,
+    "company_type": "hotel",
+    "member_count": 3,
+    "subscription": {
+        "id": "a346f9ad-0fa9-4687-a843-708480103a7e",
+        "status": "trialing",
+        "features": [
+            "requisitions",
+            "multi_tier",
+            "budgets",
+            "rfq",
+            "reverse_auction",
+            "ai_insights",
+            "ai_spend",
+            "statements"
+        ],
+        "lapsed_at": null,
+        "max_sites": 3,
+        "max_users": 10,
+        "plan_code": "co_trial",
+        "plan_name": {
+            "en": "Trial",
+            "ms": "Percubaan",
+            "zh": "试用"
+        },
+        "has_access": true,
+        "started_at": "2026-11-26T14:41:15.474943+00:00",
+        "grace_until": null,
+        "custom_price": false,
+        "billing_cycle": "monthly",
+        "trial_ends_at": "2026-12-01T14:41:15.514475+00:00",
+        "locked_price_sen": 0,
+        "pending_plan_code": "co_pro",
+        "pending_price_sen": 79000,
+        "current_period_end": null,
+        "current_period_start": "2026-11-26T14:41:15.474943+00:00",
+        "pending_billing_cycle": "monthly"
+    },
+    "billing_email": "ap@grandhotel.example",
+    "subscriptions": [
+        {
+            "id": "a346f9ad-0fa9-4687-a843-708480103a7e",
+            "status": "trialing",
+            "lapsed_at": null,
+            "plan_code": "co_trial",
+            "company_id": "bfb532d1-4c14-43c5-b817-5b178482e9bb",
+            "created_at": "2026-11-26T14:41:15.474943+00:00",
+            "started_at": "2026-11-26T14:41:15.474943+00:00",
+            "updated_at": "2026-11-26T14:41:15.514994+00:00",
+            "grace_until": null,
+            "custom_price": false,
+            "billing_cycle": "monthly",
+            "trial_ends_at": "2026-12-01T14:41:15.514475+00:00",
+            "trial_reminded": [
+                7
+            ],
+            "locked_price_sen": 0,
+            "pending_plan_code": "co_pro",
+            "pending_price_sen": 79000,
+            "current_period_end": null,
+            "current_period_start": "2026-11-26T14:41:15.474943+00:00",
+            "pending_billing_cycle": "monthly"
+        }
+    ],
+    "open_invoice_sen": 79000
+}

@@ -2210,6 +2210,432 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'开太多付款链接了，请等一下'**
   String get errTooManyPayments;
+
+  /// No description provided for @navCompanies.
+  ///
+  /// In zh, this message translates to:
+  /// **'公司'**
+  String get navCompanies;
+
+  /// No description provided for @coHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'公司账号（酒店、工厂、连锁餐厅……）：方案、试用、账单、停权。公司自己在采购网页管分店和成员。'**
+  String get coHint;
+
+  /// No description provided for @coSearchHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'公司名字、SSM 或电话'**
+  String get coSearchHint;
+
+  /// No description provided for @coEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有公司'**
+  String get coEmpty;
+
+  /// No description provided for @coLegalName.
+  ///
+  /// In zh, this message translates to:
+  /// **'公司全名'**
+  String get coLegalName;
+
+  /// No description provided for @coType.
+  ///
+  /// In zh, this message translates to:
+  /// **'类型'**
+  String get coType;
+
+  /// No description provided for @coSitesLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'分店'**
+  String get coSitesLabel;
+
+  /// No description provided for @coMembersLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'成员'**
+  String get coMembersLabel;
+
+  /// No description provided for @coAccessUntil.
+  ///
+  /// In zh, this message translates to:
+  /// **'能用到'**
+  String get coAccessUntil;
+
+  /// No description provided for @coOpenInvoices.
+  ///
+  /// In zh, this message translates to:
+  /// **'没付的账单'**
+  String get coOpenInvoices;
+
+  /// No description provided for @coSuspend.
+  ///
+  /// In zh, this message translates to:
+  /// **'停权'**
+  String get coSuspend;
+
+  /// No description provided for @coSuspendHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'停权后公司的人不能改东西，分店也看不到价钱。原因会记在操作记录。'**
+  String get coSuspendHelp;
+
+  /// No description provided for @coRestore.
+  ///
+  /// In zh, this message translates to:
+  /// **'恢复'**
+  String get coRestore;
+
+  /// No description provided for @coSuspendedBecause.
+  ///
+  /// In zh, this message translates to:
+  /// **'已停权：{note}'**
+  String coSuspendedBecause(String note);
+
+  /// No description provided for @coMarkPaidHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'公司转账 {amount} 给我们之后按这个。订阅会跟网上付款一样延长一期。'**
+  String coMarkPaidHelp(String amount);
+
+  /// No description provided for @coSectionProfile.
+  ///
+  /// In zh, this message translates to:
+  /// **'资料'**
+  String get coSectionProfile;
+
+  /// No description provided for @coTin.
+  ///
+  /// In zh, this message translates to:
+  /// **'报税号（TIN）'**
+  String get coTin;
+
+  /// No description provided for @coBillingAddress.
+  ///
+  /// In zh, this message translates to:
+  /// **'账单地址'**
+  String get coBillingAddress;
+
+  /// No description provided for @coRegion.
+  ///
+  /// In zh, this message translates to:
+  /// **'地区'**
+  String get coRegion;
+
+  /// No description provided for @coSectionSubscription.
+  ///
+  /// In zh, this message translates to:
+  /// **'方案'**
+  String get coSectionSubscription;
+
+  /// No description provided for @coCustomPrice.
+  ///
+  /// In zh, this message translates to:
+  /// **'自订价'**
+  String get coCustomPrice;
+
+  /// No description provided for @coLockedPrice.
+  ///
+  /// In zh, this message translates to:
+  /// **'锁定价'**
+  String get coLockedPrice;
+
+  /// No description provided for @coGraceUntil.
+  ///
+  /// In zh, this message translates to:
+  /// **'宽限到'**
+  String get coGraceUntil;
+
+  /// No description provided for @coPendingPlan.
+  ///
+  /// In zh, this message translates to:
+  /// **'下一期换成'**
+  String get coPendingPlan;
+
+  /// No description provided for @coLimits.
+  ///
+  /// In zh, this message translates to:
+  /// **'上限'**
+  String get coLimits;
+
+  /// No description provided for @coLimitsValue.
+  ///
+  /// In zh, this message translates to:
+  /// **'{sites} 个分店 / {users} 个用户'**
+  String coLimitsValue(String sites, String users);
+
+  /// No description provided for @coSetPlan.
+  ///
+  /// In zh, this message translates to:
+  /// **'设方案'**
+  String get coSetPlan;
+
+  /// No description provided for @coSetPlanHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'马上生效（企业方案只能在这里设）。没付的账单会作废，照新的价钱重开。'**
+  String get coSetPlanHelp;
+
+  /// No description provided for @coPlan.
+  ///
+  /// In zh, this message translates to:
+  /// **'方案'**
+  String get coPlan;
+
+  /// No description provided for @coCustomPriceLabel.
+  ///
+  /// In zh, this message translates to:
+  /// **'自订价 RM（一期；空的 = 现在的价钱，企业方案一定要填）'**
+  String get coCustomPriceLabel;
+
+  /// No description provided for @coInvoiceIssued.
+  ///
+  /// In zh, this message translates to:
+  /// **'已开账单'**
+  String get coInvoiceIssued;
+
+  /// No description provided for @coSectionSites.
+  ///
+  /// In zh, this message translates to:
+  /// **'分店 / 工地'**
+  String get coSectionSites;
+
+  /// No description provided for @coNoSites.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有分店'**
+  String get coNoSites;
+
+  /// No description provided for @coCostCenter.
+  ///
+  /// In zh, this message translates to:
+  /// **'成本中心'**
+  String get coCostCenter;
+
+  /// No description provided for @coArchived.
+  ///
+  /// In zh, this message translates to:
+  /// **'已封存'**
+  String get coArchived;
+
+  /// No description provided for @coSectionMembers.
+  ///
+  /// In zh, this message translates to:
+  /// **'成员'**
+  String get coSectionMembers;
+
+  /// No description provided for @coAllSites.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部分店'**
+  String get coAllSites;
+
+  /// No description provided for @coInactive.
+  ///
+  /// In zh, this message translates to:
+  /// **'停用'**
+  String get coInactive;
+
+  /// No description provided for @coInvites.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没接受的邀请'**
+  String get coInvites;
+
+  /// No description provided for @coInviteExpired.
+  ///
+  /// In zh, this message translates to:
+  /// **'过期了'**
+  String get coInviteExpired;
+
+  /// No description provided for @coInviteUntil.
+  ///
+  /// In zh, this message translates to:
+  /// **'{time} 前有效'**
+  String coInviteUntil(String time);
+
+  /// No description provided for @coSectionInvoices.
+  ///
+  /// In zh, this message translates to:
+  /// **'方案账单'**
+  String get coSectionInvoices;
+
+  /// No description provided for @coDue.
+  ///
+  /// In zh, this message translates to:
+  /// **'{date} 到期'**
+  String coDue(String date);
+
+  /// No description provided for @coSectionPayments.
+  ///
+  /// In zh, this message translates to:
+  /// **'付款'**
+  String get coSectionPayments;
+
+  /// No description provided for @coNoPayments.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有付款'**
+  String get coNoPayments;
+
+  /// No description provided for @coStatusActive.
+  ///
+  /// In zh, this message translates to:
+  /// **'正常'**
+  String get coStatusActive;
+
+  /// No description provided for @coStatusSuspended.
+  ///
+  /// In zh, this message translates to:
+  /// **'已停权'**
+  String get coStatusSuspended;
+
+  /// No description provided for @coTypeCorporate.
+  ///
+  /// In zh, this message translates to:
+  /// **'公司'**
+  String get coTypeCorporate;
+
+  /// No description provided for @coTypeFactory.
+  ///
+  /// In zh, this message translates to:
+  /// **'工厂'**
+  String get coTypeFactory;
+
+  /// No description provided for @coTypeHotel.
+  ///
+  /// In zh, this message translates to:
+  /// **'酒店'**
+  String get coTypeHotel;
+
+  /// No description provided for @coTypeRestaurantChain.
+  ///
+  /// In zh, this message translates to:
+  /// **'连锁餐厅'**
+  String get coTypeRestaurantChain;
+
+  /// No description provided for @coTypeGlc.
+  ///
+  /// In zh, this message translates to:
+  /// **'GLC'**
+  String get coTypeGlc;
+
+  /// No description provided for @coTypeOther.
+  ///
+  /// In zh, this message translates to:
+  /// **'其他'**
+  String get coTypeOther;
+
+  /// No description provided for @coRoleAdmin.
+  ///
+  /// In zh, this message translates to:
+  /// **'管理员'**
+  String get coRoleAdmin;
+
+  /// No description provided for @coRoleApprover.
+  ///
+  /// In zh, this message translates to:
+  /// **'审批'**
+  String get coRoleApprover;
+
+  /// No description provided for @coRoleFinance.
+  ///
+  /// In zh, this message translates to:
+  /// **'财务'**
+  String get coRoleFinance;
+
+  /// No description provided for @coRoleRequester.
+  ///
+  /// In zh, this message translates to:
+  /// **'申请人'**
+  String get coRoleRequester;
+
+  /// No description provided for @coCycleMonthly.
+  ///
+  /// In zh, this message translates to:
+  /// **'月付'**
+  String get coCycleMonthly;
+
+  /// No description provided for @coCycleAnnual.
+  ///
+  /// In zh, this message translates to:
+  /// **'年付'**
+  String get coCycleAnnual;
+
+  /// No description provided for @coPlanTrial.
+  ///
+  /// In zh, this message translates to:
+  /// **'试用'**
+  String get coPlanTrial;
+
+  /// No description provided for @coPlanStarter.
+  ///
+  /// In zh, this message translates to:
+  /// **'入门版'**
+  String get coPlanStarter;
+
+  /// No description provided for @coPlanPro.
+  ///
+  /// In zh, this message translates to:
+  /// **'专业版'**
+  String get coPlanPro;
+
+  /// No description provided for @coPlanEnterprise.
+  ///
+  /// In zh, this message translates to:
+  /// **'企业版'**
+  String get coPlanEnterprise;
+
+  /// No description provided for @purposeCompanyPlan.
+  ///
+  /// In zh, this message translates to:
+  /// **'公司方案'**
+  String get purposeCompanyPlan;
+
+  /// No description provided for @errCompanyNotFound.
+  ///
+  /// In zh, this message translates to:
+  /// **'找不到这家公司'**
+  String get errCompanyNotFound;
+
+  /// No description provided for @auditActCompanyStatus.
+  ///
+  /// In zh, this message translates to:
+  /// **'公司停权 / 恢复'**
+  String get auditActCompanyStatus;
+
+  /// No description provided for @auditActCompanyPlan.
+  ///
+  /// In zh, this message translates to:
+  /// **'设公司方案'**
+  String get auditActCompanyPlan;
+
+  /// No description provided for @auditActCompanyTrial.
+  ///
+  /// In zh, this message translates to:
+  /// **'延长公司试用'**
+  String get auditActCompanyTrial;
+
+  /// No description provided for @auditActCompanyInvoice.
+  ///
+  /// In zh, this message translates to:
+  /// **'开公司账单'**
+  String get auditActCompanyInvoice;
+
+  /// No description provided for @auditActCompanyInvoicePaid.
+  ///
+  /// In zh, this message translates to:
+  /// **'公司账单已付'**
+  String get auditActCompanyInvoicePaid;
+
+  /// No description provided for @auditActCompanyEdit.
+  ///
+  /// In zh, this message translates to:
+  /// **'代公司改资料 / 分店 / 成员'**
+  String get auditActCompanyEdit;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -4,6 +4,7 @@ import '../features/audit/audit_page.dart';
 import '../features/auth/login_page.dart';
 import '../features/auth/status_pages.dart';
 import '../features/commission/commission_page.dart';
+import '../features/companies/companies_page.dart';
 import '../features/dashboard/dashboard_page.dart';
 import '../features/orders/followup_page.dart';
 import '../features/orders/order_detail_page.dart';
@@ -91,6 +92,16 @@ GoRouter buildRouter(AdminSession session, {bool demo = false}) {
             ],
           ),
           GoRoute(path: '/subscriptions', builder: (_, _) => const SubscriptionsPage()),
+          GoRoute(
+            path: '/companies',
+            builder: (_, _) => const CompaniesPage(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (_, state) => CompanyDetailPage(companyId: state.pathParameters['id']!),
+              ),
+            ],
+          ),
           GoRoute(path: '/commission', builder: (_, _) => const CommissionPage()),
           GoRoute(path: '/payments', builder: (_, _) => const PaymentsPage()),
           GoRoute(path: '/audit', builder: (_, _) => const AuditPage()),
