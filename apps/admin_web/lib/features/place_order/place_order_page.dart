@@ -399,10 +399,13 @@ class _CartPanel extends StatelessWidget {
                   decoration: InputDecoration(labelText: l.orderNoteLabel),
                 ),
                 const SizedBox(height: 8),
-                Row(
+                Wrap(
+                  alignment: WrapAlignment.spaceBetween,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
                     TextButton(onPressed: busy ? null : onClear, child: Text(l.clearCart)),
-                    const Spacer(),
                     FilledButton(
                       key: const Key('place-order'),
                       onPressed: busy || !q.canPlace ? null : onPlace,

@@ -281,11 +281,8 @@ void main() {
     expect(csv.trim().split('\r\n').last, contains('合计'));
     expect(find.text('已下载 commission-2026-11.csv'), findsOneWidget);
 
-    await tester.runAsync(() async {
-      await tester.tap(find.byKey(const Key('pdf-$_b')));
-      await Future<void>.delayed(const Duration(seconds: 3));
-    });
-    await tester.pumpAndSettle();
+    // 字体在上面先读好了（rootBundle 要真的读档），做 PDF 本身不用等
+    await tapKey(tester, 'pdf-$_b');
     final pdf = r.saver.files.entries.firstWhere((e) => e.key.endsWith('.pdf'));
     expect(pdf.key, 'invoice-2026-11-00000000.pdf');
     expect(String.fromCharCodes(pdf.value.take(5)), '%PDF-');
