@@ -132,4 +132,14 @@ void main() {
     await api.listPayments(purpose: PaymentPurpose.listingFee, reviewOnly: true);
     expect(sent.last.$2, {'p_status': null, 'p_purpose': 'listing_fee', 'p_review_only': true});
   });
+
+  test('list_seller_orders：第一页不带 p_after；下一页带上一页最后一张的 cursor', () async {
+    final (api, sent) = mockApi((path, body) => fixture('seller_orders'));
+    final first = await api.listSellerOrders('w1', limit: 2);
+    expect(sent.last.$1, '/rest/v1/rpc/list_seller_orders');
+    expect(sent.last.$2, {'p_wholesaler_id': 'w1', 'p_statuses': null, 'p_delivery_date': null, 'p_limit': 2});
+    await api.listSellerOrders('w1', limit: 2, after: first.last.cursor);
+    expect((sent.last.$2! as Map)['p_after'], first.last.cursor);
+    expect(first.last.cursor, isNotNull);
+  });
 }

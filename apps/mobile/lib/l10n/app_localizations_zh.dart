@@ -1354,9 +1354,6 @@ class L10nZh extends L10n {
   String get sellerImportErrService => 'AI 服务暂时有问题。请过几分钟再上传一次。';
 
   @override
-  String get sellerImportErrFile => '这个文件打不开，或是空的。请重新存一次（Excel 存成 .xlsx），或拍照上传。';
-
-  @override
   String get sellerImportErrTimeout => 'AI 读太久还没读完。价目表很长的话，请分成几份上传；不长的话，请过几分钟再试。';
 
   @override
@@ -1425,11 +1422,6 @@ class L10nZh extends L10n {
   @override
   String sellerReviewIncomplete(int count) {
     return '还有 $count 行没填好（红色的）。请填好，或选「跳过」。';
-  }
-
-  @override
-  String sellerOrdersLimited(int count) {
-    return '这里只显示最近的 $count 张单';
   }
 
   @override
@@ -1756,4 +1748,87 @@ class L10nZh extends L10n {
 
   @override
   String get invoiceColRate => '比例';
+
+  @override
+  String get sellerOrdersLoadMore => '再看更早的订单';
+
+  @override
+  String sellerShopWhatsapp(String phone) {
+    return 'WhatsApp：$phone';
+  }
+
+  @override
+  String get sellerReviewAppliedRows => '这一份已经上架了，下面的内容不能再改。要改价钱请到「商品和价钱」。';
+
+  @override
+  String get plErrEmptyFile => '这个文件是空的（0 KB），里面什么都没有。请重新存一次再上传，或直接拍照。';
+
+  @override
+  String get plErrFileNotFound => '上传的文件不见了，AI 拿不到。请再上传一次。';
+
+  @override
+  String get plErrInvalidFilePath => '文件存放的位置不对，系统读不到。请重新上传；还是不行请联系客服。';
+
+  @override
+  String get plErrDownloadFailed => '系统暂时拿不到你上传的文件。请过几分钟再上传一次。';
+
+  @override
+  String get plErrSpreadsheetUnreadable => '这个 Excel 文件打不开（可能坏了或设了密码）。请在电脑上打开，另存成 .xlsx 再上传，或拍照上传。';
+
+  @override
+  String get plErrEmptySpreadsheet => '这个表格里面没有资料。请确认选对了文件、价目表有写在表格里，再上传。';
+
+  @override
+  String get plErrTooManyRows => '这个表格太长了（最多大约 1200 样商品）。请分成几个文件，一份一份上传。';
+
+  @override
+  String get plErrAiInvalidOutput => 'AI 读出来的结果乱掉了。请再上传一次；照片的话请拍正、拍清楚一点。';
+
+  @override
+  String get plErrNoProductsPhoto => 'AI 在照片里找不到商品名字和价钱。请把整张价目表拍清楚（不要反光、不要太远），再试一次。';
+
+  @override
+  String get plErrAiBusy => '现在很多人在用 AI，排不到。请等 5 分钟再上传一次。';
+
+  @override
+  String get plErrAiUnavailable => 'AI 服务暂时停了。请过半小时再上传；急的话可以先在「商品和价钱」自己加。';
+
+  @override
+  String get plErrAiFailed => 'AI 读的时候出错了，这份没读完。请再上传一次。';
+
+  @override
+  String get plErrAiAuthFailed => 'AI 服务的设定出了问题（不是你的错）。请联系客服，我们修好后再上传。';
+
+  @override
+  String get plErrAiRequestRejected => 'AI 不收这份文件（可能页数太多或格式特别）。请拍照上传，或另存成 PDF 再试。';
+
+  @override
+  String get plErrAiNotConfigured => '价目表 AI 还没开放。请先在「商品和价钱」自己加，或请客服帮你加。';
+
+  @override
+  String get plErrDbError => '系统存资料的时候出错了。请过几分钟再上传一次。';
+
+  @override
+  String get plErrInternal => '系统出错了，这份没读到。请再上传一次；一直这样请联系客服。';
+
+  @override
+  String get plErrStartFailed => '这份价目表没有开始读（叫不到 AI）。请再上传一次。';
+
+  @override
+  String get plErrNetwork => '上传的时候网络断了，AI 没开始读。请检查网络，再上传一次。';
+
+  @override
+  String get plErrInvalidImportId => '这份价目表的编号不对。请回到首页，重新上传。';
+
+  @override
+  String get plErrImportNotFound => '找不到这份价目表（可能已经删掉了）。请重新上传。';
+
+  @override
+  String get plErrImportNotProcessing => '这份价目表已经读过了。请回首页看结果，或上传新的一份。';
+
+  @override
+  String get plErrConfigMissing => '价目表功能的设定还没弄好（不是你的错）。请联系客服。';
+
+  @override
+  String get plErrMethodNotAllowed => 'App 版本太旧了。请更新 App 再上传。';
 }

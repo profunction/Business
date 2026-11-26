@@ -1376,10 +1376,6 @@ class L10nMs extends L10n {
       'Perkhidmatan AI sedang ada masalah. Sila muat naik semula dalam beberapa minit.';
 
   @override
-  String get sellerImportErrFile =>
-      'Fail ini tidak dapat dibuka, atau kosong. Sila simpan semula (Excel sebagai .xlsx), atau ambil gambar.';
-
-  @override
   String get sellerImportErrTimeout =>
       'AI ambil masa terlalu lama. Jika senarai harga panjang, bahagikan kepada beberapa bahagian. Jika tidak, sila cuba lagi dalam beberapa minit.';
 
@@ -1455,11 +1451,6 @@ class L10nMs extends L10n {
   @override
   String sellerReviewIncomplete(int count) {
     return 'Ada $count baris yang belum lengkap (yang merah). Sila lengkapkan, atau pilih \"Langkau\".';
-  }
-
-  @override
-  String sellerOrdersLimited(int count) {
-    return 'Hanya $count pesanan terkini ditunjukkan di sini';
   }
 
   @override
@@ -1788,4 +1779,108 @@ class L10nMs extends L10n {
 
   @override
   String get invoiceColRate => 'Kadar';
+
+  @override
+  String get sellerOrdersLoadMore => 'Lihat pesanan lebih awal';
+
+  @override
+  String sellerShopWhatsapp(String phone) {
+    return 'WhatsApp: $phone';
+  }
+
+  @override
+  String get sellerReviewAppliedRows =>
+      'Senarai harga ini sudah disenaraikan. Baris di bawah tidak boleh diubah lagi. Untuk tukar harga, pergi ke “Barang & harga”.';
+
+  @override
+  String get plErrEmptyFile => 'Fail ini kosong (0 KB). Sila simpan semula dan muat naik, atau ambil gambar sahaja.';
+
+  @override
+  String get plErrFileNotFound =>
+      'Fail yang dimuat naik hilang, jadi AI tidak dapat membacanya. Sila muat naik sekali lagi.';
+
+  @override
+  String get plErrInvalidFilePath =>
+      'Fail disimpan di tempat yang salah dan sistem tidak dapat membacanya. Sila muat naik semula; jika masih gagal, hubungi khidmat pelanggan.';
+
+  @override
+  String get plErrDownloadFailed =>
+      'Sistem tidak dapat mengambil fail anda buat masa ini. Sila muat naik semula dalam beberapa minit.';
+
+  @override
+  String get plErrSpreadsheetUnreadable =>
+      'Fail Excel ini tidak dapat dibuka (mungkin rosak atau berkata laluan). Buka di komputer, simpan sebagai .xlsx dan muat naik semula, atau muat naik gambar.';
+
+  @override
+  String get plErrEmptySpreadsheet =>
+      'Hamparan ini tiada data. Pastikan anda pilih fail yang betul dan senarai harga ada dalam helaian, kemudian muat naik semula.';
+
+  @override
+  String get plErrTooManyRows =>
+      'Hamparan ini terlalu panjang (paling banyak kira-kira 1,200 barang). Sila bahagikan kepada beberapa fail dan muat naik satu per satu.';
+
+  @override
+  String get plErrAiInvalidOutput =>
+      'Keputusan AI bercelaru. Sila muat naik semula; untuk gambar, ambil dengan lurus dan jelas.';
+
+  @override
+  String get plErrNoProductsPhoto =>
+      'AI tidak jumpa nama barang dan harga dalam gambar. Ambil gambar jelas seluruh senarai harga (tiada silau, tidak terlalu jauh), kemudian cuba lagi.';
+
+  @override
+  String get plErrAiBusy => 'AI sangat sibuk sekarang. Sila tunggu 5 minit dan muat naik semula.';
+
+  @override
+  String get plErrAiUnavailable =>
+      'Perkhidmatan AI terhenti buat sementara. Sila muat naik semula dalam setengah jam; jika segera, tambah barang sendiri di “Barang & harga”.';
+
+  @override
+  String get plErrAiFailed =>
+      'AI menghadapi ralat semasa membaca, jadi senarai ini tidak selesai. Sila muat naik semula.';
+
+  @override
+  String get plErrAiAuthFailed =>
+      'Ada masalah tetapan pada perkhidmatan AI (bukan salah anda). Sila hubungi khidmat pelanggan dan muat naik semula selepas kami membaikinya.';
+
+  @override
+  String get plErrAiRequestRejected =>
+      'AI tidak menerima fail ini (terlalu banyak halaman atau format luar biasa). Sila muat naik gambar, atau simpan sebagai PDF dan cuba lagi.';
+
+  @override
+  String get plErrAiNotConfigured =>
+      'AI senarai harga belum dibuka. Sila tambah barang sendiri di “Barang & harga”, atau minta khidmat pelanggan tambahkan.';
+
+  @override
+  String get plErrDbError => 'Sistem bermasalah semasa menyimpan data. Sila muat naik semula dalam beberapa minit.';
+
+  @override
+  String get plErrInternal =>
+      'Ada masalah dalam sistem kami dan senarai ini tidak dibaca. Sila muat naik semula; jika berulang, hubungi khidmat pelanggan.';
+
+  @override
+  String get plErrStartFailed =>
+      'Senarai harga ini tidak mula dibaca (AI tidak dapat dihubungi). Sila muat naik semula.';
+
+  @override
+  String get plErrNetwork =>
+      'Internet terputus semasa muat naik, jadi AI tidak bermula. Semak sambungan anda dan muat naik semula.';
+
+  @override
+  String get plErrInvalidImportId =>
+      'Nombor senarai harga ini tidak sah. Kembali ke halaman utama dan muat naik semula.';
+
+  @override
+  String get plErrImportNotFound => 'Senarai harga ini tidak dijumpai (mungkin sudah dipadam). Sila muat naik semula.';
+
+  @override
+  String get plErrImportNotProcessing =>
+      'Senarai harga ini sudah dibaca. Lihat keputusan di halaman utama, atau muat naik yang baharu.';
+
+  @override
+  String get plErrConfigMissing =>
+      'Ciri senarai harga belum disediakan (bukan salah anda). Sila hubungi khidmat pelanggan.';
+
+  @override
+  String get plErrMethodNotAllowed =>
+      'Versi aplikasi anda terlalu lama. Sila kemas kini aplikasi dan muat naik semula.';
 }

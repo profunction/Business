@@ -1,6 +1,5 @@
 // 批发商端的商品、送货单、价目表导入：用示范模式把整个流程点一遍（手机宽度 400，撑爆就失败）。
 // 拍照、选文件、分享、打印都换成假的（FakeDevice），不会碰到 platform channel。
-import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -106,66 +105,71 @@ void main() {
       }
     });
 
-    test('AI 读失败的原因（error_message）：照 parse-price-list 开头写的三类代码，每一个都对到合适的说明', () {
-      // 代码表在 Edge Function 的开头（档案问题 / AI 读不到 / 网络、服务），App 要照这个分三种说
-      final header = File('../../supabase/functions/parse-price-list/index.ts').readAsLinesSync().take(40).join('\n');
-      List<String> codes(String group) {
-        final m = RegExp('$group：([A-Z_、\\s/]+?)(?=\\n//\\s+[^\\n：]+：|\\n\\n|\$)').firstMatch(header);
-        expect(m, isNotNull, reason: '找不到「$group」那一类');
-        return RegExp(r'[A-Z][A-Z_]+').allMatches(m!.group(1)!).map((m) => m.group(0)!).toList();
-      }
-
-      final fileCodes = codes('档案问题'), aiCodes = codes('AI 读不到'), serviceCodes = codes('网络 / 服务');
-      expect(fileCodes, containsAll(['UNSUPPORTED_FILE', 'SPREADSHEET_UNREADABLE', 'TOO_MANY_ROWS']));
-      expect(aiCodes, containsAll(['AI_REFUSED', 'NO_PRODUCTS_FOUND']));
-      expect(serviceCodes, containsAll(['AI_BUSY', 'AI_TIMEOUT', 'INTERNAL_ERROR']));
-
+    test('价目表 AI 的每一个错误代码（error_message、HTTP）：三语都有自己的说明，不是笼统的「出了点问题」', () {
+      // 代码清单在 packages/core（supabase/functions/tests/error_codes_test.ts 扫 Edge 代码确认没漏）
+      final codes = {...priceListImportErrorCodes, ...priceListHttpErrorCodes};
+      expect(codes.length, greaterThanOrEqualTo(35));
       for (final lang in ['zh', 'en', 'ms']) {
         final l = lookupL10n(Locale(lang));
-        final photoAdvice = l.sellerErrAiFailed; // 「请拍清楚一点」
-        for (final c in fileCodes) {
-          expect(l.importFailure(c), isNot(photoAdvice), reason: '$lang $c：档案的问题，拍清楚也没用');
+        // 笼统的说法：不认识的代码才用
+        final generic = {
+          l.errUnknown,
+          l.sellerErrAiFailed,
+          l.sellerImportErrService,
+          l.errNotAllowed,
+          l.sellerErrNotFound,
+        };
+        final seen = <String, String>{};
+        for (final c in codes) {
+          for (final type in [ImportFileType.image, ImportFileType.excel, ImportFileType.pdf, null]) {
+            final text = l.priceListText(c, fileType: type);
+            expect(text, isNotNull, reason: '$lang $c 没有说明');
+            expect(generic, isNot(contains(text)), reason: '$lang $c：太笼统');
+            expect(l.importFailure(c, fileType: type), text, reason: '$lang $c');
+          }
+          final text = l.priceListText(c, fileType: ImportFileType.image)!;
+          // 每个代码自己的说明（UNAUTHORIZED 跟 AUTH 一样是登录过期）
+          final other = seen[text];
           expect(
-            [l.sellerErrUnsupportedFile, l.sellerErrFileTooLarge, l.sellerImportErrFile, l.sellerImportErrTruncated],
-            contains(l.importFailure(c)),
-            reason: '$lang $c',
+            other == null || {other, c}.containsAll(['AUTH', 'UNAUTHORIZED']),
+            isTrue,
+            reason: '$lang $c 跟 $other 的说明一样',
           );
+          seen[text] = c;
+          // 上传 / 叫 AI 时收到的 AppError 也一样（NETWORK、AUTH 在那里是一般的意思）
+          if (c != 'NETWORK' && c != 'AUTH') {
+            expect(l.priceListError(AppError(c)), isNot(l.errUnknown), reason: '$lang $c');
+            expect(generic, isNot(contains(l.priceListError(AppError(c)))), reason: '$lang $c');
+          }
         }
-        for (final c in serviceCodes) {
-          expect(
-            [l.sellerImportErrService, l.sellerImportErrTimeout],
-            contains(l.importFailure(c)),
-            reason: '$lang $c',
-          );
-        }
-        for (final c in aiCodes) {
-          expect(
-            [l.sellerImportErrRefused, l.sellerImportErrTruncated, photoAdvice],
-            contains(l.importFailure(c)),
-            reason: '$lang $c',
-          );
-        }
-        expect(l.importFailure('TOO_MANY_ROWS'), l.sellerImportErrTruncated, reason: '太长：分成几份');
-        expect(l.importFailure('SPREADSHEET_UNREADABLE'), l.sellerImportErrFile);
-        expect(l.importFailure('AI_BUSY'), l.sellerImportErrService);
-        expect(l.importFailure('AI_TIMEOUT'), l.sellerImportErrTimeout);
-        expect(l.importFailure('NO_PRODUCTS_FOUND'), photoAdvice);
-        // App 自己写的：叫不到 AI 的原因
-        expect(l.importFailure('NETWORK'), l.errNetwork);
-        expect(l.importFailure('START_FAILED'), l.sellerImportErrService, reason: '不一定是没网络');
-        expect(l.importFailure('AUTH'), l.sellerErrLoginExpired);
-        // 照片超过 7 MB 跟档案超过 10 MB 说法不一样
+        // 照片太大（7 MB）跟文件太大（10 MB）、HEIC
         expect(l.importFailure('FILE_TOO_LARGE', fileType: ImportFileType.image), l.sellerErrPhotoTooLarge);
         expect(l.importFailure('FILE_TOO_LARGE', fileType: ImportFileType.pdf), l.sellerErrFileTooLarge);
-        expect(l.importFailure(null), photoAdvice);
-        // Excel / PDF 读不到商品：拍清楚没用，请看是不是价目表；照片才叫老板拍清楚一点
-        for (final c in ['NO_PRODUCTS_FOUND', 'AI_INVALID_OUTPUT', 'SOMETHING_NEW']) {
-          for (final type in [ImportFileType.excel, ImportFileType.pdf]) {
-            expect(l.importFailure(c, fileType: type), l.sellerImportErrNoProductsFile, reason: '$lang $c $type');
-            expect(l.importFailure(c, fileType: type), isNot(photoAdvice));
-          }
-          expect(l.importFailure(c, fileType: ImportFileType.image), photoAdvice, reason: '$lang $c');
-        }
+        expect(l.priceListError(const AppError('UNSUPPORTED_FILE', detail: 'heic')), l.sellerErrHeic);
+        // 找不到商品：照片叫老板拍清楚；Excel / PDF 拍清楚没用，请看是不是价目表
+        expect(l.importFailure('NO_PRODUCTS_FOUND', fileType: ImportFileType.image), l.plErrNoProductsPhoto);
+        expect(l.importFailure('NO_PRODUCTS_FOUND', fileType: ImportFileType.excel), l.sellerImportErrNoProductsFile);
+        // App 自己写的：叫不到 AI 的原因
+        expect(l.importFailure('NETWORK'), l.plErrNetwork);
+        expect(l.importFailure('AUTH'), l.sellerErrLoginExpired);
+        expect(l.priceListError(const AppError('NETWORK')), l.errNetwork, reason: '上传前没网络：一般的说法');
+        // 不认识的代码（以后加的）：照片请拍清楚；文件请看是不是价目表
+        expect(l.importFailure('SOMETHING_NEW', fileType: ImportFileType.image), l.sellerErrAiFailed);
+        expect(l.importFailure('SOMETHING_NEW', fileType: ImportFileType.pdf), l.sellerImportErrNoProductsFile);
+        expect(l.importFailure(null), l.sellerErrAiFailed);
+        // HTTP 错误：函数回 {"error": "CODE"}
+        final notProcessing = AppError.fromFunction(
+          const FunctionsHttpException(status: 409, details: {'error': 'IMPORT_NOT_PROCESSING', 'status': 'review'}),
+        );
+        expect(l.priceListError(notProcessing), l.plErrImportNotProcessing);
+        final config = AppError.fromFunction(
+          const FunctionsHttpException(status: 500, details: {'error': 'CONFIG_MISSING'}),
+        );
+        expect(l.priceListError(config), l.plErrConfigMissing);
+        final unauthorized = AppError.fromFunction(
+          const FunctionsHttpException(status: 401, details: {'error': 'UNAUTHORIZED'}),
+        );
+        expect(l.priceListError(unauthorized), l.sellerErrLoginExpired);
       }
     });
 
@@ -559,17 +563,18 @@ void main() {
       expect(find.text('请到手机的「设定」，允许这个 App 用相机和照片'), findsOneWidget);
     });
 
-    testWidgets('AI 读不到：按原因说明（太长 / 不肯读 / 文件打不开 / 服务出问题 / 其他），可以再上传一次', (tester) async {
+    testWidgets('AI 读不到：每个原因有自己的说明（太长 / 不肯读 / 文件打不开 / 服务出问题 / 其他），可以再上传一次', (tester) async {
       final device = FakeDevice()..nextImage = PickedFile.memory(jpeg);
       final api = await startSeller(tester, device: device);
       await openImport(tester);
       for (final (code, text) in [
         ('AI_TRUNCATED', '价目表太长，AI 读不完。请分成几张照片或几个文件，一份一份上传。'),
-        ('TOO_MANY_ROWS', '价目表太长，AI 读不完。请分成几张照片或几个文件，一份一份上传。'),
+        ('TOO_MANY_ROWS', '这个表格太长了（最多大约 1200 样商品）。请分成几个文件，一份一份上传。'),
         ('AI_REFUSED', 'AI 不肯读这份文件。请确认是价目表，再试一次。'),
         ('UNSUPPORTED_FILE', '这种文件看不懂。请拍照，或选 Excel、PDF、CSV 文件。'),
-        ('SPREADSHEET_UNREADABLE', '这个文件打不开，或是空的。请重新存一次（Excel 存成 .xlsx），或拍照上传。'),
-        ('AI_BUSY', 'AI 服务暂时有问题。请过几分钟再上传一次。'),
+        ('SPREADSHEET_UNREADABLE', '这个 Excel 文件打不开（可能坏了或设了密码）。请在电脑上打开，另存成 .xlsx 再上传，或拍照上传。'),
+        ('AI_BUSY', '现在很多人在用 AI，排不到。请等 5 分钟再上传一次。'),
+        ('START_FAILED', '这份价目表没有开始读（叫不到 AI）。请再上传一次。'),
         ('FILE_TOO_LARGE', '照片太大了（最多 7 MB）。请用「拍照」重新拍，或选小一点的照片。'),
         ('SOMETHING_ELSE', 'AI 读不懂这份价目表。请拍清楚一点再试一次。'),
       ]) {

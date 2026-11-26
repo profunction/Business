@@ -129,7 +129,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
       await _submit(file);
     } catch (e) {
       // 不准用相机……：留在这一页，说一句话就好
-      if (mounted) showMessage(context, l.error(e), error: true);
+      if (mounted) showMessage(context, l.priceListError(e), error: true);
     }
   }
 
@@ -153,7 +153,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
         _stage = _Stage.choose;
         if (e is AppError && e.code == 'WHOLESALER_SUSPENDED') _refusedSuspended = true;
       });
-      showMessage(context, l.error(e), error: true);
+      showMessage(context, l.priceListError(e), error: true);
     }
   }
 
@@ -204,7 +204,7 @@ class _ImportPageState extends ConsumerState<ImportPage> {
               setState(() => _stage = _Stage.timedOut);
             } else {
               // 查不到进度（找不到那一份、没权限、登录过期）：不是 AI 读不到
-              _fail(context.l10n.error(e), title: context.l10n.sellerImportCheckFailed);
+              _fail(context.l10n.priceListError(e), title: context.l10n.sellerImportCheckFailed);
             }
           },
         );

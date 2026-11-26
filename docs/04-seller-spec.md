@@ -43,6 +43,8 @@
 
 全部检查：`is_wholesaler_member(p_wholesaler_id) or is_admin()`，否则 `NOT_ALLOWED`。
 
+> **补完（`20261201000100_seller_followups.sql`）**：`list_seller_orders` 多一个参数 `p_after text default null`（游标分页：每一张多回传 `cursor`，下一页传上一页最后一张的；同一个时间按 id 排）；`get_order` 给批发商 / 客服多回传 `shop.whatsapp_phone`；`claim_notifications` 每条多回传 `wholesaler_id`、`shop_id`；`price_list_import_rows.checked_at`（App 改一行就记下「看过了」）；已上架的导入，行和 `ai_raw` 都不能再改（`IMPORT_ALREADY_APPLIED`）。
+>
 > **实现说明**：`product_counts.out_of_stock / low_stock` 只算上架中（active）的商品。`list_seller_orders` 混在一起时 pending 排最前面；`p_limit` 限制在 1–200；`p_statuses` 是空数组等于不筛选。批发商不存在（客服调用时）→ `WHOLESALER_NOT_FOUND`。
 
 ### 2.3 当天送货总结 `get_delivery_summary`

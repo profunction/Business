@@ -38,9 +38,6 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
 
   String get _id => widget.importId;
 
-  /// 老板已经看过、改过的行（AI 不太肯定的那几行就不再标黄色）。离开这一页再回来也记得
-  Set<String> get _checked => ref.read(checkedImportRowsProvider).putIfAbsent(_id, () => <String>{});
-
   GlobalKey _keyFor(int rowNo) => _rowKeys.putIfAbsent(rowNo, GlobalKey.new);
 
   /// 改一行。存好、而且列表也重新读好之前，这一行和「确认上架」都按不了：
@@ -52,8 +49,8 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
       _highlight.remove(row.rowNo);
     });
     try {
+      // 改过的行服务器会记下「看过了」（checked_at），重开 App 也记得
       await ref.read(sellerActionsProvider).updateImportRow(row, fields);
-      _checked.add(row.id);
     } catch (e) {
       if (mounted) showMessage(context, l.error(e), error: true);
     } finally {
@@ -218,21 +215,30 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
               child: Text(l.sellerImportRetry),
             ),
           ),
-          ImportStatus.applied => CenterMessage(
-            icon: Icons.check_circle,
-            iconColor: AppTheme.confirm,
-            text: l.sellerReviewApplied,
-            action: FilledButton(
-              key: const Key('review-products'),
-              onPressed: () => context.go('/seller/products'),
-              child: Text(l.sellerReviewGoProducts),
-            ),
+          // 已经上架：行锁住了（服务器也不让改），只给老板看
+          ImportStatus.applied => AsyncView(
+            value: rows,
+            onRetry: () => ref.invalidate(importRowsProvider(_id)),
+            builder: (rows) => rows.isEmpty
+                ? CenterMessage(
+                    icon: Icons.check_circle,
+                    iconColor: AppTheme.confirm,
+                    text: l.sellerReviewApplied,
+                    action: _goProducts(l),
+                  )
+                : _review(context, rows, products, productsFailed: productsFailed, readOnly: true),
           ),
         },
       ),
       bottomNavigationBar: !inReview || list == null || list.isEmpty ? null : _bottom(list),
     );
   }
+
+  Widget _goProducts(L10n l) => FilledButton(
+    key: const Key('review-products'),
+    onPressed: () => context.go('/seller/products'),
+    child: Text(l.sellerReviewGoProducts),
+  );
 
   Widget _bottom(List<PriceListImportRow> rows) {
     final l = context.l10n;
@@ -273,6 +279,7 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
     List<PriceListImportRow> rows,
     Map<String, SellerProduct> products, {
     required bool productsFailed,
+    bool readOnly = false,
   }) {
     final l = context.l10n;
     final t = Theme.of(context).textTheme;
@@ -287,11 +294,10 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
       );
     }
     int count(ImportRowAction a) => rows.where((r) => r.action == a).length;
-    final checked = _checked;
-    // AI 不太肯定、老板还没看过（改过）的
-    bool unsure(PriceListImportRow r) => r.isUnsure && !checked.contains(r.id);
+    // AI 不太肯定、老板还没看过（改过）的。上架了就不用再看
+    bool unsure(PriceListImportRow r) => !readOnly && r.isUnsure && !r.isChecked;
     final unsureCount = rows.where(unsure).length;
-    final notReady = rows.where((r) => !r.isReady).length;
+    final notReady = readOnly ? 0 : rows.where((r) => !r.isReady).length;
     // 全部都建出来（不是 ListView.builder）：上架失败时才跳得到看不见的那一行
     return RefreshIndicator(
       onRefresh: _reload,
@@ -319,7 +325,14 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
                       style: t.titleLarge,
                     ),
                     const SizedBox(height: 6),
-                    Text(l.sellerReviewHint, style: t.bodyLarge),
+                    if (readOnly) ...[
+                      Text(l.sellerReviewApplied, key: const Key('review-applied'), style: t.titleMedium),
+                      const SizedBox(height: 4),
+                      Text(l.sellerReviewAppliedRows, style: t.bodyLarge),
+                      const SizedBox(height: 10),
+                      _goProducts(l),
+                    ] else
+                      Text(l.sellerReviewHint, style: t.bodyLarge),
                   ],
                 ),
               ),
@@ -353,6 +366,7 @@ class _ImportReviewPageState extends ConsumerState<ImportReviewPage> {
                 unsure: unsure(r),
                 highlighted: _highlight.contains(r.rowNo),
                 busy: _busyRows.contains(r.id),
+                readOnly: readOnly,
                 onAction: (a) => _update(r, {'action': a.name}),
                 onChooseProduct: () => _chooseProduct(r, rows),
                 onEdit: () => _edit(r),
@@ -392,9 +406,13 @@ class _RowCard extends StatelessWidget {
     required this.onAction,
     required this.onChooseProduct,
     required this.onEdit,
+    this.readOnly = false,
   });
 
   final PriceListImportRow row;
+
+  /// 已经上架：只给看，不能改（没有新增 / 更新 / 跳过、改的按钮）
+  final bool readOnly;
 
   /// 对到的商品（action = update 时会改它）
   final SellerProduct? product;
@@ -516,57 +534,72 @@ class _RowCard extends StatelessWidget {
                 style: t.bodyMedium?.copyWith(color: Colors.black54),
               ),
             ),
-          const SizedBox(height: 12),
-          ChoiceButtons<ImportRowAction>(
-            choices: [
-              (
-                value: ImportRowAction.create,
-                label: l.sellerActionCreate,
-                color: AppTheme.confirm,
-                key: Key('row-${r.rowNo}-create'),
+          if (readOnly)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: LabelChip(
+                  key: Key('row-${r.rowNo}-locked'),
+                  text: l.importAction(r.action),
+                  color: const Color(0xFF616161),
+                  icon: Icons.lock,
+                ),
               ),
-              (
-                value: ImportRowAction.update,
-                label: l.sellerActionUpdate,
-                color: const Color(0xFF1565C0),
-                key: Key('row-${r.rowNo}-update'),
-              ),
-              (
-                value: ImportRowAction.skip,
-                label: l.sellerActionSkip,
-                color: const Color(0xFF616161),
-                key: Key('row-${r.rowNo}-skip'),
+            ),
+          if (!readOnly) ...[
+            const SizedBox(height: 12),
+            ChoiceButtons<ImportRowAction>(
+              choices: [
+                (
+                  value: ImportRowAction.create,
+                  label: l.sellerActionCreate,
+                  color: AppTheme.confirm,
+                  key: Key('row-${r.rowNo}-create'),
+                ),
+                (
+                  value: ImportRowAction.update,
+                  label: l.sellerActionUpdate,
+                  color: const Color(0xFF1565C0),
+                  key: Key('row-${r.rowNo}-update'),
+                ),
+                (
+                  value: ImportRowAction.skip,
+                  label: l.sellerActionSkip,
+                  color: const Color(0xFF616161),
+                  key: Key('row-${r.rowNo}-skip'),
+                ),
+              ],
+              selected: r.action,
+              onSelected: busy
+                  ? null
+                  : (a) {
+                      if (a == r.action) return;
+                      // 「更新」还没有对到商品：先选是哪一样
+                      if (a == ImportRowAction.update && r.matchedProductId == null) {
+                        onChooseProduct();
+                      } else {
+                        onAction(a);
+                      }
+                    },
+            ),
+            if (r.action == ImportRowAction.update) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                key: Key('row-${r.rowNo}-choose'),
+                onPressed: busy ? null : onChooseProduct,
+                icon: const Icon(Icons.swap_horiz),
+                label: Text(l.sellerReviewChangeProduct, textAlign: TextAlign.center),
               ),
             ],
-            selected: r.action,
-            onSelected: busy
-                ? null
-                : (a) {
-                    if (a == r.action) return;
-                    // 「更新」还没有对到商品：先选是哪一样
-                    if (a == ImportRowAction.update && r.matchedProductId == null) {
-                      onChooseProduct();
-                    } else {
-                      onAction(a);
-                    }
-                  },
-          ),
-          if (r.action == ImportRowAction.update) ...[
             const SizedBox(height: 8),
             OutlinedButton.icon(
-              key: Key('row-${r.rowNo}-choose'),
-              onPressed: busy ? null : onChooseProduct,
-              icon: const Icon(Icons.swap_horiz),
-              label: Text(l.sellerReviewChangeProduct, textAlign: TextAlign.center),
+              key: Key('row-${r.rowNo}-edit'),
+              onPressed: busy ? null : onEdit,
+              icon: const Icon(Icons.edit),
+              label: Text(l.sellerReviewEdit),
             ),
           ],
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            key: Key('row-${r.rowNo}-edit'),
-            onPressed: busy ? null : onEdit,
-            icon: const Icon(Icons.edit),
-            label: Text(l.sellerReviewEdit),
-          ),
         ],
       ),
     );

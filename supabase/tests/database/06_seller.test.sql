@@ -63,7 +63,7 @@ select is(
 );
 select is(
   (select string_agg(k, ',' order by k) from jsonb_object_keys(:'list1'::jsonb -> 0) as t(k)),
-  'created_at,expected_delivery_date,goods_subtotal_sen,id,item_count,note,order_no,out_of_stock_count,shipping_fee_sen,shop_name,status,total_sen,zone_name',
+  'created_at,cursor,expected_delivery_date,goods_subtotal_sen,id,item_count,note,order_no,out_of_stock_count,shipping_fee_sen,shop_name,status,total_sen,zone_name',
   '列表每一行的字段'
 );
 select is(jsonb_array_length(public.list_seller_orders(tests.uid('W1'), array['pending']::public.order_status[])), 1, '只看待确认');
@@ -618,7 +618,7 @@ select is(
 );
 select is(
   (select string_agg(k, ',' order by k) from jsonb_object_keys(:'c1'::jsonb -> 0) as t(k)),
-  'attempts,channel,details,event_type,id,locale,payload,push_targets,whatsapp_phone',
+  'attempts,channel,details,event_type,id,locale,payload,push_targets,shop_id,whatsapp_phone,wholesaler_id',
   '每条领到的通知的字段'
 );
 select is(

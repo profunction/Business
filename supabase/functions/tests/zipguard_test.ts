@@ -189,7 +189,11 @@ Deno.test("zip 检查：一串空的 dynamic block（没有输出、每个都重
   const cd = centralDirectory(
     [
       ["[Content_Types].xml", 0, 0],
-      ...Array.from({ length: 40 }, (_, i) => [`xl/s${i}.xml`, sheetAt, 8] as [string, number, number]),
+      // 第一笔叫 xl/workbook.xml：sniff 才会当成 xlsx、交给这里检查
+      ...Array.from(
+        { length: 40 },
+        (_, i) => [i === 0 ? "xl/workbook.xml" : `xl/s${i}.xml`, sheetAt, 8] as [string, number, number],
+      ),
     ],
     bytes.length,
   );

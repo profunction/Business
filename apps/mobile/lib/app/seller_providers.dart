@@ -32,7 +32,7 @@ SellerOrdersTab sellerOrdersTabFrom(String? v) =>
 /// list_seller_orders()：
 /// - pending：新订单，先来先做（服务器排好：旧到新）
 /// - today：今天要送（已确认 / 送货中，送货日 = 服务器算的马来西亚今天）
-/// - all：全部（pending 在最前面，其他新到旧）
+/// - all：全部（pending 在最前面，其他新到旧）。只读第一页；页面用 [sellerAllOrdersProvider]（可以「再看更早的」）
 final sellerOrdersProvider = FutureProvider.autoDispose.family<List<SellerOrderSummary>, SellerOrdersTab>((
   ref,
   tab,
@@ -53,12 +53,76 @@ final sellerOrdersProvider = FutureProvider.autoDispose.family<List<SellerOrderS
         limit: 200,
       );
     case SellerOrdersTab.all:
-      return api.listSellerOrders(wid, limit: sellerAllOrdersLimit);
+      return api.listSellerOrders(wid, limit: sellerAllOrdersPageSize);
   }
 });
 
-/// 「全部」最多显示几张（list_seller_orders 没有分页；刚好这么多张就在最后说只显示最近的）
-const sellerAllOrdersLimit = 100;
+/// 「全部」一次读几张；按「再看更早的订单」再读一页（游标分页）
+const sellerAllOrdersPageSize = 50;
+
+/// 「全部」读到的订单，和后面还有没有
+class SellerOrderList {
+  const SellerOrderList(this.orders, {required this.hasMore});
+
+  final List<SellerOrderSummary> orders;
+  final bool hasMore;
+}
+
+/// 每一家批发商「全部」已经读了几张（重新读的时候照样读这么多，按了「再看更早的」就不会一刷新又缩回第一页）
+final _sellerAllOrdersShownProvider = Provider<Map<String, int>>((ref) => {});
+
+/// 「全部」的订单：一页一页读（list_seller_orders 的 p_after = 上一页最后一张的 cursor）
+final sellerAllOrdersProvider = AsyncNotifierProvider.autoDispose<SellerAllOrders, SellerOrderList>(
+  SellerAllOrders.new,
+);
+
+class SellerAllOrders extends AsyncNotifier<SellerOrderList> {
+  bool _loadingMore = false;
+
+  @override
+  Future<SellerOrderList> build() async {
+    final api = ref.watch(apiProvider);
+    final wid = ref.watch(wholesalerIdProvider);
+    final wanted = ref.read(_sellerAllOrdersShownProvider)[wid] ?? sellerAllOrdersPageSize;
+    final list = <SellerOrderSummary>[];
+    String? after;
+    while (true) {
+      final n = (wanted - list.length).clamp(1, 200);
+      final page = await api.listSellerOrders(wid, limit: n, after: after);
+      _append(list, page);
+      after = page.isEmpty ? null : page.last.cursor;
+      if (page.length < n || after == null) return SellerOrderList(list, hasMore: false);
+      if (list.length >= wanted) return SellerOrderList(list, hasMore: true);
+    }
+  }
+
+  /// 再读一页（更早的订单）。读不到就丢错（页面说一句话），已经读到的照样留着
+  Future<void> loadMore() async {
+    final current = state.value;
+    final after = current == null || current.orders.isEmpty ? null : current.orders.last.cursor;
+    if (current == null || !current.hasMore || after == null || _loadingMore) return;
+    _loadingMore = true;
+    try {
+      final api = ref.read(apiProvider);
+      final wid = ref.read(wholesalerIdProvider);
+      final page = await api.listSellerOrders(wid, limit: sellerAllOrdersPageSize, after: after);
+      final list = [...current.orders];
+      _append(list, page);
+      ref.read(_sellerAllOrdersShownProvider)[wid] = list.length;
+      state = AsyncData(
+        SellerOrderList(list, hasMore: page.length >= sellerAllOrdersPageSize && page.last.cursor != null),
+      );
+    } finally {
+      _loadingMore = false;
+    }
+  }
+
+  /// 两页之间有单改了状态，可能出现两次：按 id 去掉重复的
+  static void _append(List<SellerOrderSummary> list, List<SellerOrderSummary> page) {
+    final seen = {for (final o in list) o.id};
+    list.addAll(page.where((o) => seen.add(o.id)));
+  }
+}
 
 /// 送货单（get_delivery_summary）。参数是 'YYYY-MM-DD'；null = 服务器算的马来西亚今天
 final deliverySummaryProvider = FutureProvider.autoDispose.family<DeliverySummary, String?>(
@@ -87,10 +151,6 @@ final priceListImportProvider = FutureProvider.autoDispose.family<PriceListImpor
 final importProgressProvider = StreamProvider.autoDispose.family<PriceListImport, String>(
   (ref, id) => ref.watch(apiProvider).watchImport(id),
 );
-
-/// 价目表确认页：老板已经看过、改过的行（导入 id → 行 id）。AI 不太肯定的行改过就不再标黄色。
-/// 只记在这部手机、App 开着的时候（离开确认页再回来也记得）
-final checkedImportRowsProvider = Provider<Map<String, Set<String>>>((ref) => {});
 
 /// 价目表导入的每一行（AI 读到的商品）
 final importRowsProvider = FutureProvider.autoDispose.family<List<PriceListImportRow>, String>(
@@ -121,6 +181,7 @@ final sellerRealtimeProvider = Provider.autoDispose<void>((ref) {
     if (!alive) return;
     ref.invalidate(sellerHomeProvider);
     ref.invalidate(sellerOrdersProvider);
+    ref.invalidate(sellerAllOrdersProvider);
     ref.invalidate(orderDetailProvider);
     ref.invalidate(deliverySummaryProvider);
   }
@@ -228,6 +289,7 @@ class SellerActions {
   void _orderChanged(String orderId) {
     ref.invalidate(orderDetailProvider(orderId));
     ref.invalidate(sellerOrdersProvider);
+    ref.invalidate(sellerAllOrdersProvider);
     ref.invalidate(sellerHomeProvider);
     ref.invalidate(deliverySummaryProvider);
   }

@@ -20,11 +20,26 @@ class SellerOrdersPage extends ConsumerStatefulWidget {
 
 class _SellerOrdersPageState extends ConsumerState<SellerOrdersPage> {
   late SellerOrdersTab _tab = widget.initialTab;
+  bool _loadingMore = false;
 
   Future<void> _refresh() {
     // 「今天要送」的日期和按钮上的数字来自首页
     ref.invalidate(sellerHomeProvider);
+    if (_tab == SellerOrdersTab.all) return ref.refresh(sellerAllOrdersProvider.future);
     return ref.refresh(sellerOrdersProvider(_tab).future);
+  }
+
+  /// 「全部」：再读一页更早的订单
+  Future<void> _loadMore() async {
+    if (_loadingMore) return;
+    setState(() => _loadingMore = true);
+    try {
+      await ref.read(sellerAllOrdersProvider.notifier).loadMore();
+    } catch (e) {
+      if (mounted) showMessage(context, context.l10n.error(e), error: true);
+    } finally {
+      if (mounted) setState(() => _loadingMore = false);
+    }
   }
 
   @override
@@ -32,7 +47,11 @@ class _SellerOrdersPageState extends ConsumerState<SellerOrdersPage> {
     final l = context.l10n;
     ref.watch(sellerRealtimeProvider);
     final home = ref.watch(sellerHomeProvider).value;
-    final orders = ref.watch(sellerOrdersProvider(_tab));
+    // 「全部」一页一页读（后面还有就显示「再看更早的订单」）；其他两个一次读完
+    final all = _tab == SellerOrdersTab.all;
+    final AsyncValue<SellerOrderList> orders = all
+        ? ref.watch(sellerAllOrdersProvider)
+        : ref.watch(sellerOrdersProvider(_tab)).whenData((o) => SellerOrderList(o, hasMore: false));
 
     String label(SellerOrdersTab t) {
       final (name, count) = switch (t) {
@@ -76,9 +95,16 @@ class _SellerOrdersPageState extends ConsumerState<SellerOrdersPage> {
               // 「今天要送」要先有首页（日期）：首页读失败的话也要重读，不然一直按都一样失败
               onRetry: () {
                 ref.invalidate(sellerHomeProvider);
-                ref.invalidate(sellerOrdersProvider(_tab));
+                if (all) {
+                  ref.invalidate(sellerAllOrdersProvider);
+                } else {
+                  ref.invalidate(sellerOrdersProvider(_tab));
+                }
               },
-              builder: (list) => RefreshIndicator(onRefresh: _refresh, child: _list(context, list)),
+              builder: (o) => RefreshIndicator(
+                onRefresh: _refresh,
+                child: _list(context, o.orders, hasMore: o.hasMore),
+              ),
             ),
           ),
         ],
@@ -86,7 +112,7 @@ class _SellerOrdersPageState extends ConsumerState<SellerOrdersPage> {
     );
   }
 
-  Widget _list(BuildContext context, List<SellerOrderSummary> list) {
+  Widget _list(BuildContext context, List<SellerOrderSummary> list, {required bool hasMore}) {
     final l = context.l10n;
     if (list.isEmpty) {
       final text = switch (_tab) {
@@ -107,22 +133,27 @@ class _SellerOrdersPageState extends ConsumerState<SellerOrdersPage> {
       );
     }
     final showToday = _tab == SellerOrdersTab.today;
-    // 「全部」只读最近的 N 张（服务器没有分页）：刚好读满就在最后说，老板才不会以为更早的单不见了
-    final limited = _tab == SellerOrdersTab.all && list.length >= sellerAllOrdersLimit;
     final head = showToday ? 1 : 0;
     return ListView.separated(
       padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-      itemCount: list.length + head + (limited ? 1 : 0),
+      itemCount: list.length + head + (hasMore ? 1 : 0),
       separatorBuilder: (_, _) => const SizedBox(height: 12),
       itemBuilder: (_, i) {
         if (showToday && i == 0) {
           return _TodayHeader(count: list.length, totalSen: list.fold(0, (n, o) => n + o.totalSen));
         }
         if (i - head == list.length) {
+          // 更早的订单还没读：按一下再读一页
           return Padding(
-            key: const Key('seller-orders-limited'),
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: InfoLine(icon: Icons.info_outline, text: l.sellerOrdersLimited(sellerAllOrdersLimit)),
+            child: OutlinedButton.icon(
+              key: const Key('seller-orders-more'),
+              onPressed: _loadingMore ? null : _loadMore,
+              icon: _loadingMore
+                  ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 3))
+                  : const Icon(Icons.expand_more),
+              label: Text(l.sellerOrdersLoadMore, textAlign: TextAlign.center),
+            ),
           );
         }
         return SellerOrderCard(order: list[i - head]);

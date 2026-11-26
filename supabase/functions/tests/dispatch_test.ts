@@ -836,3 +836,45 @@ Deno.test("worker 要被关掉（beforeunload）→ 不再领、不再开始发"
   }
   assertEquals(worker.stopping, false);
 });
+
+Deno.test("dispatch：批发商的推送带 wholesaler_id、每家分开的 tag；WhatsApp 那条照旧", async () => {
+  const W1 = "cccccccc-0000-4000-8000-000000000001";
+  const W2 = "cccccccc-0000-4000-8000-000000000002";
+  const t = await setup();
+  const rt = fakeEdgeRuntime();
+  t.b.batches.push([
+    claimed(1, {
+      event_type: "daily_summary",
+      payload: { date: "2026-11-26", order_count: 1 },
+      push_targets: [{ target: "tok-a", kind: "token" }],
+      wholesaler_id: W1,
+    }),
+    claimed(2, {
+      event_type: "daily_summary",
+      payload: { date: "2026-11-26", order_count: 2 },
+      push_targets: [{ target: "tok-b", kind: "fid" }],
+      wholesaler_id: W2,
+    }),
+    claimed(3, { channel: "whatsapp", whatsapp_phone: "60111", wholesaler_id: W1 }),
+  ]);
+  try {
+    const res = await fn.fetch(post());
+    assertEquals(res.status, 200);
+    const sent = t.net.calls.filter((c) => c.url.host === "fcm.googleapis.com").map((c) => c.json().message);
+    assertEquals(sent.length, 2);
+    const byTarget = Object.fromEntries(sent.map((m) => [m.token ?? m.fid, m]));
+    assertEquals(byTarget["tok-a"].data.wholesaler_id, W1);
+    assertEquals(byTarget["tok-b"].data.wholesaler_id, W2);
+    assertEquals(byTarget["tok-a"].android.notification.tag, `daily-summary-${W1}`);
+    assertEquals(byTarget["tok-b"].apns.headers["apns-collapse-id"], `daily-summary-${W2}`);
+    assertEquals(t.b.templates.length, 1);
+    assertEquals(t.b.templates[0].to, "+60111");
+    assert(!JSON.stringify(t.b.templates[0]).includes(W1), "WhatsApp 模板不带 wholesaler_id");
+    assertEquals(t.b.completes[id(3)].p_status, "sent");
+    assertEquals(t.b.completes[id(3)].p_channel, "whatsapp");
+  } finally {
+    await Promise.allSettled(rt.pending);
+    rt.restore();
+    t.restore();
+  }
+});

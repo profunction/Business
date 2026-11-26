@@ -102,7 +102,7 @@ void main() {
     expect(FileKind.pdf.importType, ImportFileType.pdf);
   });
 
-  test('xlsx：ZIP 里有 xl/ 的档案；docx 不算', () {
+  test('xlsx：ZIP 里有 xl/workbook.xml；docx 不算', () {
     final xlsx = zip({
       '[Content_Types].xml': ascii.encode('<Types/>'),
       '_rels/.rels': ascii.encode('<Relationships/>'),
@@ -135,6 +135,29 @@ void main() {
     expect(sniffFileType(cut), FileKind.unknown);
     final xlsx = zip({'[Content_Types].xml': ascii.encode('<Types/>'), 'xl/workbook.xml': payload});
     expect(sniffFileType(Uint8List.sublistView(xlsx, 0, xlsx.length - 100)), FileKind.xlsx);
+  });
+
+  test('xlsx 要有正好叫 xl/workbook.xml 的档案：只是 xl/ 开头、内容里有 xl/workbook.xml 的 docx / zip 都不算', () {
+    expect(sniffFileType(zip({'xl/notes.txt': ascii.encode('hi')})), FileKind.unknown);
+    expect(sniffFileType(zip({'xl/workbook.xml.bak': ascii.encode('<workbook/>')})), FileKind.unknown);
+    expect(sniffFileType(zip({'backup/xl/workbook.xml': ascii.encode('<workbook/>')})), FileKind.unknown);
+    final docx = zip({
+      '[Content_Types].xml': ascii.encode(
+        '<Types><Override ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+      ),
+      'word/document.xml': ascii.encode('<w:document>xl/ xl/workbook.xml</w:document>'),
+    });
+    expect(sniffFileType(docx), FileKind.unknown);
+    expect(sniffFileType(Uint8List.sublistView(docx, 0, docx.length - 60)), FileKind.unknown, reason: '截掉中央目录也一样');
+    // 工作簿换了名字，但 [Content_Types].xml 说是 spreadsheetml
+    final renamed = zip({
+      '[Content_Types].xml': ascii.encode(
+        '<Types><Override PartName="/book/main.xml" '
+        'ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>',
+      ),
+      'book/main.xml': ascii.encode('<workbook/>'),
+    });
+    expect(sniffFileType(renamed), FileKind.xlsx);
   });
 
   test('xls：OLE2 里有 Workbook 资料流', () {

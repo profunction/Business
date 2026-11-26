@@ -449,17 +449,20 @@ class WholesaleApi {
   Future<SellerHome> getSellerHome(String wholesalerId) async =>
       SellerHome.fromJson(await _rpcJson('get_seller_home', {'p_wholesaler_id': wholesalerId}));
 
-  /// statuses 空 = 全部；pending 排最前面（先来先做），其他新到旧。limit 1..200
+  /// statuses 空 = 全部；pending 排最前面（先来先做），其他新到旧。limit 1..200。
+  /// 下一页：after = 上一页最后一张的 [SellerOrderSummary.cursor]（游标分页，不会因为新订单进来而重复 / 漏掉）
   Future<List<SellerOrderSummary>> listSellerOrders(
     String wholesalerId, {
     List<OrderStatus>? statuses,
     DateTime? deliveryDate,
     int limit = 50,
+    String? after,
   }) async => (await _rpcList('list_seller_orders', {
     'p_wholesaler_id': wholesalerId,
     'p_statuses': statuses == null || statuses.isEmpty ? null : statuses.map(orderStatusCode).toList(),
     'p_delivery_date': deliveryDate == null ? null : dateParam(deliveryDate),
     'p_limit': limit,
+    'p_after': ?after,
   })).map(SellerOrderSummary.fromJson).toList();
 
   /// date 空 = 马来西亚的今天

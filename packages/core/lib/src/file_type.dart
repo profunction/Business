@@ -78,11 +78,11 @@ FileKind sniffFileType(Uint8List bytes, {String? fileName}) {
     if (_heicBrands.contains(brand)) return FileKind.heic;
     return FileKind.unknown; // avif、mp4、mov……
   }
-  // ZIP：xlsx 里一定有 xl/ 文件夹的档案（xl/workbook.xml……）。只看 ZIP 里的档名，
-  // 不在整个档案里搜 'xl/'（压缩过的资料、照片里随便都可能出现这三个字节，大的 Word 档会被当成 Excel）
+  // ZIP：xlsx 里一定有一个档案的名字正好是 xl/workbook.xml（或 [Content_Types].xml 说是 spreadsheetml 的工作簿）。
+  // 只看 ZIP 里的档名，不在整个档案里搜 'xl/'（压缩过的资料、照片里随便都可能出现这三个字节，
+  // 大的 Word 档会被当成 Excel）；档名只是 xl/ 开头（xl/notes.txt）也不算
   if (_startsWith(bytes, const [0x50, 0x4B, 0x03, 0x04])) {
-    if (_zipEntryNames(bytes).any((n) => n.startsWith('xl/'))) return FileKind.xlsx;
-    return FileKind.unknown; // docx、普通 zip……
+    return _isXlsxZip(bytes) ? FileKind.xlsx : FileKind.unknown; // docx、普通 zip……
   }
   // 旧版 Office（OLE2）：Excel 的资料流叫 Workbook（或更旧的 Book），档名是 UTF-16LE
   if (_startsWith(bytes, const [0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1])) {
@@ -124,13 +124,34 @@ bool _looksLikeCsv(Uint8List bytes, String? ext) {
   return newlines > 0 && separators >= newlines;
 }
 
-/// ZIP 里的档名：先看最后面的中央目录（End of Central Directory → 每一个档案的记录）；
+/// xl/workbook.xml，或没压缩的 [Content_Types].xml 里写着 spreadsheetml 的工作簿
+bool _isXlsxZip(Uint8List bytes) {
+  final entries = _zipEntries(bytes).toList();
+  if (entries.any((e) => e.name == 'xl/workbook.xml')) return true;
+  for (final e in entries) {
+    if (e.name != '[Content_Types].xml' || e.stored == null) continue;
+    if (_indexOf(e.stored!, ascii.encode('spreadsheetml.sheet.main+xml')) >= 0) return true;
+  }
+  return false;
+}
+
+/// ZIP 里的一个档案：名字；没压缩（stored）而且找得到资料的话，资料本身
+typedef _ZipEntry = ({String name, Uint8List? stored});
+
+/// ZIP 里的档案：先看最后面的中央目录（End of Central Directory → 每一个档案的记录）；
 /// 找不到（档案被截掉、ZIP64）就从头一个一个读本地档头（档名就在档头后面，不压缩）
-Iterable<String> _zipEntryNames(Uint8List bytes) sync* {
+Iterable<_ZipEntry> _zipEntries(Uint8List bytes) sync* {
   final data = ByteData.sublistView(bytes);
   int u16(int at) => data.getUint16(at, Endian.little);
   int u32(int at) => data.getUint32(at, Endian.little);
   String name(int at, int length) => latin1.decode(bytes.sublist(at, at + length));
+  // 没压缩的资料：本地档头（档名、额外资料）后面
+  Uint8List? stored(int local, int size) {
+    if (local + 30 > bytes.length || !_matchesAt(bytes, local, const [0x50, 0x4B, 0x03, 0x04])) return null;
+    final start = local + 30 + u16(local + 26) + u16(local + 28);
+    if (start + size > bytes.length) return null;
+    return Uint8List.sublistView(bytes, start, start + size);
+  }
 
   // End of Central Directory：最后 22 字节起（后面可能有最多 65535 字节的注解），签名 PK\x05\x06
   final eocd = _lastIndexOf(
@@ -142,7 +163,7 @@ Iterable<String> _zipEntryNames(Uint8List bytes) sync* {
   if (eocd >= 0) {
     final count = u16(eocd + 10);
     var at = u32(eocd + 16);
-    final names = <String>[];
+    final names = <_ZipEntry>[];
     var ok = at < bytes.length;
     for (var i = 0; ok && i < count; i++) {
       // 中央目录的一笔：签名 PK\x01\x02，档名长度在 +28，额外资料 +30，注解 +32，档名从 +46 开始
@@ -155,7 +176,8 @@ Iterable<String> _zipEntryNames(Uint8List bytes) sync* {
         ok = false;
         break;
       }
-      names.add(name(at + 46, n));
+      final method = u16(at + 10);
+      names.add((name: name(at + 46, n), stored: method == 0 ? stored(u32(at + 42), u32(at + 20)) : null));
       at += 46 + n + extra + comment;
     }
     if (ok) {
@@ -170,7 +192,9 @@ Iterable<String> _zipEntryNames(Uint8List bytes) sync* {
     final n = u16(at + 26);
     if (n > 0 && n <= 512 && at + 30 + n <= bytes.length) {
       final raw = bytes.sublist(at + 30, at + 30 + n);
-      if (raw.every((b) => b >= 0x20 && b < 0x7F)) yield ascii.decode(raw);
+      if (raw.every((b) => b >= 0x20 && b < 0x7F)) {
+        yield (name: ascii.decode(raw), stored: u16(at + 8) == 0 ? stored(at, u32(at + 18)) : null);
+      }
     }
     at = _indexOf(bytes, const [0x50, 0x4B, 0x03, 0x04], start: at + 4);
   }

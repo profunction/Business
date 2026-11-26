@@ -401,7 +401,8 @@ class DemoApi extends WholesaleApi {
     List<OrderStatus>? statuses,
     DateTime? deliveryDate,
     int limit = 50,
-  }) => _later(() => sellerData.orders(statuses: statuses, deliveryDate: deliveryDate, limit: limit));
+    String? after,
+  }) => _later(() => sellerData.orders(statuses: statuses, deliveryDate: deliveryDate, limit: limit, after: after));
 
   @override
   Future<DeliverySummary> getDeliverySummary(String wholesalerId, {DateTime? date}) =>

@@ -162,6 +162,8 @@ export function toItem(raw: unknown): NotificationItem | null {
     whatsapp_phone: typeof r.whatsapp_phone === "string" && r.whatsapp_phone.trim() !== "" ? r.whatsapp_phone : null,
     attempts: typeof r.attempts === "number" ? r.attempts : undefined,
     details: r.details && typeof r.details === "object" ? r.details as NotificationItem["details"] : null,
+    wholesaler_id: typeof r.wholesaler_id === "string" && UUID_RE.test(r.wholesaler_id) ? r.wholesaler_id : null,
+    shop_id: typeof r.shop_id === "string" && UUID_RE.test(r.shop_id) ? r.shop_id : null,
   };
 }
 

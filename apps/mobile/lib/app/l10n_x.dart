@@ -184,44 +184,73 @@ extension L10nText on L10n {
     NotifyChannel.whatsapp => sellerNotifyWhatsapp,
   };
 
-  /// 价目表 AI 读失败的原因（price_list_imports.error_message）。代码见 supabase/functions/parse-price-list/index.ts
-  /// 开头的三类：档案问题 / AI 读不到 / 网络、服务；另外 App 自己写的 START_FAILED、NETWORK、AUTH（叫不到 AI）。
-  /// [fileType] 是导入的种类（照片太大跟档案太大的上限不一样）
-  String importFailure(String? code, {ImportFileType? fileType}) => switch (code) {
-    // 档案问题
-    'UNSUPPORTED_FILE' => sellerErrUnsupportedFile,
-    'FILE_TOO_LARGE' => fileType == ImportFileType.image ? sellerErrPhotoTooLarge : sellerErrFileTooLarge,
-    'EMPTY_FILE' ||
-    'FILE_NOT_FOUND' ||
-    'INVALID_FILE_PATH' ||
-    'SPREADSHEET_UNREADABLE' ||
-    'EMPTY_SPREADSHEET' => sellerImportErrFile,
-    // 太长：分成几份
-    'TOO_MANY_ROWS' || 'AI_TRUNCATED' => sellerImportErrTruncated,
-    'AI_TIMEOUT' => sellerImportErrTimeout,
-    // AI 读不到
-    'AI_REFUSED' => sellerImportErrRefused,
-    // 网络、服务（不是照片的问题，过一会儿再试）
-    'AI_BUSY' ||
-    'AI_UNAVAILABLE' ||
-    'AI_FAILED' ||
-    'AI_AUTH_FAILED' ||
-    'AI_REQUEST_REJECTED' ||
-    'AI_NOT_CONFIGURED' ||
-    'DOWNLOAD_FAILED' ||
-    'DB_ERROR' ||
-    'INTERNAL_ERROR' ||
-    'START_FAILED' => sellerImportErrService,
-    'QUOTA_UNAVAILABLE' => sellerErrQuotaUnavailable,
-    'WHOLESALER_SUSPENDED' => sellerErrSuspended,
-    'NETWORK' => errNetwork,
-    'AUTH' => sellerErrLoginExpired,
-    // AI_INVALID_OUTPUT、NO_PRODUCTS_FOUND、不认识的：照片请拍清楚一点；Excel / PDF 拍清楚没用，请看是不是价目表
-    _ =>
-      fileType == ImportFileType.excel || fileType == ImportFileType.pdf
+  /// 价目表 AI 的错误代码 → 给老板看的话。每一个代码都有自己的说明（发生了什么、接下来怎么做），
+  /// 清单在 packages/core 的 priceListImportErrorCodes / priceListHttpErrorCodes（Edge Function 的测试会检查没漏）。
+  /// [fileType]：照片太大跟文件太大的上限不一样、找不到商品时照片和文件的建议不一样；
+  /// [detail]：UNSUPPORTED_FILE 的 'heic'、FILE_TOO_LARGE 的 'image'；[waitMinutes]：TOO_MANY_IMPORTS 要等几分钟。
+  /// 不是价目表的代码 → null
+  String? priceListText(String? code, {ImportFileType? fileType, String? detail, int? waitMinutes}) {
+    final isFile = fileType == ImportFileType.excel || fileType == ImportFileType.pdf;
+    return switch (code) {
+      // 文件问题
+      'UNSUPPORTED_FILE' => detail == 'heic' ? sellerErrHeic : sellerErrUnsupportedFile,
+      'FILE_TOO_LARGE' =>
+        fileType == ImportFileType.image || detail == 'image' ? sellerErrPhotoTooLarge : sellerErrFileTooLarge,
+      'EMPTY_FILE' => plErrEmptyFile,
+      'FILE_NOT_FOUND' => plErrFileNotFound,
+      'INVALID_FILE_PATH' => plErrInvalidFilePath,
+      'DOWNLOAD_FAILED' => plErrDownloadFailed,
+      'SPREADSHEET_UNREADABLE' => plErrSpreadsheetUnreadable,
+      'EMPTY_SPREADSHEET' => plErrEmptySpreadsheet,
+      'TOO_MANY_ROWS' => plErrTooManyRows,
+      // AI 读不到
+      'AI_REFUSED' => sellerImportErrRefused,
+      'AI_TRUNCATED' => sellerImportErrTruncated,
+      'AI_INVALID_OUTPUT' => plErrAiInvalidOutput,
+      // 照片请拍清楚一点；Excel / PDF 拍清楚没用，请看是不是价目表
+      'NO_PRODUCTS_FOUND' => isFile ? sellerImportErrNoProductsFile : plErrNoProductsPhoto,
+      // AI、系统（不是文件的问题）
+      'AI_TIMEOUT' => sellerImportErrTimeout,
+      'AI_BUSY' => plErrAiBusy,
+      'AI_UNAVAILABLE' => plErrAiUnavailable,
+      'AI_FAILED' => plErrAiFailed,
+      'AI_AUTH_FAILED' => plErrAiAuthFailed,
+      'AI_REQUEST_REJECTED' => plErrAiRequestRejected,
+      'AI_NOT_CONFIGURED' => plErrAiNotConfigured,
+      'DB_ERROR' => plErrDbError,
+      'INTERNAL_ERROR' => plErrInternal,
+      // App 自己写的（叫不到 parse-price-list）
+      'START_FAILED' => plErrStartFailed,
+      'NETWORK' => plErrNetwork,
+      'AUTH' || 'UNAUTHORIZED' => sellerErrLoginExpired,
+      // parse-price-list 的 HTTP 错误
+      'INVALID_IMPORT_ID' => plErrInvalidImportId,
+      'WHOLESALER_SUSPENDED' => sellerErrSuspended,
+      'IMPORT_NOT_FOUND' => plErrImportNotFound,
+      'IMPORT_NOT_PROCESSING' => plErrImportNotProcessing,
+      'IMPORT_ALREADY_RUNNING' => sellerImportStillReading,
+      'TOO_MANY_IMPORTS' => sellerErrTooManyImports(waitMinutes ?? 10),
+      'QUOTA_UNAVAILABLE' => sellerErrQuotaUnavailable,
+      'CONFIG_MISSING' => plErrConfigMissing,
+      'METHOD_NOT_ALLOWED' => plErrMethodNotAllowed,
+      _ => null,
+    };
+  }
+
+  /// 价目表 AI 读失败的原因（price_list_imports.error_message）。不认识的代码：照片请拍清楚一点；
+  /// Excel / PDF 请看是不是价目表
+  String importFailure(String? code, {ImportFileType? fileType}) =>
+      priceListText(code, fileType: fileType) ??
+      (fileType == ImportFileType.excel || fileType == ImportFileType.pdf
           ? sellerImportErrNoProductsFile
-          : sellerErrAiFailed,
-  };
+          : sellerErrAiFailed);
+
+  /// 上传价目表、叫 AI、查进度失败 → 价目表的说明；其他错误照 [error]。
+  /// NETWORK / AUTH 在这里是一般的意思（没网络、登录过期 / 验证码），不是「叫 AI 时断了」
+  String priceListError(Object e) {
+    if (e is! AppError || e.code == 'NETWORK' || e.code == 'AUTH') return error(e);
+    return priceListText(e.code, detail: e.detail, waitMinutes: _waitMinutes(e)) ?? error(e);
+  }
 
   /// 库存：有货 / 快卖完 / 缺货
   String stock(StockStatus s) => switch (s) {

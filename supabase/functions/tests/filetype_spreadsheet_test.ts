@@ -432,3 +432,53 @@ Deno.test("表写的范围（<dimension>）比内容长：只有格式的尾巴�
   const raw = XLSX.read(framed, { type: "array", dense: true, sheetRows: MAX_SCAN_ROWS + 1 });
   assertEquals(code(() => workbookLines(raw)), "TOO_MANY_ROWS");
 });
+
+Deno.test("xlsx 要看 zip 里的档名：内容里有 xl/ 的 docx / zip 不算", () => {
+  const enc = (s: string) => new TextEncoder().encode(s);
+  // 压缩过的资料、照片看起来像乱码，随便都会出现 'xl/'
+  const noise = new Uint8Array(20000).map((_, i) => (i * 7919 + (i >> 3)) & 0xff);
+  const payload = new Uint8Array([
+    ...noise.subarray(0, 500),
+    ...enc("xl/"),
+    ...noise.subarray(500),
+    ...enc("xl/workbook.xml"),
+  ]);
+  const docx = zipFiles([
+    {
+      name: "[Content_Types].xml",
+      data: enc(
+        '<Types><Override ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+      ),
+    },
+    { name: "word/document.xml", data: enc("<w:document>see xl/ folder</w:document>") },
+    { name: "word/media/image1.jpeg", data: payload },
+  ]);
+  assertEquals(sniffFileType(docx), "unknown");
+  // 截掉中央目录：一个一个读 local header 的档名，一样分得出来
+  assertEquals(sniffFileType(docx.subarray(0, docx.length - 120)), "unknown");
+  // 普通 zip：里面的档案叫 xl/notes.txt、或 xl/workbook.xml.bak（不是正好 xl/workbook.xml）
+  assertEquals(sniffFileType(zipFiles([{ name: "xl/notes.txt", data: enc("hi") }])), "unknown");
+  assertEquals(sniffFileType(zipFiles([{ name: "backup/xl/workbook.xml", data: enc("<workbook/>") }])), "unknown");
+  assertEquals(sniffFileType(zipFiles([{ name: "xl/workbook.xml.bak", data: enc("<workbook/>") }])), "unknown");
+
+  // 真的 xlsx：有 xl/workbook.xml（中央目录、或被截掉只剩 local header）
+  const xlsx = zipFiles([
+    { name: "[Content_Types].xml", data: enc("<Types/>") },
+    { name: "xl/workbook.xml", data: payload },
+  ]);
+  assertEquals(sniffFileType(xlsx), "xlsx");
+  assertEquals(sniffFileType(xlsx.subarray(0, xlsx.length - 60)), "xlsx");
+  // 工作簿不叫 xl/workbook.xml，但 [Content_Types].xml 说是 spreadsheetml
+  const renamed = zipFiles([
+    {
+      name: "[Content_Types].xml",
+      data: enc(
+        '<Types><Override PartName="/book/main.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/></Types>',
+      ),
+    },
+    { name: "book/main.xml", data: enc("<workbook/>") },
+  ]);
+  assertEquals(sniffFileType(renamed), "xlsx");
+  // SheetJS 做的真的 xlsx（deflate 压缩）照样认得
+  assertEquals(sniffFileType(makeWorkbook("xlsx")), "xlsx");
+});

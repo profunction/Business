@@ -277,3 +277,44 @@ Deno.test("docs/04-whatsapp-templates.md 的模板内文跟代码一模一样", 
     }
   }
 });
+
+Deno.test("推送：收件人是批发商 → 每一种通知都带 wholesaler_id；每日总结的 tag 分开每一家", () => {
+  const W1 = "cccccccc-0000-4000-8000-000000000001";
+  const W2 = "cccccccc-0000-4000-8000-000000000002";
+  const kinds: Partial<NotificationItem>[] = [
+    { event_type: "order_new", payload: { order_id: ORDER_ID }, details },
+    { event_type: "order_cancelled", payload: { order_id: ORDER_ID } },
+    { event_type: "order_status_changed", payload: { order_id: ORDER_ID, status: "confirmed" } },
+    { event_type: "daily_summary", payload: { date: "2026-11-26", order_count: 1, pending_count: 0 } },
+    { event_type: "invoice_issued", payload: { invoice_id: "9b1c2d3e-0000-4000-8000-123456789abc" } },
+    { event_type: "invoice_due_soon", payload: {} },
+    { event_type: "invoice_overdue", payload: {} },
+    { event_type: "payment_received", payload: { purpose: "listing_fee" } },
+    { event_type: "something_new", payload: {} },
+  ];
+  for (const k of kinds) {
+    const p1 = pushContent(item({ ...k, wholesaler_id: W1 }));
+    const p2 = pushContent(item({ ...k, wholesaler_id: W2 }));
+    assertEquals(p1.data.wholesaler_id, W1, k.event_type);
+    assertEquals(p2.data.wholesaler_id, W2, k.event_type);
+    // 同一种通知、两家批发商：tag 不一样（不会互相取代）；或者是同一张订单 / 账单（只属于一家）
+    if (p1.tag !== null && p1.tag === p2.tag) assertMatch(p1.tag, /^(order|invoice)-/, k.event_type);
+    if (p1.tag) assert(p1.tag.length <= 64, "apns-collapse-id 最多 64 字");
+  }
+  const s1 = pushContent(item({ ...kinds[3], wholesaler_id: W1 }));
+  assertEquals(s1.tag, `daily-summary-${W1}`);
+  // 收件人是店 / 客服：不带（客服提醒照旧用 payload 的 wholesaler_id）
+  assertEquals(pushContent(item({ ...kinds[2], shop_id: W2 })).data.wholesaler_id, undefined);
+  const alert = pushContent(
+    item({ event_type: "order_unconfirmed", payload: { order_id: ORDER_ID, wholesaler_id: W2 } }),
+  );
+  assertEquals(alert.data.wholesaler_id, W2);
+});
+
+Deno.test("WhatsApp 模板不受 wholesaler_id 影响", () => {
+  const base = item({ channel: "whatsapp", whatsapp_phone: "60123", details, payload: { order_id: ORDER_ID } });
+  assertEquals(
+    whatsappTemplate({ ...base, wholesaler_id: "cccccccc-0000-4000-8000-000000000001" }),
+    whatsappTemplate(base),
+  );
+});

@@ -258,6 +258,8 @@ class _ShopCard extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final zone = d.shopZoneName?.of(l.lang) ?? '';
     final phone = phoneDigits(d.shopPhone);
+    // WhatsApp 号码可以跟电话不一样（get_order 只给批发商、客服）；没有就用电话
+    final whatsapp = phoneDigits(d.shopWhatsappPhone) ?? phone;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -269,29 +271,38 @@ class _ShopCard extends StatelessWidget {
             if (zone.isNotEmpty) InfoLine(icon: Icons.map, text: zone),
             if (d.shopAddress != null) InfoLine(icon: Icons.location_on, text: d.shopAddress!),
             if (d.shopContactName != null) InfoLine(icon: Icons.person, text: l.sellerContact(d.shopContactName!)),
-            if (phone != null) ...[
-              InfoLine(icon: Icons.phone, text: formatMalaysianMobile(phone)),
+            if (phone != null) InfoLine(icon: Icons.phone, text: formatMalaysianMobile(phone)),
+            if (whatsapp != null && whatsapp != phone)
+              InfoLine(
+                key: const Key('seller-shop-whatsapp'),
+                icon: Icons.chat,
+                text: l.sellerShopWhatsapp(formatMalaysianMobile(whatsapp)),
+              ),
+            if (phone != null || whatsapp != null) ...[
               const SizedBox(height: 10),
               Row(
                 children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      key: const Key('seller-call'),
-                      icon: const Icon(Icons.phone),
-                      onPressed: () => openExternal(context, telUri(phone)),
-                      label: Text(l.sellerCall),
+                  if (phone != null)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        key: const Key('seller-call'),
+                        icon: const Icon(Icons.phone),
+                        onPressed: () => openExternal(context, telUri(phone)),
+                        label: Text(l.sellerCall),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      key: const Key('seller-whatsapp'),
-                      icon: const Icon(Icons.chat),
-                      onPressed: () =>
-                          openExternal(context, whatsappUri(phone, text: l.sellerWhatsappHello(d.orderNo))),
-                      label: Text(l.sellerWhatsapp),
+                  if (phone != null && whatsapp != null) const SizedBox(width: 10),
+                  if (whatsapp != null)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        key: const Key('seller-whatsapp'),
+                        icon: const Icon(Icons.chat),
+                        // 按一下打开 WhatsApp（wa.me），先打好一句话
+                        onPressed: () =>
+                            openExternal(context, whatsappUri(whatsapp, text: l.sellerWhatsappHello(d.orderNo))),
+                        label: Text(l.sellerWhatsapp),
+                      ),
                     ),
-                  ),
                 ],
               ),
             ],

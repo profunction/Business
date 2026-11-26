@@ -353,6 +353,7 @@ class OrderDetail {
     required this.shopName,
     this.shopAddress,
     this.shopPhone,
+    this.shopWhatsappPhone,
     this.shopContactName,
     this.shopZoneName,
     this.source,
@@ -383,9 +384,10 @@ class OrderDetail {
       paymentTerms: asStringList(w['payment_terms']),
       shopName: asStringOrNull(s['name']) ?? '',
       shopAddress: asStringOrNull(s['address']),
-      // get_order 的 shop 现在只回传 phone（没有 whatsapp_phone，也没有像 get_delivery_summary 那样
-      // coalesce(phone, whatsapp_phone)）：只有 WhatsApp 号码的店这里会是 null。要后端改 get_order，这一行先留着
+      // 没有电话、只有 WhatsApp 号码的店：打电话也用 WhatsApp 号码（跟 get_delivery_summary 一样）
       shopPhone: asStringOrNull(s['phone']) ?? asStringOrNull(s['whatsapp_phone']),
+      // get_order 只给批发商和客服回传 whatsapp_phone（买家那边没有这一栏）
+      shopWhatsappPhone: asStringOrNull(s['whatsapp_phone']),
       shopContactName: asStringOrNull(s['contact_name']),
       shopZoneName: s['zone_name'] is Map ? LocalizedName.fromJson(s['zone_name']) : null,
       source: asStringOrNull(j['source']),
@@ -413,8 +415,11 @@ class OrderDetail {
   final String shopName;
   final String? shopAddress;
 
-  /// 批发商打电话 / WhatsApp 给店用（国际格式数字）
+  /// 批发商打电话给店用（国际格式数字）
   final String? shopPhone;
+
+  /// 店的 WhatsApp 号码（可以跟电话不一样）。只有批发商、客服读得到；没有 → null（WhatsApp 就用电话）
+  final String? shopWhatsappPhone;
   final String? shopContactName;
   final LocalizedName? shopZoneName;
 

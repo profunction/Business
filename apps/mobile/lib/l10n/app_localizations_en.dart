@@ -1398,10 +1398,6 @@ class L10nEn extends L10n {
       'The AI service is having a problem right now. Please upload again in a few minutes.';
 
   @override
-  String get sellerImportErrFile =>
-      'This file can\'t be opened, or it\'s empty. Please save it again (Excel as .xlsx), or take a photo instead.';
-
-  @override
   String get sellerImportErrTimeout =>
       'The AI took too long. If the price list is long, split it into a few parts. If not, please try again in a few minutes.';
 
@@ -1487,11 +1483,6 @@ class L10nEn extends L10n {
       one: '1 row is not filled in yet (in red). Fill it in, or choose \"Skip\".',
     );
     return '$_temp0';
-  }
-
-  @override
-  String sellerOrdersLimited(int count) {
-    return 'Only the latest $count orders are shown here';
   }
 
   @override
@@ -1821,4 +1812,104 @@ class L10nEn extends L10n {
 
   @override
   String get invoiceColRate => 'Rate';
+
+  @override
+  String get sellerOrdersLoadMore => 'Show older orders';
+
+  @override
+  String sellerShopWhatsapp(String phone) {
+    return 'WhatsApp: $phone';
+  }
+
+  @override
+  String get sellerReviewAppliedRows =>
+      'This price list is already listed. The rows below can no longer be changed. To change a price, go to “Products & prices”.';
+
+  @override
+  String get plErrEmptyFile => 'This file is empty (0 KB). Please save it again and upload, or take a photo instead.';
+
+  @override
+  String get plErrFileNotFound => 'The uploaded file is missing, so the AI could not get it. Please upload it again.';
+
+  @override
+  String get plErrInvalidFilePath =>
+      'The file was saved in the wrong place and the system cannot read it. Please upload again; if it still fails, contact support.';
+
+  @override
+  String get plErrDownloadFailed =>
+      'The system could not fetch your file just now. Please upload again in a few minutes.';
+
+  @override
+  String get plErrSpreadsheetUnreadable =>
+      'This Excel file cannot be opened (it may be damaged or password-protected). Open it on a computer, save it as .xlsx and upload again, or upload a photo.';
+
+  @override
+  String get plErrEmptySpreadsheet =>
+      'This spreadsheet has no data in it. Check that you picked the right file and that the price list is in the sheet, then upload again.';
+
+  @override
+  String get plErrTooManyRows =>
+      'This spreadsheet is too long (about 1,200 products at most). Please split it into a few files and upload them one by one.';
+
+  @override
+  String get plErrAiInvalidOutput =>
+      'The AI\'s result came out garbled. Please upload again; for photos, take it straight and clear.';
+
+  @override
+  String get plErrNoProductsPhoto =>
+      'The AI could not find product names and prices in the photo. Take a clear photo of the whole price list (no glare, not too far), then try again.';
+
+  @override
+  String get plErrAiBusy => 'The AI is very busy right now. Please wait 5 minutes and upload again.';
+
+  @override
+  String get plErrAiUnavailable =>
+      'The AI service is down for now. Please upload again in half an hour; if it is urgent, add products yourself in “Products & prices”.';
+
+  @override
+  String get plErrAiFailed => 'The AI hit an error while reading, so this list was not finished. Please upload again.';
+
+  @override
+  String get plErrAiAuthFailed =>
+      'There is a setup problem with the AI service (not your fault). Please contact support and upload again after we fix it.';
+
+  @override
+  String get plErrAiRequestRejected =>
+      'The AI would not accept this file (too many pages or an unusual format). Please upload a photo, or save it as PDF and try again.';
+
+  @override
+  String get plErrAiNotConfigured =>
+      'Price-list AI is not switched on yet. Please add products yourself in “Products & prices”, or ask support to add them.';
+
+  @override
+  String get plErrDbError => 'The system had a problem saving the data. Please upload again in a few minutes.';
+
+  @override
+  String get plErrInternal =>
+      'Something went wrong in our system and this list was not read. Please upload again; if it keeps happening, contact support.';
+
+  @override
+  String get plErrStartFailed =>
+      'This price list never started being read (the AI could not be reached). Please upload again.';
+
+  @override
+  String get plErrNetwork =>
+      'The internet dropped during upload, so the AI did not start. Check your connection and upload again.';
+
+  @override
+  String get plErrInvalidImportId =>
+      'This price list\'s number is not valid. Go back to the home page and upload again.';
+
+  @override
+  String get plErrImportNotFound => 'This price list cannot be found (it may have been deleted). Please upload again.';
+
+  @override
+  String get plErrImportNotProcessing =>
+      'This price list has already been read. Check the result on the home page, or upload a new one.';
+
+  @override
+  String get plErrConfigMissing => 'The price-list feature is not set up yet (not your fault). Please contact support.';
+
+  @override
+  String get plErrMethodNotAllowed => 'Your app version is too old. Please update the app and upload again.';
 }

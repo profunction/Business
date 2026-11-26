@@ -186,6 +186,7 @@ class SellerOrderSummary {
     this.note,
     required this.createdAt,
     this.expectedDeliveryDate,
+    this.cursor,
   });
 
   factory SellerOrderSummary.fromJson(Json j) => SellerOrderSummary(
@@ -202,6 +203,7 @@ class SellerOrderSummary {
     note: asStringOrNull(j['note']),
     createdAt: asDateTimeOrNull(j['created_at']) ?? DateTime.now(),
     expectedDeliveryDate: asDateOrNull(j['expected_delivery_date']),
+    cursor: asStringOrNull(j['cursor']),
   );
 
   final String id;
@@ -217,6 +219,9 @@ class SellerOrderSummary {
   final String? note;
   final DateTime createdAt;
   final DateTime? expectedDeliveryDate;
+
+  /// 下一页从这张之后开始（list_seller_orders 的 p_after）。服务器给的，不要自己拼
+  final String? cursor;
 }
 
 // ---------------- get_delivery_summary ----------------
@@ -578,6 +583,7 @@ class PriceListImportRow {
     required this.action,
     this.confidence,
     this.createdAt,
+    this.checkedAt,
   });
 
   factory PriceListImportRow.fromJson(Json j) => PriceListImportRow(
@@ -595,6 +601,7 @@ class PriceListImportRow {
     action: importRowActionFrom(j['action']),
     confidence: asDoubleOrNull(j['confidence']),
     createdAt: asDateTimeOrNull(j['created_at']),
+    checkedAt: asDateTimeOrNull(j['checked_at']),
   );
 
   final String id;
@@ -619,6 +626,11 @@ class PriceListImportRow {
   /// AI 有多肯定（0..1）
   final double? confidence;
   final DateTime? createdAt;
+
+  /// 老板看过 / 改过这一行的时间（存在数据库：换手机、重开 App 也记得）。null = 还没看过
+  final DateTime? checkedAt;
+
+  bool get isChecked => checkedAt != null;
 
   bool get hasName => name != null && name!.trim().isNotEmpty;
 
@@ -675,6 +687,7 @@ class PriceListImportRow {
     action: action ?? this.action,
     confidence: confidence,
     createdAt: createdAt,
+    checkedAt: checkedAt,
   );
 }
 

@@ -39,6 +39,9 @@ void main() {
       expect(o.zoneName.of('zh'), isNotEmpty);
       expect(o.totalSen, o.goodsSubtotalSen + o.shippingFeeSen);
       expect(o.outOfStockCount, lessThanOrEqualTo(o.itemCount));
+      // 游标分页：下一页从这张之后（p = pending 那一段）
+      expect(o.cursor, matches(RegExp(r'^[po]\|\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z\|' + o.id + r'$')));
+      expect(o.cursor!.startsWith('p|'), o.status == OrderStatus.pending);
     }
     final pending = orders.takeWhile((o) => o.status == OrderStatus.pending).toList();
     expect(orders.skip(pending.length).any((o) => o.status == OrderStatus.pending), isFalse);
@@ -93,6 +96,7 @@ void main() {
     expect(d.actions.canConfirm, isTrue);
     expect(d.actions.canCancel, isFalse, reason: '批发商不能取消');
     expect(d.shopPhone, isNotNull);
+    expect(d.shopWhatsappPhone, isNotNull, reason: '批发商看得到店的 WhatsApp 号码');
     expect(d.shopContactName, isNotNull);
     expect(d.shopZoneName?.of('zh'), isNotEmpty);
     expect(d.source, isNotNull);
@@ -127,7 +131,14 @@ void main() {
           expect(r.isReady, isTrue);
       }
       if (r.confidence != null) expect(r.confidence, inInclusiveRange(0, 1));
+      expect(r.isChecked, isFalse, reason: '服务器写的行：还没看过（checked_at = null）');
+      expect(r.copyWith(priceSen: 1).checkedAt, r.checkedAt);
     }
+    final checked = PriceListImportRow.fromJson({
+      ...asJson(asJsonList(fixture('price_list_import_rows')).first),
+      'checked_at': '2026-11-26T03:00:00+00:00',
+    });
+    expect(checked.isChecked, isTrue);
     // 没名字的行（例如价目表上的备注）也有原文
     final noName = rows.where((r) => !r.hasName);
     expect(noName.every((r) => r.action == ImportRowAction.skip && r.unit == null), isTrue);

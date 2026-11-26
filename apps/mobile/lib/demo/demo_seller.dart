@@ -8,6 +8,16 @@ import 'demo_data.dart';
 /// 一开始的资料全部来自 packages/core/test/fixtures 的真实样本（seller_home、seller_orders、seller_order_detail、
 /// delivery_summary、price_list_import、price_list_import_rows）；按了「确认」「缺货」「上架」之后，
 /// 订单、送货总结、首页数字都照数据库函数的规则跟着变（不会真的连服务器）。
+/// 跟数据库的 _seller_order_cursor() 一样的格式：`p|2026-11-25T01:51:02.959427Z|id`（p = pending 那一段）
+String demoOrderCursor(bool pending, String createdAt, String id) {
+  final t = DateTime.parse(createdAt).toUtc();
+  String two(int n) => n.toString().padLeft(2, '0');
+  final us = (t.millisecond * 1000 + t.microsecond).toString().padLeft(6, '0');
+  final ts =
+      '${t.year.toString().padLeft(4, '0')}-${two(t.month)}-${two(t.day)}T${two(t.hour)}:${two(t.minute)}:${two(t.second)}.${us}Z';
+  return '${pending ? 'p' : 'o'}|$ts|$id';
+}
+
 class DemoSeller {
   DemoSeller() {
     _buildProducts();
@@ -295,6 +305,18 @@ class DemoSeller {
   bool hasOrder(String id) => _orders.any((o) => o['id'] == id);
 
   /// 测试用：再加 [n] 张以前的单（已送达，一天一张往前推），测「全部」最多只显示几张
+  /// 测试用：改一张单的店的 WhatsApp 号码（跟电话不一样的店）
+  void setShopWhatsapp(String orderId, String? phone) {
+    final o = _order(orderId);
+    o['shop'] = {...asJson(o['shop']), 'whatsapp_phone': phone};
+  }
+
+  /// 测试用：改一张单的店的电话
+  void setShopPhone(String orderId, String? phone) {
+    final o = _order(orderId);
+    o['shop'] = {...asJson(o['shop']), 'phone': phone};
+  }
+
   void addPastOrders(int n) {
     final base = _orders.first;
     final start = DateTime.parse(base['created_at'] as String);
@@ -344,11 +366,18 @@ class DemoSeller {
       'note': o['note'],
       'created_at': o['created_at'],
       'expected_delivery_date': o['expected_delivery_date'],
+      'cursor': demoOrderCursor(o['status'] == 'pending', o['created_at'] as String, o['id'] as String),
     };
   }
 
-  /// list_seller_orders()：pending 最前面（旧到新），其他新到旧
-  List<SellerOrderSummary> orders({List<OrderStatus>? statuses, DateTime? deliveryDate, int limit = 50}) {
+  /// list_seller_orders()：pending 最前面（旧到新），其他新到旧；同一个时间按 id。
+  /// [after] = 上一页最后一张的 cursor（跟数据库一样的游标分页）
+  List<SellerOrderSummary> orders({
+    List<OrderStatus>? statuses,
+    DateTime? deliveryDate,
+    int limit = 50,
+    String? after,
+  }) {
     final codes = statuses == null || statuses.isEmpty ? null : statuses.map(orderStatusCode).toSet();
     final date = deliveryDate == null ? null : dateParam(deliveryDate);
     final list = _orders
@@ -356,13 +385,36 @@ class DemoSeller {
         .where((o) => date == null || o['expected_delivery_date'] == date)
         .map((o) => SellerOrderSummary.fromJson(_summaryJson(o)))
         .toList();
-    list.sort((a, b) {
-      final ap = a.status == OrderStatus.pending, bp = b.status == OrderStatus.pending;
-      if (ap != bp) return ap ? -1 : 1;
-      final c = ap ? a.createdAt.compareTo(b.createdAt) : b.createdAt.compareTo(a.createdAt);
-      return c != 0 ? c : (ap ? a.orderNo.compareTo(b.orderNo) : b.orderNo.compareTo(a.orderNo));
-    });
-    return list.take(limit.clamp(1, 200)).toList();
+    list.sort(_compareSellerOrders);
+    var rest = list;
+    if (after != null && after.isNotEmpty) {
+      final c = _parseCursor(after);
+      rest = list.where((o) {
+        final pending = o.status == OrderStatus.pending;
+        final cmp = _compareKey(o.createdAt, o.id, c.createdAt, c.id);
+        return c.pending ? (!pending || cmp > 0) : (!pending && cmp < 0);
+      }).toList();
+    }
+    return rest.take(limit.clamp(1, 200)).toList();
+  }
+
+  static int _compareKey(DateTime at, String id, DateTime at2, String id2) {
+    final c = at.compareTo(at2);
+    return c != 0 ? c : id.compareTo(id2);
+  }
+
+  static int _compareSellerOrders(SellerOrderSummary a, SellerOrderSummary b) {
+    final ap = a.status == OrderStatus.pending, bp = b.status == OrderStatus.pending;
+    if (ap != bp) return ap ? -1 : 1;
+    final c = _compareKey(a.createdAt, a.id, b.createdAt, b.id);
+    return ap ? c : -c;
+  }
+
+  static ({bool pending, DateTime createdAt, String id}) _parseCursor(String cursor) {
+    final parts = cursor.split('|');
+    final at = parts.length == 3 ? DateTime.tryParse(parts[1]) : null;
+    if (at == null || (parts[0] != 'p' && parts[0] != 'o')) throw const AppError('INVALID_CURSOR');
+    return (pending: parts[0] == 'p', createdAt: at, id: parts[2]);
   }
 
   void _setStatus(Json o, String to) {
@@ -664,10 +716,13 @@ class DemoSeller {
     return (_rows.map(PriceListImportRow.fromJson).toList()..sort((a, b) => a.rowNo.compareTo(b.rowNo)));
   }
 
+  /// 跟数据库的 price_list_import_rows_guard 一样：上架了就不能改；改了一行 = 看过了（checked_at）
   PriceListImportRow updateRow(String rowId, Map<String, Object?> fields) {
     for (final r in _rows) {
       if (r['id'] == rowId) {
+        if (_import['status'] == 'applied') throw AppError('IMPORT_ALREADY_APPLIED', detail: '${r['row_no']}');
         r.addAll(fields);
+        r['checked_at'] = DateTime.now().toUtc().toIso8601String();
         return PriceListImportRow.fromJson(r);
       }
     }

@@ -16,4 +16,5 @@ export 'src/models/orders.dart';
 export 'src/models/seller.dart';
 export 'src/money.dart';
 export 'src/phone.dart';
+export 'src/price_list_errors.dart';
 export 'src/wav.dart';

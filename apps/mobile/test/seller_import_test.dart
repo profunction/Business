@@ -5,9 +5,11 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:jb_wholesale/app/l10n_x.dart';
 import 'package:jb_wholesale/app/theme.dart';
 import 'package:jb_wholesale/demo/demo_api.dart';
 import 'package:jb_wholesale/features/seller/seller_device.dart';
+import 'package:jb_wholesale/l10n/app_localizations.dart';
 import 'package:jb_wholesale/widgets/common.dart';
 import 'package:wholesale_core/wholesale_core.dart';
 
@@ -151,7 +153,7 @@ void main() {
       expect(find.byKey(const Key('import-failed')), findsOneWidget);
       expect(find.text('查不到这份价目表读得怎样'), findsOneWidget);
       expect(find.text('AI 读不到这份价目表'), findsNothing);
-      expect(find.text('找不到，可能已经被删掉了'), findsOneWidget);
+      expect(find.text('找不到这份价目表（可能已经删掉了）。请重新上传。'), findsOneWidget);
       await tapAndSettle(tester, find.byKey(const Key('import-retry')));
       expect(find.byKey(const Key('import-camera')), findsOneWidget);
     });
@@ -175,6 +177,31 @@ void main() {
       await settle(tester);
       expect(api.calls, contains('applyImport 2 1 3'));
       expect(api.sellerData.product(cup16).priceSen, 8500, reason: '跳过的那一行没有上架');
+    });
+
+    testWidgets('上架之后再打开：每一行只给看（锁住），没有改、跳过、确认上架的按钮；服务器也不让改', (tester) async {
+      final api = await startSeller(tester);
+      await tapAndSettle(tester, find.byKey(const Key('seller-import')));
+      final importId = api.sellerData.currentImport.id;
+      await tapAndSettle(tester, find.byKey(const Key('review-apply')));
+      await settle(tester);
+      expect(api.sellerData.currentImport.status, ImportStatus.applied);
+
+      routerOf(tester).push('/seller/import/$importId');
+      await tester.pumpAndSettle();
+      await settle(tester);
+      expect(find.byKey(const Key('review-applied')), findsOneWidget);
+      expect(find.text('这一份已经上架了，下面的内容不能再改。要改价钱请到「商品和价钱」。'), findsOneWidget);
+      await scrollTo(tester, find.byKey(const Key('row-1-locked')));
+      expect(find.byKey(const Key('row-1-edit')), findsNothing);
+      expect(find.byKey(const Key('row-1-skip')), findsNothing);
+      expect(find.byKey(const Key('review-apply')), findsNothing);
+      expect(find.byKey(const Key('review-unsure')), findsNothing, reason: '上架了就不用再看');
+      expect(
+        () => api.sellerData.updateRow(row(api, 1).id, {'price_sen': 1}),
+        throwsA(isA<AppError>().having((e) => e.code, 'code', 'IMPORT_ALREADY_APPLIED')),
+      );
+      expect(lookupL10n(const Locale('zh')).error(const AppError('IMPORT_ALREADY_APPLIED')), '这份价目表已经处理过了');
     });
 
     testWidgets('自己选要更新哪样商品：没对到的可以选、对到的可以换或清掉；下架的会重新上架、包装会改，都写出来', (tester) async {
@@ -381,7 +408,7 @@ void main() {
     });
 
     testWidgets('AI 不太肯定的行（黄色）：老板改过、存好了就不再标黄色，上面的数字也少一行', (tester) async {
-      await startSeller(tester);
+      final api = await startSeller(tester);
       await tapAndSettle(tester, find.byKey(const Key('seller-import')));
       expect(find.text('有 2 行 AI 不太肯定，请检查黄色的'), findsOneWidget);
       Color border(int n) =>
@@ -400,6 +427,9 @@ void main() {
       expect(border(5), isNot(AppTheme.unsure));
       expect(find.descendant(of: find.byKey(const Key('import-row-5')), matching: find.text('请检查')), findsNothing);
       expect(border(6), AppTheme.unsure, reason: '第 6 行还没看');
+      // 「看过了」存在服务器（checked_at）：换手机、重开 App 也记得
+      expect(row(api, 5).isChecked, isTrue);
+      expect(row(api, 6).isChecked, isFalse);
 
       // 离开再回来也记得
       await back(tester);

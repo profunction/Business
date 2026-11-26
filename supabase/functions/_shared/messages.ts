@@ -164,6 +164,10 @@ export interface NotificationItem {
   whatsapp_phone: string | null;
   attempts?: number;
   details: OrderDetails | null;
+  /** 收件的批发商（claim_notifications 回传；收件人是店 / 用户时是 null）。推送 data 带着，App 才知道是哪一家 */
+  wholesaler_id?: string | null;
+  /** 收件的店 */
+  shop_id?: string | null;
 }
 
 /** 从 payload 和 details 拿值：details（发送时的最新资料）优先，没有再看 payload。 */
@@ -183,7 +187,10 @@ export interface PushContent {
   /** FCM data：值全部是字串。App 按 type / order_id 打开页面 */
   data: Record<string, string>;
   ttlSeconds: number;
-  /** Android 同一个 tag 的通知会取代旧的（同一张订单的状态更新只留最新一条） */
+  /**
+   * Android 同一个 tag 的通知会取代旧的（同一张订单的状态更新只留最新一条），iOS 是 apns-collapse-id。
+   * 一个人可以是两家批发商的成员：tag 要分开每一家（订单、账单的 id 本来就只属于一家；每日总结加上批发商 id）
+   */
   tag: string | null;
 }
 
@@ -387,6 +394,9 @@ export function pushContent(item: NotificationItem): PushContent {
   const orderId = str(pick(item, "order_id"));
   const orderNo = str(pick(item, "order_no")) ?? "";
   const data: Record<string, string> = { type: item.event_type, notification_id: item.id };
+  // 收件人是批发商：每一种通知都带 wholesaler_id（App 的 PushNavigator 先换到那一家，再打开页面）
+  const recipientWid = str(item.wholesaler_id);
+  if (recipientWid) data.wholesaler_id = recipientWid;
   if (orderId) data.order_id = orderId;
   if (orderNo) data.order_no = orderNo;
   let title: string;
@@ -448,7 +458,8 @@ export function pushContent(item: NotificationItem): PushContent {
       const date = str(item.payload?.date);
       if (date) data.date = date;
       ttl = 12 * 3600;
-      tag = "daily-summary";
+      // 两家批发商的每日总结不要互相取代
+      tag = recipientWid ? `daily-summary-${recipientWid}` : "daily-summary";
       break;
     }
     case "order_unconfirmed": {
@@ -462,7 +473,7 @@ export function pushContent(item: NotificationItem): PushContent {
       title = tpl(PUSH.order_unconfirmed.title[loc], vars);
       body = tpl(PUSH.order_unconfirmed.body[loc], vars);
       const wid = str(item.payload?.wholesaler_id);
-      if (wid) data.wholesaler_id = wid;
+      if (wid && !recipientWid) data.wholesaler_id = wid;
       ttl = 3600;
       break;
     }

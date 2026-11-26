@@ -2,6 +2,9 @@
 // 手机宽度 400：大字把画面撑爆（overflow）的话，测试会直接失败。
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:jb_wholesale/app/seller_providers.dart';
+import 'package:jb_wholesale/features/seller/seller_orders_page.dart';
 import 'package:jb_wholesale/app/router.dart';
 import 'package:jb_wholesale/push/push_service.dart';
 import 'package:jb_wholesale/widgets/common.dart';
@@ -91,6 +94,33 @@ void main() {
     launcher.fail = true;
     await tapAndSettle(tester, find.byKey(const Key('seller-whatsapp')));
     expect(find.text('打不开，请检查手机有没有装这个 App'), findsOneWidget);
+  });
+
+  testWidgets('店的 WhatsApp 号码跟电话不一样：两个都显示，WhatsApp 按钮开 wa.me 的 WhatsApp 号码', (tester) async {
+    final launcher = fakeLauncher();
+    final api = await startSeller(tester);
+    api.sellerData.setShopWhatsapp(amingPending, '60177000001');
+    await openOrder(tester, tile: 'seller-new-orders', id: amingPending);
+    expect(find.text('012-000 0001'), findsOneWidget, reason: '电话');
+    expect(find.text('WhatsApp：017-700 0001'), findsOneWidget);
+    await tapAndSettle(tester, find.byKey(const Key('seller-call')));
+    await tapAndSettle(tester, find.byKey(const Key('seller-whatsapp')));
+    expect(launcher.launched, [
+      'externalApplication tel:+60120000001',
+      'externalApplication https://wa.me/60177000001?text=${Uri.encodeQueryComponent('你好，关于你的订单 JHB261125-00005：')}',
+    ]);
+  });
+
+  testWidgets('店只有 WhatsApp 号码、没有电话：打电话也用它', (tester) async {
+    final launcher = fakeLauncher();
+    final api = await startSeller(tester);
+    api.sellerData.setShopWhatsapp(amingPending, '60177000001');
+    api.sellerData.setShopPhone(amingPending, null);
+    await openOrder(tester, tile: 'seller-new-orders', id: amingPending);
+    expect(find.text('017-700 0001'), findsOneWidget);
+    expect(find.byKey(const Key('seller-shop-whatsapp')), findsNothing, reason: '同一个号码只写一次');
+    await tapAndSettle(tester, find.byKey(const Key('seller-whatsapp')));
+    expect(launcher.launched.single, startsWith('externalApplication https://wa.me/60177000001'));
   });
 
   testWidgets('确认，勾一样缺货：那样划掉不算钱，变成「出发送货」/「已送达」', (tester) async {
@@ -209,20 +239,42 @@ void main() {
     expect(find.byKey(const Key('seller-order-$kopitiamPending')), findsNothing);
   });
 
-  testWidgets('「全部」只读最近的 100 张：读满了在最后说只显示最近的，没满就不说', (tester) async {
+  testWidgets('「全部」一页一页读：按「再看更早的订单」读下一页（游标），读完了按钮就不见', (tester) async {
     final api = await startSeller(tester);
     routerOf(tester).push('/seller/orders?tab=all');
     await tester.pumpAndSettle();
     await settle(tester);
-    expect(find.byKey(const Key('seller-orders-limited'), skipOffstage: false), findsNothing);
+    expect(find.byKey(const Key('seller-orders-more'), skipOffstage: false), findsNothing, reason: '不到一页：没有按钮');
 
-    api.sellerData.addPastOrders(150);
+    api.sellerData.addPastOrders(120);
+    final total = api.sellerData.orders(limit: 200).length;
+    expect(total, greaterThan(100));
     await tapAndSettle(tester, find.byKey(const Key('seller-tab-pending')));
     await tapAndSettle(tester, find.byKey(const Key('seller-tab-all')));
     await settle(tester);
-    await tester.scrollUntilVisible(find.byKey(const Key('seller-orders-limited')), 2000, scrollable: pageScrollable);
+    const oldest = '00000000-0000-4000-e000-000000000119';
+    final pages = (total / sellerAllOrdersPageSize).ceil();
+    expect(pages, 3);
+    for (var page = 1; page < pages; page++) {
+      await tester.scrollUntilVisible(find.byKey(const Key('seller-orders-more')), 2000, scrollable: pageScrollable);
+      expect(find.byKey(const Key('seller-order-$oldest'), skipOffstage: false), findsNothing, reason: '第 $page 页');
+      await tapAndSettle(tester, find.byKey(const Key('seller-orders-more')));
+      await settle(tester);
+    }
+    await tester.scrollUntilVisible(find.byKey(const Key('seller-order-$oldest')), 2000, scrollable: pageScrollable);
+    expect(find.byKey(const Key('seller-order-$oldest')), findsOneWidget, reason: '最早的那张读到了');
+    await tester.drag(pageScrollable, const Offset(0, -3000));
     await tester.pumpAndSettle();
-    expect(find.text('这里只显示最近的 100 张单'), findsOneWidget);
+    expect(find.byKey(const Key('seller-orders-more')), findsNothing, reason: '读完了：没有按钮');
+    final list = tester.widget<ListView>(find.byType(ListView).last);
+    expect(list.childrenDelegate.estimatedChildCount, total * 2 - 1, reason: '每张一次（加上中间的空隙），没有重复');
+
+    // 重新读（例如来了新订单、App 从背景回来）：照样是已经读到的那么多张，不会缩回第一页
+    api.sellerData.confirm(amingPending, const []);
+    ProviderScope.containerOf(tester.element(find.byType(SellerOrdersPage))).invalidate(sellerAllOrdersProvider);
+    await tester.pumpAndSettle();
+    await settle(tester);
+    expect(find.byKey(const Key('seller-order-$oldest'), skipOffstage: false), findsOneWidget);
   });
 
   testWidgets('英文：订单明细、缺货勾选的数量有复数（×2 cartons，跟送货单一样）', (tester) async {
