@@ -2,10 +2,12 @@
 library;
 
 export 'src/api.dart';
+export 'src/commission_csv.dart';
 export 'src/file_type.dart';
 export 'src/ids.dart';
 export 'src/json.dart';
 export 'src/models/account.dart';
+export 'src/models/admin.dart';
 export 'src/models/catalog.dart';
 export 'src/models/common.dart';
 export 'src/models/orders.dart';

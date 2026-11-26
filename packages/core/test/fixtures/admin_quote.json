@@ -1,0 +1,33 @@
+{
+    "groups": [
+        {
+            "lines": [
+                {
+                    "qty": 3,
+                    "unit": "carton",
+                    "problem": null,
+                    "pack_qty": 1000,
+                    "product_id": "12c688c5-6f51-4fed-8bc3-b50b348558cd",
+                    "product_name": "95 平盖",
+                    "min_order_qty": 1,
+                    "line_total_sen": 13500,
+                    "unit_price_sen": 4500
+                }
+            ],
+            "problem": null,
+            "short_by_sen": 0,
+            "min_order_sen": 5000,
+            "wholesaler_id": "00000000-0000-4000-a000-00000000000a",
+            "wholesaler_name": "示范批发 A：新山包装行",
+            "shipping_fee_sen": 800,
+            "goods_subtotal_sen": 13500,
+            "free_shipping_min_sen": 15000,
+            "expected_delivery_date": "2026-11-27"
+        }
+    ],
+    "shop_id": "00000000-0000-4000-b000-000000000001",
+    "can_place": true,
+    "total_sen": 14300,
+    "goods_total_sen": 13500,
+    "shipping_total_sen": 800
+}

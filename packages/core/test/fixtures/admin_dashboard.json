@@ -1,0 +1,19 @@
+{
+    "month": "2026-11-01",
+    "today": "2026-11-26",
+    "alert_minutes": 30,
+    "month_gmv_sen": 56700,
+    "subscriptions": {
+        "active": 0,
+        "lapsed": 1,
+        "past_due": 0,
+        "trialing": 1,
+        "founding_price": 1
+    },
+    "pending_orders": 2,
+    "today_total_sen": 110700,
+    "today_order_count": 5,
+    "unconfirmed_orders": 1,
+    "pending_wholesalers": 1,
+    "month_commission_sen": 567
+}

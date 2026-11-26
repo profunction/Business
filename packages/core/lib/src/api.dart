@@ -8,10 +8,13 @@ import 'file_type.dart';
 import 'ids.dart';
 import 'json.dart';
 import 'models/account.dart';
+import 'models/admin.dart';
 import 'models/catalog.dart';
 import 'models/common.dart';
 import 'models/orders.dart';
 import 'models/seller.dart';
+
+part 'admin_api.dart';
 
 /// 服务器返回的错误。code 是数据库函数 raise 的英文代码（见 docs/02-database.md 第 4 节），
 /// 另外还有 App 自己的：NETWORK（没网络）、AUTH（验证码错 / 登录过期）、UNKNOWN。

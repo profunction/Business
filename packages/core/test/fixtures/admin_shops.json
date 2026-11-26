@@ -1,0 +1,46 @@
+[
+    {
+        "id": "00000000-0000-4000-b000-000000000002",
+        "name": "Kedai Runcit Siti",
+        "phone": "60120000004",
+        "address": "Jalan Demo 20, Skudai",
+        "zone_id": "7be9349f-0eb7-4200-a1c5-060589e9ad97",
+        "is_active": true,
+        "shop_type": "grocery",
+        "zone_name": {
+            "en": "Skudai",
+            "ms": "Skudai",
+            "zh": "士古来"
+        },
+        "cart_count": 0,
+        "created_at": "2026-11-26T03:59:57.215889+00:00",
+        "contact_name": "Siti",
+        "member_count": 0,
+        "whatsapp_phone": "60120000004",
+        "has_full_access": false,
+        "whatsapp_opt_in_at": null,
+        "subscription_status": "lapsed"
+    },
+    {
+        "id": "00000000-0000-4000-b000-000000000001",
+        "name": "阿明茶餐室",
+        "phone": "60120000001",
+        "address": "Jalan Demo 10, Taman Molek",
+        "zone_id": "e67da4d9-aa8d-4090-b17c-d909ec22b5f6",
+        "is_active": true,
+        "shop_type": "restaurant",
+        "zone_name": {
+            "en": "Tebrau / Johor Jaya / Mount Austin",
+            "ms": "Tebrau / Johor Jaya / Mount Austin",
+            "zh": "地不佬 / 柔佛再也 / 奥斯汀"
+        },
+        "cart_count": 1,
+        "created_at": "2026-11-26T03:59:57.215889+00:00",
+        "contact_name": "阿明",
+        "member_count": 0,
+        "whatsapp_phone": "60120000001",
+        "has_full_access": true,
+        "whatsapp_opt_in_at": null,
+        "subscription_status": "trialing"
+    }
+]

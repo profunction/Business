@@ -1,0 +1,517 @@
+{
+  "@@locale": "zh",
+  "appTitle": "新山批发 · 客服后台",
+  "language": "语言",
+  "signOut": "登出",
+  "retry": "再试一次",
+  "cancel": "取消",
+  "save": "保存",
+  "close": "关闭",
+  "confirm": "确定",
+  "all": "全部",
+  "searchHint": "搜索",
+  "saved": "已保存",
+  "copied": "已复制：{text}",
+  "@copied": {
+    "placeholders": {
+      "text": {
+        "type": "String"
+      }
+    }
+  },
+  "demoBanner": "示范模式：资料是样本，按了不会真的改服务器",
+  "errNetwork": "连不上服务器，请检查网络",
+  "errAuth": "验证码不对，或者登录过期了",
+  "errNotAllowed": "没有权限（只有客服可以）",
+  "errPriceChanged": "价钱刚好改了，请看一下新的总额再下单",
+  "errCartHasProblems": "购物车有问题，请看每一行的提示",
+  "errCartEmpty": "购物车是空的",
+  "errInvalidTransition": "订单现在的状态不能这样改",
+  "errInvalidRate": "比例要在 0% 到 20% 之间，最多两位小数",
+  "errInvalidDays": "天数要在 1 到 90 之间",
+  "errInvalidMonths": "月数要在 1 到 24 之间",
+  "errInvalidAmount": "金额不对",
+  "errDuplicateReference": "这个参考号已经记过了",
+  "errSubscriptionState": "这个订阅现在不能这样改",
+  "errSubscriptionOpen": "这家店已经有新的订阅",
+  "errInvoiceState": "账单现在的状态不能这样改",
+  "errFoundingFull": "创始会员名额满了",
+  "errInvalidProduct": "商品资料不对：名称、单位、价钱、数量都要填对",
+  "errInvalidNote": "请写跟进内容",
+  "errNoPricingPlan": "系统还没设定月费（找技术）",
+  "errUnknown": "出错了（{code}）",
+  "@errUnknown": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "loginTitle": "客服登录",
+  "loginSubtitle": "用手机号和验证码登录。只有客服账号可以进来。",
+  "phoneLabel": "手机号",
+  "phoneInvalid": "请输入马来西亚手机号，例如 012-345 6789",
+  "sendCode": "发验证码",
+  "otpTitle": "输入验证码",
+  "otpSentTo": "验证码已发到 {phone}",
+  "@otpSentTo": {
+    "placeholders": {
+      "phone": {
+        "type": "String"
+      }
+    }
+  },
+  "otpLogin": "登录",
+  "otpResend": "重新发送",
+  "otpResendIn": "{seconds} 秒后可以重发",
+  "@otpResendIn": {
+    "placeholders": {
+      "seconds": {
+        "type": "int"
+      }
+    }
+  },
+  "changePhone": "换号码",
+  "deniedTitle": "这个账号不是客服",
+  "deniedBody": "客服后台只给客服用。请用客服的手机号登录；老板和批发商请用手机 App。",
+  "loadingContext": "正在读取资料…",
+  "navDashboard": "首页",
+  "navOrders": "全部订单",
+  "navFollowup": "待跟进",
+  "navPlaceOrder": "代下单",
+  "navWholesalers": "批发商",
+  "navSubscriptions": "订阅",
+  "navCommission": "佣金报表",
+  "navAudit": "操作记录",
+  "dashUnconfirmed": "超过 {minutes} 分钟没确认",
+  "@dashUnconfirmed": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "dashPendingOrders": "待确认订单",
+  "dashPendingWholesalers": "待审核批发商",
+  "dashTodayOrders": "今天的订单",
+  "dashTodayTotal": "今天总额",
+  "dashMonthGmv": "这个月已送达货价",
+  "dashMonthCommission": "这个月佣金",
+  "dashSubscriptions": "订阅",
+  "subTrialing": "试用中",
+  "subActive": "有效",
+  "subPastDue": "逾期",
+  "subLapsed": "已停",
+  "subNone": "没有订阅",
+  "subFounding": "创始价",
+  "statusPending": "待确认",
+  "statusConfirmed": "已确认",
+  "statusOutOfStock": "缺货",
+  "statusDelivering": "送货中",
+  "statusDelivered": "已送达",
+  "statusCancelled": "已取消",
+  "sourceApp": "App",
+  "sourceVoice": "语音",
+  "sourceWhatsapp": "WhatsApp",
+  "sourceAdmin": "客服",
+  "sourceReorder": "重复下单",
+  "channelApp": "App",
+  "channelWhatsapp": "WhatsApp",
+  "channelAdmin": "客服",
+  "channelSystem": "系统",
+  "unitCarton": "箱",
+  "unitPack": "包",
+  "unitBag": "袋",
+  "unitRoll": "卷",
+  "unitBundle": "捆",
+  "unitBox": "盒",
+  "unitPiece": "个",
+  "unitDozen": "打",
+  "unitKg": "公斤",
+  "stockIn": "有货",
+  "stockLow": "快卖完",
+  "stockOut": "缺货",
+  "productActive": "上架",
+  "productDraft": "草稿",
+  "productArchived": "下架",
+  "filterFrom": "从",
+  "filterTo": "到",
+  "filterWholesaler": "批发商",
+  "filterShop": "店铺",
+  "filterStatus": "状态",
+  "filterSource": "来源",
+  "filterUnconfirmed": "只看超过 {minutes} 分钟没确认",
+  "@filterUnconfirmed": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "filterClear": "清除筛选",
+  "ordersTotal": "共 {count} 张",
+  "@ordersTotal": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "ordersEmpty": "没有符合的订单",
+  "colOrderNo": "单号",
+  "colCreated": "下单时间",
+  "colShop": "店铺",
+  "colWholesaler": "批发商",
+  "colStatus": "状态",
+  "colSource": "来源",
+  "colTotal": "总额",
+  "pagePrev": "上一页",
+  "pageNext": "下一页",
+  "pageRange": "{from}–{to}，共 {total}",
+  "@pageRange": {
+    "placeholders": {
+      "from": {
+        "type": "int"
+      },
+      "to": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "followupHint": "待确认超过 {minutes} 分钟的订单。打电话给批发商跟进，然后记一句。",
+  "@followupHint": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "followupEmpty": "没有要跟进的单",
+  "pendingFor": "等了 {minutes} 分钟",
+  "@pendingFor": {
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "logFollowup": "记下跟进",
+  "followupNoteLabel": "跟进内容（例如：批发商说 3 点前确认）",
+  "lastFollowup": "上次跟进 {time}：{note}",
+  "@lastFollowup": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      },
+      "note": {
+        "type": "String"
+      }
+    }
+  },
+  "openOrder": "打开订单",
+  "phoneOf": "{name} 电话",
+  "@phoneOf": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "orderTitle": "订单 {orderNo}",
+  "@orderTitle": {
+    "placeholders": {
+      "orderNo": {
+        "type": "String"
+      }
+    }
+  },
+  "itemsTitle": "明细",
+  "eventsTitle": "进度",
+  "goodsSubtotal": "货价",
+  "shippingFee": "运费",
+  "totalLabel": "总额",
+  "expectedDelivery": "预计送达",
+  "noteLabel": "备注",
+  "outOfStockTag": "缺货",
+  "actConfirm": "代批发商确认",
+  "actConfirmHint": "勾选缺货的商品（不算钱）。全部缺货就变成「缺货」。",
+  "actOutOfStock": "整单缺货",
+  "actDelivering": "出发送货",
+  "actDelivered": "已送达",
+  "actCancel": "取消订单",
+  "cancelReasonLabel": "取消原因（会给批发商看）",
+  "statusUpdated": "状态已更新：{status}",
+  "@statusUpdated": {
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "chooseShop": "选店铺",
+  "shopSearchHint": "店名或电话",
+  "changeShop": "换一家店",
+  "shopNoApp": "没装 App",
+  "shopLocked": "未付费：只能向免费开放的批发商下单",
+  "offersSearchHint": "搜商品",
+  "offersEmpty": "没有送到这家店的商品",
+  "priceHidden": "看不到价钱",
+  "perPiece": "每个 {sen} 仙",
+  "@perPiece": {
+    "placeholders": {
+      "sen": {
+        "type": "String"
+      }
+    }
+  },
+  "minOrderQty": "起订 {qty}",
+  "@minOrderQty": {
+    "placeholders": {
+      "qty": {
+        "type": "int"
+      }
+    }
+  },
+  "add": "加入",
+  "cartTitle": "购物车",
+  "cartEmpty": "购物车是空的",
+  "clearCart": "清空",
+  "orderNoteLabel": "备注（会给批发商看）",
+  "placeOrderButton": "确认下单 {amount}",
+  "@placeOrderButton": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "placedTitle": "已下单",
+  "placedBody": "拆成 {count} 张订单，批发商会收到通知：",
+  "@placedBody": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "problemProductUnavailable": "商品下架了",
+  "problemNotDelivering": "不送这家店那区",
+  "problemWholesalerLocked": "未付费：这家不在免费名单",
+  "problemOutOfStock": "缺货",
+  "problemBelowMinQty": "未到起订量 {qty}",
+  "@problemBelowMinQty": {
+    "placeholders": {
+      "qty": {
+        "type": "int"
+      }
+    }
+  },
+  "problemBelowMinOrder": "还差 {amount} 才到最低消费",
+  "@problemBelowMinOrder": {
+    "placeholders": {
+      "amount": {
+        "type": "String"
+      }
+    }
+  },
+  "wsStatusPending": "待审核",
+  "wsStatusActive": "营业中",
+  "wsStatusSuspended": "已停权",
+  "wsApprove": "审核通过",
+  "wsReject": "不通过",
+  "wsSuspend": "停权",
+  "wsReactivate": "恢复",
+  "wsNoteLabel": "原因（记在操作记录）",
+  "wsCommission": "佣金 {rate}",
+  "@wsCommission": {
+    "placeholders": {
+      "rate": {
+        "type": "String"
+      }
+    }
+  },
+  "wsRateOverride": "单独调整",
+  "wsRateFounding": "创始会员",
+  "wsRateIndustry": "行业默认",
+  "wsSetRate": "改佣金比例",
+  "wsRateLabel": "比例 %（空的 = 用默认）",
+  "wsRateDefaults": "行业默认 {industry}，创始会员 {founding}",
+  "@wsRateDefaults": {
+    "placeholders": {
+      "industry": {
+        "type": "String"
+      },
+      "founding": {
+        "type": "String"
+      }
+    }
+  },
+  "wsFounding": "创始会员",
+  "wsFoundingNo": "创始 #{no}",
+  "@wsFoundingNo": {
+    "placeholders": {
+      "no": {
+        "type": "int"
+      }
+    }
+  },
+  "wsWhatsappOptIn": "同意 WhatsApp 收订单",
+  "wsProducts": "商品（{count}）",
+  "@wsProducts": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wsPendingOrders": "{count} 张待确认",
+  "@wsPendingOrders": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "wsEmpty": "没有批发商",
+  "productsTitle": "{name} 的商品",
+  "@productsTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "productsHint": "客服代批发商改：每个改动都记在操作记录。",
+  "productNew": "新增商品",
+  "productEdit": "改商品",
+  "productName": "名称",
+  "productUnit": "单位",
+  "productPackQty": "一个单位有几个",
+  "productPrice": "价钱（RM）",
+  "productMinQty": "起订量",
+  "productStock": "库存",
+  "productStatus": "上架状态",
+  "productsEmpty": "还没有商品",
+  "productPerUnit": "{price} / {unit}（{qty} 个）",
+  "@productPerUnit": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      },
+      "qty": {
+        "type": "int"
+      }
+    }
+  },
+  "subsFoundingOnly": "只看创始价",
+  "colPlan": "锁定月费",
+  "colTrialEnds": "试用到",
+  "colPeriodEnd": "付到",
+  "colLastPayment": "上次付款",
+  "subExtendTrial": "延长试用",
+  "subDaysLabel": "延长几天（1–90）",
+  "subMarkPaid": "标记已付",
+  "subMonthsLabel": "几个月",
+  "subAmountLabel": "金额 RM（空的 = 锁定月费 x 月数）",
+  "subMethodLabel": "付款方式",
+  "subReferenceLabel": "参考号（银行转账号码）",
+  "subLapsedNewPrice": "已停：付款会新建一条订阅，按今天的月费锁定。",
+  "subCancel": "取消订阅",
+  "subCancelConfirm": "取消后马上停。之后回来要按当时的价钱重新订阅。",
+  "subReasonLabel": "原因",
+  "subSetFounding": "创始价设定",
+  "subLockedPriceLabel": "锁定月费 RM（空的 = 不改）",
+  "subsEmpty": "没有订阅",
+  "methodFpx": "FPX",
+  "methodDuitnow": "DuitNow",
+  "methodEwallet": "电子钱包",
+  "methodCard": "信用卡",
+  "methodOther": "现金 / 其他",
+  "commissionHint": "每家批发商这个月已送达订单的货价（不含运费）和应付佣金。比例是送达时存下来的。",
+  "prevMonth": "上个月",
+  "nextMonth": "下个月",
+  "colOrders": "送达订单",
+  "colGmv": "货价（不含运费）",
+  "colRate": "比例",
+  "colCommission": "应付佣金",
+  "colInvoice": "账单",
+  "colBillingName": "开账单名称",
+  "colSsm": "SSM 号码",
+  "colEmail": "电邮",
+  "colPeriod": "月份",
+  "colInvoiceStatus": "账单状态",
+  "commissionTotal": "合计",
+  "exportCsv": "导出 CSV（全部）",
+  "exportPdf": "账单 PDF",
+  "exported": "已下载 {name}",
+  "@exported": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "exportUnsupported": "只有网页版可以下载档案",
+  "generateInvoices": "生成草稿账单",
+  "invoicesGenerated": "生成 / 更新了 {count} 张草稿账单",
+  "@invoicesGenerated": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "issueInvoice": "发出账单",
+  "markInvoicePaid": "标记已付",
+  "invoiceDraft": "草稿",
+  "invoiceIssued": "已发出",
+  "invoicePaid": "已付",
+  "invoiceOverdue": "逾期",
+  "invoiceVoid": "作废",
+  "invoiceNone": "还没有账单",
+  "commissionEmpty": "这个月还没有送达的订单",
+  "pdfInvoiceTitle": "佣金账单",
+  "pdfBillTo": "账单给",
+  "pdfInvoiceNo": "账单号码",
+  "pdfDraft": "草稿（还没发出）",
+  "pdfDueDate": "到期日",
+  "pdfDelivered": "送达日期",
+  "pdfTotalDue": "应付佣金合计",
+  "pdfNote": "佣金只算已送达订单的货价，不含运费；缺货和取消的不算。",
+  "pdfCompanyNotConfigured": "（公司资料未设定）",
+  "auditAdminOnly": "只看客服动作",
+  "auditActor": "谁",
+  "auditActingFor": "代谁",
+  "auditTable": "资料",
+  "auditChanges": "改了什么",
+  "auditEmpty": "没有记录",
+  "loadMore": "再看多一些",
+  "auditActPlaceOrder": "代下单",
+  "auditActSetCartItem": "改购物车",
+  "auditActClearCart": "清空购物车",
+  "auditActSetOrderStatus": "改订单状态",
+  "auditActConfirmOrder": "代确认订单",
+  "auditActLogFollowup": "跟进",
+  "auditActCreateProduct": "新增商品",
+  "auditActUpdateProduct": "改商品",
+  "auditActWholesalerStatus": "审核 / 停权",
+  "auditActCommissionRate": "改佣金比例",
+  "auditActWholesalerFounding": "创始会员",
+  "auditActWhatsappOptIn": "WhatsApp 同意",
+  "auditActExtendTrial": "延长试用",
+  "auditActMarkPaid": "标记月费已付",
+  "auditActCancelSubscription": "取消订阅",
+  "auditActSubscriptionFounding": "创始价",
+  "auditActGenerateInvoices": "生成账单",
+  "auditActIssueInvoice": "发出账单",
+  "auditActInvoicePaid": "账单已付",
+  "auditActInsert": "新增",
+  "auditActUpdate": "修改",
+  "auditActDelete": "删除"
+}

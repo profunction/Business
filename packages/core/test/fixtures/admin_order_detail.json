@@ -1,0 +1,71 @@
+{
+    "id": "62e1dc3a-97a8-4daf-a5b3-8d9e3743cc03",
+    "note": null,
+    "shop": {
+        "id": "00000000-0000-4000-b000-000000000002",
+        "name": "Kedai Runcit Siti",
+        "phone": "60120000004",
+        "address": "Jalan Demo 20, Skudai",
+        "zone_name": {
+            "en": "Skudai",
+            "ms": "Skudai",
+            "zh": "士古来"
+        },
+        "contact_name": "Siti"
+    },
+    "items": [
+        {
+            "id": "ba01567e-bca7-4a01-930e-4fd4a0ecaa8c",
+            "qty": 1,
+            "name": "650ml 长方饭盒连盖",
+            "unit": "carton",
+            "pack_qty": 300,
+            "product_id": "2933c8e2-ee93-4d31-b9a8-c99ade686a79",
+            "line_total_sen": 7800,
+            "unit_price_sen": 7800,
+            "is_out_of_stock": false
+        }
+    ],
+    "events": [
+        {
+            "note": null,
+            "channel": "system",
+            "to_status": "pending",
+            "created_at": "2026-11-26T03:59:57.283602+00:00",
+            "from_status": null
+        }
+    ],
+    "review": null,
+    "source": "app",
+    "status": "pending",
+    "actions": {
+        "can_cancel": true,
+        "can_review": false,
+        "can_confirm": true,
+        "can_mark_received": false,
+        "can_mark_delivered": false,
+        "can_mark_delivering": false
+    },
+    "order_no": "JHB261126-00002",
+    "total_sen": 9000,
+    "created_at": "2026-11-26T03:14:57.294083+00:00",
+    "wholesaler": {
+        "id": "00000000-0000-4000-a000-00000000000a",
+        "name": "示范批发 A：新山包装行",
+        "phone": "60120000002",
+        "payment_terms": [
+            "cod",
+            "transfer"
+        ],
+        "whatsapp_phone": "60120000002"
+    },
+    "checkout_id": "debddf5d-c445-401a-b52a-07097eb3e72b",
+    "cancelled_at": null,
+    "confirmed_at": null,
+    "delivered_at": null,
+    "cancel_reason": null,
+    "delivering_at": null,
+    "shipping_fee_sen": 1200,
+    "goods_subtotal_sen": 7800,
+    "expected_delivery_date": "2026-11-27"
+}

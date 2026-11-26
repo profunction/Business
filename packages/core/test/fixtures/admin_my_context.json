@@ -1,0 +1,13 @@
+{
+    "shops": [
+    ],
+    "profile": {
+        "id": "00000000-0000-4000-c000-000000000003",
+        "role": "admin",
+        "phone": "60120000003",
+        "locale": "zh",
+        "full_name": "客服 Mei"
+    },
+    "wholesalers": [
+    ]
+}

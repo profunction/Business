@@ -1,0 +1,84 @@
+{
+    "gmv_sen": 56700,
+    "order_count": 2,
+    "wholesalers": [
+        {
+            "name": "Demo Wholesaler B: Tebrau Packaging",
+            "phone": "60129990002",
+            "rates": [
+                {
+                    "rate": 0.0100,
+                    "rate_source": "founding"
+                }
+            ],
+            "orders": [
+                {
+                    "rate": 0.0100,
+                    "order_id": "b93927f6-e0a8-44be-8094-9a9d0bcc55b9",
+                    "order_no": "JHB261126-00004",
+                    "shop_name": "阿明茶餐室",
+                    "rate_source": "founding",
+                    "delivered_at": "2026-11-26T03:59:57.324514+00:00",
+                    "commission_sen": 286,
+                    "base_amount_sen": 28600,
+                    "shipping_fee_sen": 0
+                }
+            ],
+            "status": "active",
+            "address": "Jalan Demo 2, Tebrau",
+            "billing": {
+                "name": "Demo Wholesaler B: Tebrau Packaging",
+                "email": null,
+                "ssm_no": null,
+                "address": "Jalan Demo 2, Tebrau"
+            },
+            "gmv_sen": 28600,
+            "invoice": null,
+            "is_founding": true,
+            "order_count": 1,
+            "wholesaler_id": "00000000-0000-4000-a000-00000000000b",
+            "commission_sen": 286
+        },
+        {
+            "name": "示范批发 A：新山包装行",
+            "phone": "60120000002",
+            "rates": [
+                {
+                    "rate": 0.0100,
+                    "rate_source": "founding"
+                }
+            ],
+            "orders": [
+                {
+                    "rate": 0.0100,
+                    "order_id": "fd896044-db9c-4a0b-a0b8-de8dec1b9aa7",
+                    "order_no": "JHB261126-00001",
+                    "shop_name": "阿明茶餐室",
+                    "rate_source": "founding",
+                    "delivered_at": "2026-11-26T03:59:57.23821+00:00",
+                    "commission_sen": 281,
+                    "base_amount_sen": 28100,
+                    "shipping_fee_sen": 0
+                }
+            ],
+            "status": "active",
+            "address": "Jalan Demo 1, Johor Bahru",
+            "billing": {
+                "name": "示范批发 A：新山包装行",
+                "email": null,
+                "ssm_no": null,
+                "address": "Jalan Demo 1, Johor Bahru"
+            },
+            "gmv_sen": 28100,
+            "invoice": null,
+            "is_founding": true,
+            "order_count": 1,
+            "wholesaler_id": "00000000-0000-4000-a000-00000000000a",
+            "commission_sen": 281
+        }
+    ],
+    "generated_at": "2026-11-26T03:59:57.352524+00:00",
+    "period_month": "2026-11-01",
+    "commission_sen": 567,
+    "invoice_due_days": 14
+}
