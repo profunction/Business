@@ -6,6 +6,7 @@ import 'package:wholesale_core/wholesale_core.dart';
 import '../../app/l10n_x.dart';
 import '../../app/providers.dart';
 import '../../widgets/common.dart';
+import '../../widgets/payment_link.dart';
 
 /// 订阅（买家月费）：每家店最新的一条。延长试用、手动标记已付（转账 / 现金）、取消、创始价
 class SubscriptionsPage extends ConsumerStatefulWidget {
@@ -154,6 +155,8 @@ class _SubscriptionsPageState extends ConsumerState<SubscriptionsPage> {
                             onPaid: () => _markPaid(s),
                             onCancel: () => _cancel(s),
                             onFounding: () => _founding(s),
+                            onPayLink: () =>
+                                showPaymentLink(context, ref, PaymentPurpose.subscription, s.shopId, title: s.shopName),
                           ),
                         ),
                     ],
@@ -172,9 +175,11 @@ class _SubscriptionCard extends StatelessWidget {
     required this.onPaid,
     required this.onCancel,
     required this.onFounding,
+    required this.onPayLink,
   });
 
   final AdminSubscription sub;
+  final VoidCallback onPayLink;
   final VoidCallback onExtend;
   final VoidCallback onPaid;
   final VoidCallback onCancel;
@@ -240,6 +245,12 @@ class _SubscriptionCard extends StatelessWidget {
                   onPressed: onPaid,
                   icon: const Icon(Icons.payments_outlined),
                   label: Text(l.subMarkPaid),
+                ),
+                OutlinedButton.icon(
+                  key: Key('paylink-${s.shopName}'),
+                  onPressed: onPayLink,
+                  icon: const Icon(Icons.link),
+                  label: Text(l.payLink),
                 ),
                 OutlinedButton.icon(
                   key: Key('founding-${s.shopName}'),

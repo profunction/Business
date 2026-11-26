@@ -286,6 +286,73 @@ const PUSH = {
       ms: "{wholesaler_name} ({phone}) belum mengesahkan pesanan {shop_name}. Sila hubungi mereka.",
     },
   },
+  invoice_issued: {
+    title: {
+      zh: "{month} 佣金账单 {invoice_no}",
+      en: "{month} commission invoice {invoice_no}",
+      ms: "Invois komisen {month} {invoice_no}",
+    },
+    body: {
+      zh: "佣金 {amount}，请在 {date} 前付款。点这里看明细和付款。",
+      en: "Commission {amount}, please pay by {date}. Tap to see details and pay.",
+      ms: "Komisen {amount}, sila bayar sebelum {date}. Tekan untuk butiran dan bayaran.",
+    },
+  },
+  invoice_due_soon: {
+    title: {
+      zh: "账单 {invoice_no} 快到期",
+      en: "Invoice {invoice_no} due soon",
+      ms: "Invois {invoice_no} hampir tamat tempoh",
+    },
+    body: {
+      zh: "佣金 {amount}，{date} 到期。",
+      en: "Commission {amount} is due on {date}.",
+      ms: "Komisen {amount} perlu dibayar pada {date}.",
+    },
+  },
+  invoice_overdue: {
+    title: {
+      zh: "账单 {invoice_no} 逾期了",
+      en: "Invoice {invoice_no} is overdue",
+      ms: "Invois {invoice_no} telah lewat",
+    },
+    body: {
+      zh: "佣金 {amount} 在 {date} 到期，还没收到。请尽快付款。",
+      en: "Commission {amount} was due on {date} and has not been received. Please pay soon.",
+      ms: "Komisen {amount} perlu dibayar pada {date} dan belum diterima. Sila bayar segera.",
+    },
+  },
+  subscription_ending: {
+    title: { zh: "订阅快到期", en: "Subscription ending soon", ms: "Langganan hampir tamat" },
+    trial: {
+      zh: "免费试用 {date} 结束。",
+      en: "Your free trial ends on {date}.",
+      ms: "Percubaan percuma tamat pada {date}.",
+    },
+    active: {
+      zh: "这一期 {date} 结束，续费还是 {amount} 一个月。",
+      en: "This period ends on {date}. Renewal stays at {amount} a month.",
+      ms: "Tempoh ini tamat pada {date}. Pembaharuan kekal {amount} sebulan.",
+    },
+  },
+  payment_received: {
+    title: { zh: "收到付款 {amount}", en: "Payment received {amount}", ms: "Bayaran diterima {amount}" },
+    subscription: {
+      zh: "谢谢！订阅到 {date}。",
+      en: "Thank you! Subscription active until {date}.",
+      ms: "Terima kasih! Langganan aktif hingga {date}.",
+    },
+    listing_fee: {
+      zh: "谢谢！创始会员上架费已付。",
+      en: "Thank you! Founding member listing fee paid.",
+      ms: "Terima kasih! Yuran penyenaraian ahli pengasas telah dibayar.",
+    },
+    commission_invoice: {
+      zh: "谢谢！账单 {invoice_no} 已付。",
+      en: "Thank you! Invoice {invoice_no} is paid.",
+      ms: "Terima kasih! Invois {invoice_no} telah dibayar.",
+    },
+  },
   generic: {
     title: { zh: "新通知", en: "New notification", ms: "Pemberitahuan baharu" },
     body: {
@@ -305,6 +372,15 @@ const FALLBACK = {
 
 const PUSH_TITLE_MAX = 80;
 const PUSH_BODY_MAX = 300;
+
+/** 账单的月份：2026-10-01 → 「2026年10月」/ Oct 2026 / Okt 2026 */
+export function monthLabel(value: unknown, locale: Locale): string {
+  const m = typeof value === "string" ? /^(\d{4})-(\d{2})/.exec(value) : null;
+  if (!m) return "";
+  const y = Number(m[1]), mo = Number(m[2]);
+  if (mo < 1 || mo > 12) return "";
+  return locale === "zh" ? `${y}年${mo}月` : `${(locale === "en" ? EN_MON : MS_MON)[mo - 1]} ${y}`;
+}
 
 export function pushContent(item: NotificationItem): PushContent {
   const loc = toLocale(item.locale);
@@ -388,6 +464,49 @@ export function pushContent(item: NotificationItem): PushContent {
       const wid = str(item.payload?.wholesaler_id);
       if (wid) data.wholesaler_id = wid;
       ttl = 3600;
+      break;
+    }
+    case "invoice_issued":
+    case "invoice_due_soon":
+    case "invoice_overdue": {
+      const key = item.event_type as "invoice_issued" | "invoice_due_soon" | "invoice_overdue";
+      const vars = {
+        invoice_no: str(item.payload?.invoice_no) ?? "",
+        month: monthLabel(item.payload?.period_month, loc),
+        amount: formatMoney(item.payload?.commission_sen),
+        date: formatDate(item.payload?.due_date, loc) ?? FALLBACK.date[loc],
+      };
+      title = tpl(PUSH[key].title[loc], vars);
+      body = tpl(PUSH[key].body[loc], vars);
+      const invoiceId = str(item.payload?.invoice_id);
+      if (invoiceId) data.invoice_id = invoiceId;
+      tag = invoiceId ? `invoice-${invoiceId}` : null;
+      break;
+    }
+    case "subscription_ending": {
+      const vars = {
+        date: formatDate(item.payload?.ends_at, loc) ?? FALLBACK.date[loc],
+        amount: formatMoney(item.payload?.locked_price_sen),
+      };
+      title = PUSH.subscription_ending.title[loc];
+      body = tpl(PUSH.subscription_ending[item.payload?.status === "trialing" ? "trial" : "active"][loc], vars);
+      tag = "subscription";
+      break;
+    }
+    case "payment_received": {
+      const purpose = str(item.payload?.purpose);
+      const key = purpose === "listing_fee" || purpose === "commission_invoice" ? purpose : "subscription";
+      const vars = {
+        amount: formatMoney(item.payload?.amount_sen),
+        date: formatDate(item.payload?.period_end, loc) ?? FALLBACK.date[loc],
+        invoice_no: str(item.payload?.invoice_no) ?? "",
+      };
+      title = tpl(PUSH.payment_received.title[loc], vars);
+      body = tpl(PUSH.payment_received[key][loc], vars);
+      const paymentId = str(item.payload?.payment_id);
+      if (paymentId) data.payment_id = paymentId;
+      const invoiceId = str(item.payload?.invoice_id);
+      if (invoiceId) data.invoice_id = invoiceId;
       break;
     }
     default: {
@@ -667,4 +786,39 @@ export function buttonReplyText(result: string, orderNo: string | null, locale: 
   else if (result === "order_not_found" || result === "invalid_payload") t = REPLY.not_found;
   if (!t) return null;
   return tpl(t[locale], vars).replace(/\s{2,}/g, " ");
+}
+
+// ---------------------------------------------------------------------------
+// WhatsApp 下单（第六步）：收到消息后马上回的一句话（对方刚发消息来，在 24 小时客服窗口内，可以发普通文字）
+// ---------------------------------------------------------------------------
+
+const ORDER_REPLY = {
+  received: {
+    zh: "收到您的订单（{n} 样）。客服确认后会帮您下单，请稍等。",
+    en: "We got your order ({n} item(s)). Our team will check it and place it for you shortly.",
+    ms: "Pesanan anda diterima ({n} barang). Pasukan kami akan menyemak dan membuat pesanan untuk anda.",
+  },
+  received_unclear: {
+    zh: "收到您的消息。客服会看一下，需要的话会联系您。",
+    en: "We got your message. Our team will take a look and contact you if needed.",
+    ms: "Mesej anda diterima. Pasukan kami akan menyemak dan menghubungi anda jika perlu.",
+  },
+  unsupported: {
+    zh: "请用文字或语音告诉我们要订什么（例如：两箱 16oz 杯）。",
+    en: "Please tell us what you need by text or voice message (for example: 2 cartons of 16oz cups).",
+    ms: "Sila beritahu kami apa yang anda perlukan melalui teks atau mesej suara (contoh: 2 karton cawan 16oz).",
+  },
+} satisfies Record<string, Tri>;
+
+/** 不认识的号码：不知道他用什么语言，三种一起写 */
+export const REGISTER_REPLY = [
+  "您好！这个号码还没有注册。请先下载 App 注册店铺，或回复您的店名和地址，客服会帮您开户。",
+  "Hello! This number is not registered yet. Please download our app to register your shop, or reply with your shop name and address and our team will set it up for you.",
+  "Hai! Nombor ini belum didaftarkan. Sila muat turun aplikasi kami untuk mendaftar kedai anda, atau balas dengan nama dan alamat kedai anda dan pasukan kami akan membantu.",
+].join("\n\n");
+
+export type OrderReplyKind = keyof typeof ORDER_REPLY;
+
+export function orderReplyText(kind: OrderReplyKind, locale: Locale, vars: { n?: number } = {}): string {
+  return ORDER_REPLY[kind][locale].replace("{n}", String(vars.n ?? 0));
 }

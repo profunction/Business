@@ -8,9 +8,11 @@ import '../features/dashboard/dashboard_page.dart';
 import '../features/orders/followup_page.dart';
 import '../features/orders/order_detail_page.dart';
 import '../features/orders/orders_page.dart';
+import '../features/payments/payments_page.dart';
 import '../features/place_order/place_order_page.dart';
 import '../features/subscriptions/subscriptions_page.dart';
 import '../features/wholesalers/products_page.dart';
+import '../features/whatsapp/whatsapp_orders_page.dart';
 import '../features/wholesalers/wholesalers_page.dart';
 import '../widgets/shell.dart';
 import 'session.dart';
@@ -62,6 +64,16 @@ GoRouter buildRouter(AdminSession session, {bool demo = false}) {
           ),
           GoRoute(path: '/followup', builder: (_, _) => const FollowupPage()),
           GoRoute(
+            path: '/whatsapp-orders',
+            builder: (_, _) => const WhatsappOrdersPage(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (_, state) => WhatsappOrderPage(draftId: state.pathParameters['id']!),
+              ),
+            ],
+          ),
+          GoRoute(
             path: '/place-order',
             builder: (_, state) => PlaceOrderPage(initialShopId: state.uri.queryParameters['shop']),
           ),
@@ -80,6 +92,7 @@ GoRouter buildRouter(AdminSession session, {bool demo = false}) {
           ),
           GoRoute(path: '/subscriptions', builder: (_, _) => const SubscriptionsPage()),
           GoRoute(path: '/commission', builder: (_, _) => const CommissionPage()),
+          GoRoute(path: '/payments', builder: (_, _) => const PaymentsPage()),
           GoRoute(path: '/audit', builder: (_, _) => const AuditPage()),
         ],
       ),

@@ -69,10 +69,12 @@ class SettingsPage extends ConsumerWidget {
                         child: Text(l.chooseWholesalers),
                       ),
                     ],
-                    if (s.state != SubscriptionState.active) ...[
-                      const SizedBox(height: 10),
-                      Text(l.subscribeComingSoon, style: t.bodyMedium?.copyWith(color: Colors.black54)),
-                    ],
+                    const SizedBox(height: 10),
+                    OutlinedButton(
+                      key: const Key('open-subscription'),
+                      onPressed: () => context.push('/subscription'),
+                      child: Text(l.subDetails),
+                    ),
                   ],
                 ),
               ),

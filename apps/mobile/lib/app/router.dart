@@ -6,6 +6,9 @@ import '../features/auth/language_page.dart';
 import '../features/auth/login_page.dart';
 import '../features/auth/otp_page.dart';
 import '../features/auth/status_pages.dart';
+import '../features/billing/invoice_page.dart';
+import '../features/billing/seller_billing_page.dart';
+import '../features/billing/subscription_page.dart';
 import '../features/browse/browse_page.dart';
 import '../features/browse/catalog_items_page.dart';
 import '../features/browse/compare_page.dart';
@@ -30,6 +33,7 @@ import '../features/seller/seller_orders_page.dart';
 import '../features/seller/seller_settings_page.dart';
 import '../features/settings/free_wholesalers_page.dart';
 import '../features/settings/settings_page.dart';
+import '../features/voice/voice_draft_page.dart';
 import 'seller_providers.dart';
 import 'session.dart';
 
@@ -104,6 +108,16 @@ GoRouter buildRouter(SessionController session) {
           ),
           GoRoute(path: 'settings', builder: (_, _) => const SellerSettingsPage()),
           GoRoute(
+            path: 'billing',
+            builder: (_, _) => const SellerBillingPage(),
+            routes: [
+              GoRoute(
+                path: 'invoices/:id',
+                builder: (_, s) => InvoicePage(invoiceId: s.pathParameters['id']!),
+              ),
+            ],
+          ),
+          GoRoute(
             path: 'summary',
             builder: (_, s) => DeliverySummaryPage(date: s.uri.queryParameters['date']),
           ),
@@ -168,6 +182,10 @@ GoRouter buildRouter(SessionController session) {
         path: '/checkout/done',
         builder: (_, s) => OrderPlacedPage(orderCount: int.tryParse(s.uri.queryParameters['n'] ?? '') ?? 1),
       ),
+      GoRoute(
+        path: '/voice-draft/:id',
+        builder: (_, s) => VoiceDraftPage(draftId: s.pathParameters['id']!),
+      ),
       GoRoute(path: '/orders', builder: (_, _) => const OrdersPage()),
       GoRoute(
         path: '/orders/:id',
@@ -179,6 +197,7 @@ GoRouter buildRouter(SessionController session) {
       ),
       GoRoute(path: '/free-wholesalers', builder: (_, _) => const FreeWholesalersPage()),
       GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
+      GoRoute(path: '/subscription', builder: (_, _) => const SubscriptionPage()),
     ],
     errorBuilder: (_, _) => session.stage == SessionStage.seller ? const SellerHomePage() : const HomePage(),
   );

@@ -6,6 +6,7 @@ import 'package:wholesale_core/wholesale_core.dart';
 import '../../app/l10n_x.dart';
 import '../../app/providers.dart';
 import '../../widgets/common.dart';
+import '../../widgets/payment_link.dart';
 
 /// 批发商：审核（自己注册的要客服通过才出现在买家面前）、停权 / 恢复、佣金比例、创始会员、WhatsApp 同意；
 /// 也可以进去代他管商品
@@ -67,6 +68,20 @@ class _WholesalersPageState extends ConsumerState<WholesalersPage> {
       success: l.saved,
     );
     if (ok) _refresh();
+  }
+
+  Future<void> _markListingFee(AdminWholesaler w) async {
+    final l = context.l10n;
+    final reference = await showInputDialog(
+      context,
+      title: '${l.wsMarkListingFee} · ${w.name}',
+      label: l.subReferenceLabel,
+    );
+    if (reference == null || !mounted) return;
+    await _toggle(
+      () =>
+          ref.read(apiProvider).markListingFeePaid(w.id, reference: reference.trim().isEmpty ? null : reference.trim()),
+    );
   }
 
   Future<void> _toggle(Future<Object?> Function() action) async {
@@ -136,6 +151,9 @@ class _WholesalersPageState extends ConsumerState<WholesalersPage> {
                             onRate: () => _setRate(w),
                             onFounding: (v) => _toggle(() => api.setWholesalerFounding(w.id, v)),
                             onOptIn: (v) => _toggle(() => api.setWhatsappOptInAsAdmin(wholesalerId: w.id, optIn: v)),
+                            onListingFee: () => _markListingFee(w),
+                            onPayLink: () =>
+                                showPaymentLink(context, ref, PaymentPurpose.listingFee, w.id, title: w.name),
                           ),
                         ),
                     ],
@@ -166,9 +184,13 @@ class _WholesalerCard extends StatelessWidget {
     required this.onRate,
     required this.onFounding,
     required this.onOptIn,
+    required this.onListingFee,
+    required this.onPayLink,
   });
 
   final AdminWholesaler w;
+  final VoidCallback onListingFee;
+  final VoidCallback onPayLink;
   final ValueChanged<WholesalerStatus> onStatus;
   final VoidCallback onRate;
   final ValueChanged<bool> onFounding;
@@ -198,6 +220,11 @@ class _WholesalerCard extends StatelessWidget {
                 Text(w.name, style: Theme.of(context).textTheme.titleMedium),
                 Tag(l.wholesalerStatus(w.status), color: statusColor),
                 if (w.isFounding && w.foundingNo != null) Tag(l.wsFoundingNo(w.foundingNo!), color: scheme.tertiary),
+                if (w.isFounding)
+                  Tag(
+                    w.foundingFeePaidAt != null ? l.wsListingFeePaid : l.wsListingFeeUnpaid,
+                    color: w.foundingFeePaidAt != null ? const Color(0xFF2E7D32) : const Color(0xFFB26A00),
+                  ),
                 Text(l.wsCommission('${formatRate(w.commissionRate)}（${l.rateSource(w.commissionRateSource)}）')),
                 if (w.pendingOrderCount > 0) Text(l.wsPendingOrders(w.pendingOrderCount)),
               ],
@@ -261,6 +288,20 @@ class _WholesalerCard extends StatelessWidget {
                 ),
                 TextButton(onPressed: () => context.go('/orders?wholesaler=${w.id}'), child: Text(l.navOrders)),
                 _Switch(key: Key('founding-${w.id}'), label: l.wsFounding, value: w.isFounding, onChanged: onFounding),
+                if (w.foundingFeePaidAt == null) ...[
+                  OutlinedButton.icon(
+                    key: Key('listingfee-${w.id}'),
+                    onPressed: onListingFee,
+                    icon: const Icon(Icons.payments_outlined),
+                    label: Text(l.wsMarkListingFee),
+                  ),
+                  OutlinedButton.icon(
+                    key: Key('listinglink-${w.id}'),
+                    onPressed: onPayLink,
+                    icon: const Icon(Icons.link),
+                    label: Text(l.payLink),
+                  ),
+                ],
                 _Switch(
                   key: Key('optin-${w.id}'),
                   label: l.wsWhatsappOptIn,

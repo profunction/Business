@@ -153,6 +153,7 @@ class AdminWholesaler {
     required this.status,
     this.isFounding = false,
     this.foundingNo,
+    this.foundingFeePaidAt,
     this.contactName,
     this.phone,
     this.whatsappPhone,
@@ -180,6 +181,7 @@ class AdminWholesaler {
     status: wholesalerStatusFrom(j['status']),
     isFounding: asBool(j['is_founding']),
     foundingNo: asIntOrNull(j['founding_no']),
+    foundingFeePaidAt: asDateTimeOrNull(j['founding_fee_paid_at']),
     contactName: asStringOrNull(j['contact_name']),
     phone: asStringOrNull(j['phone']),
     whatsappPhone: asStringOrNull(j['whatsapp_phone']),
@@ -206,6 +208,9 @@ class AdminWholesaler {
   final WholesalerStatus status;
   final bool isFounding;
   final int? foundingNo;
+
+  /// 创始上架费什么时候付的（没付 → null）
+  final DateTime? foundingFeePaidAt;
   final String? contactName;
   final String? phone;
   final String? whatsappPhone;
@@ -526,6 +531,7 @@ class CommissionInvoice {
     this.issuedAt,
     this.dueDate,
     this.paidAt,
+    this.periodMonth,
   });
 
   factory CommissionInvoice.fromJson(Json j) => CommissionInvoice(
@@ -538,10 +544,14 @@ class CommissionInvoice {
     issuedAt: asDateTimeOrNull(j['issued_at']),
     dueDate: asDateOrNull(j['due_date']),
     paidAt: asDateTimeOrNull(j['paid_at']),
+    periodMonth: asDateOrNull(j['period_month']),
   );
 
   final String id;
   final String invoiceNo;
+
+  /// 哪个月的佣金（那个月的 1 号）
+  final DateTime? periodMonth;
 
   /// draft / issued / paid / overdue / void
   final String status;
@@ -551,6 +561,9 @@ class CommissionInvoice {
   final DateTime? issuedAt;
   final DateTime? dueDate;
   final DateTime? paidAt;
+
+  /// 已发出 / 逾期、还没付
+  bool get isOutstanding => status == 'issued' || status == 'overdue';
 }
 
 class CommissionOrderLine {

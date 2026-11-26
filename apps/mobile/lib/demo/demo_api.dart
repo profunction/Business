@@ -169,6 +169,7 @@ class DemoApi extends WholesaleApi {
     }
     var offers = rows.map(Offer.fromJson);
     if (wholesalerId != null) offers = offers.where((o) => o.wholesalerId == wholesalerId);
+    if (search != null) offers = offers.where((o) => o.productName.toLowerCase().contains(search.toLowerCase()));
     return offers.toList();
   });
 
@@ -249,6 +250,129 @@ class DemoApi extends WholesaleApi {
 
   @override
   Future<void> stopWatching(RealtimeChannel channel) async => _orderWatchers.remove(channel);
+
+  // ---------------- 语音下单（第六步） ----------------
+
+  /// 下一次语音下单丢这个错误（测试：NO_SPEECH 之类）
+  String? failNextVoiceWith;
+
+  /// 示范的草稿（本机数据库导出的 order_draft.json），按了按钮会跟着变
+  OrderDraft? _draft;
+
+  OrderDraft get _demoDraft => _draft ??= OrderDraft.fromJson(asJson(_j('order_draft')));
+
+  @override
+  Future<OrderDraft> submitVoiceOrder(String shopId, Uint8List wavBytes) => _later(() {
+    calls.add('voice ${wavBytes.length}');
+    final fail = failNextVoiceWith;
+    if (fail != null) {
+      failNextVoiceWith = null;
+      throw AppError(fail);
+    }
+    _draft = OrderDraft.fromJson(asJson(_j('order_draft')));
+    return _draft!;
+  });
+
+  @override
+  Future<OrderDraft> getOrderDraft(String draftId) => _later(() => _demoDraft);
+
+  @override
+  // 不等 150 毫秒：首页的提醒读取中什么都不画（没有动画），测试的 pumpAndSettle 不会等它
+  Future<List<DraftSummary>> listOrderDrafts(String shopId) async {
+    if (_draft != null && !_draft!.isPending) return const <DraftSummary>[];
+    return asJsonList(_j('order_drafts')).map(DraftSummary.fromJson).toList();
+  }
+
+  @override
+  Future<OrderDraft> saveOrderDraft(String draftId, List<DraftItem> items, {List<UnmatchedPhrase>? unmatched}) =>
+      _later(() {
+        calls.add('saveDraft ${items.map((i) => '${i.productName}x${i.qty}').join(',')}');
+        final d = _demoDraft;
+        return _draft = _withItems(d, items, unmatched ?? d.unmatched, d.status);
+      });
+
+  @override
+  Future<DraftSubmitResult> submitOrderDraft(String draftId, {required int expectedTotalSen, String? note}) =>
+      _later(() {
+        calls.add('submitDraft $expectedTotalSen${note == null ? '' : ' $note'}');
+        final d = _demoDraft;
+        if (d.quote == null || !d.quote!.canPlace) throw const AppError('CART_HAS_PROBLEMS');
+        if (d.quote!.totalSen != expectedTotalSen) throw const AppError('PRICE_CHANGED');
+        _draft = _withItems(d, d.items, d.unmatched, DraftStatus.confirmed);
+        return DraftSubmitResult(checkoutId: 'demo-checkout', orderNos: 'JHB261129-00031', totalSen: expectedTotalSen);
+      });
+
+  @override
+  Future<OrderDraft> rejectOrderDraft(String draftId, {String? reason}) => _later(() {
+    calls.add('rejectDraft');
+    final d = _demoDraft;
+    return _draft = _withItems(d, d.items, d.unmatched, DraftStatus.rejected);
+  });
+
+  /// 照服务器的规则算报价：未到起订量、缺货的不算钱；每家满 RM150 免运费，否则 RM8
+  OrderDraft _withItems(OrderDraft d, List<DraftItem> items, List<UnmatchedPhrase> unmatched, DraftStatus status) {
+    final groups = <String, List<DraftItem>>{};
+    for (final i in items) {
+      groups.putIfAbsent(i.wholesalerId, () => []).add(i);
+    }
+    final quoteGroups = [
+      for (final e in groups.entries)
+        () {
+          final lines = [
+            for (final i in e.value)
+              CartLine(
+                productId: i.productId,
+                productName: i.productName,
+                unit: i.unit,
+                packQty: i.packQty,
+                qty: i.qty,
+                minOrderQty: i.minOrderQty,
+                unitPriceSen: i.unitPriceSen,
+                lineTotalSen: (i.unitPriceSen ?? 0) * i.qty,
+                problem: i.stockStatus == StockStatus.outOfStock
+                    ? CartProblem.outOfStock
+                    : i.qty < i.minOrderQty
+                    ? CartProblem.belowMinQty
+                    : null,
+              ),
+          ];
+          final goods = lines.where((l) => l.problem == null).fold<int>(0, (a, l) => a + (l.lineTotalSen ?? 0));
+          return CartGroup(
+            wholesalerId: e.key,
+            wholesalerName: e.value.first.wholesalerName,
+            goodsSubtotalSen: goods,
+            shippingFeeSen: goods >= 15000 ? 0 : 800,
+            freeShippingMinSen: 15000,
+            shortBySen: 0,
+            expectedDeliveryDate: DateTime.now().add(const Duration(days: 1)),
+            lines: lines,
+          );
+        }(),
+    ];
+    final goods = quoteGroups.fold<int>(0, (a, g) => a + g.goodsSubtotalSen);
+    final ship = quoteGroups.fold<int>(0, (a, g) => a + (g.shippingFeeSen ?? 0));
+    return OrderDraft(
+      id: d.id,
+      shopId: d.shopId,
+      shopName: d.shopName,
+      source: d.source,
+      status: status,
+      transcript: d.transcript,
+      language: d.language,
+      unmatched: unmatched,
+      createdAt: d.createdAt,
+      items: items,
+      quote: status != DraftStatus.pendingReview
+          ? null
+          : CartQuote(
+              canPlace: items.isNotEmpty && !quoteGroups.any((g) => g.hasProblem),
+              goodsTotalSen: goods,
+              shippingTotalSen: ship,
+              totalSen: goods + ship,
+              groups: quoteGroups,
+            ),
+    );
+  }
 
   // ---------------- 推送 ----------------
 
@@ -461,4 +585,83 @@ class DemoApi extends WholesaleApi {
 
   @override
   Future<void> setWhatsappOptIn(String wholesalerId, bool optIn) => _later(() => sellerData.setWhatsappOptIn(optIn));
+
+  // ---------------- 收费（第七步）：假的网关，按了「我付好了」就当作付了 ----------------
+
+  /// 测试用：create-payment 回传这个错误（例如 PAYMENT_NOT_CONFIGURED）
+  String? paymentError;
+
+  /// 开了付款页、还没「付」的那张（purpose, targetId）
+  (PaymentPurpose, String, int)? _pendingPayment;
+  bool _subscriptionPaid = false;
+  bool _listingFeePaid = false;
+  bool _invoicePaid = false;
+
+  @override
+  Future<BuyerBilling> getBuyerBilling(String shopId) => _later(
+    () => BuyerBilling.fromJson(
+      asJson(_j(freeUser ? 'buyer_billing_lapsed' : (_subscriptionPaid ? 'buyer_billing_active' : 'buyer_billing'))),
+    ),
+  );
+
+  @override
+  Future<PaymentCheckout> createPayment(PaymentPurpose purpose, String targetId, {int months = 1}) => _later(() {
+    calls.add('createPayment ${paymentPurposeCode(purpose)} $months');
+    if (paymentError != null) throw AppError(paymentError!);
+    _pendingPayment = (purpose, targetId, months);
+    final amount = switch (purpose) {
+      PaymentPurpose.subscription => 5000 * months,
+      PaymentPurpose.listingFee => 10000,
+      PaymentPurpose.commissionInvoice => asInt(asJson(_j('commission_invoice'))['commission_sen']),
+    };
+    return PaymentCheckout(
+      paymentId: 'demo-payment-1',
+      checkoutUrl: 'https://securecheckout.sandbox.hit-pay.com/demo-payment-1',
+      amountSen: amount,
+    );
+  });
+
+  @override
+  Future<PaymentInfo> getPayment(String paymentId) => _later(() {
+    final p = _pendingPayment;
+    final paid = asJson(_j('payment_paid'));
+    if (p == null) return PaymentInfo.fromJson(paid);
+    _pendingPayment = null;
+    switch (p.$1) {
+      case PaymentPurpose.subscription:
+        _subscriptionPaid = true;
+      case PaymentPurpose.listingFee:
+        _listingFeePaid = true;
+      case PaymentPurpose.commissionInvoice:
+        _invoicePaid = true;
+    }
+    final amount = switch (p.$1) {
+      PaymentPurpose.subscription => 5000 * p.$3,
+      PaymentPurpose.listingFee => 10000,
+      PaymentPurpose.commissionInvoice => asInt(asJson(_j('commission_invoice'))['commission_sen']),
+    };
+    return PaymentInfo.fromJson({...paid, 'purpose': paymentPurposeCode(p.$1), 'amount_sen': amount});
+  });
+
+  Json _invoiceJson(Json j) =>
+      _invoicePaid ? {...j, 'status': 'paid', 'paid_at': DateTime.now().toUtc().toIso8601String()} : j;
+
+  @override
+  Future<SellerBilling> getSellerBilling(String wholesalerId) => _later(() {
+    final b = asJson(_j('seller_billing'));
+    if (_listingFeePaid) {
+      b['listing_fee'] = {
+        ...asJson(b['listing_fee']),
+        'paid_at': DateTime.now().toUtc().toIso8601String(),
+        'can_pay': false,
+      };
+    }
+    b['invoices'] = [for (final i in asJsonList(b['invoices'])) _invoiceJson(i)];
+    if (_invoicePaid) b['outstanding_sen'] = 0;
+    return SellerBilling.fromJson(b);
+  });
+
+  @override
+  Future<InvoiceDetail> getCommissionInvoice(String invoiceId) =>
+      _later(() => InvoiceDetail.fromJson(_invoiceJson(asJson(_j('commission_invoice')))));
 }

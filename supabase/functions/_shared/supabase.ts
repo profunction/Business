@@ -66,3 +66,17 @@ export async function rpc<T>(client: SupabaseClient, fn: string, params: Record<
   }
   return unwrap(fn, res);
 }
+
+/**
+ * auth.getUser 的错误是不是 Auth 服务自己的问题（断线、逾时、5xx、429 太忙、回的不是 JSON）：
+ * 这时候 JWT 可能是好的，不能回 401（App 会当成登录过期、把导入标 AUTH 失败）；回 503 QUOTA_UNAVAILABLE
+ * （cause = "AUTH"）：App 已经认得这个代码是「没开始、什么都没改，等一下再传」，不用另外加新的代码。
+ * auth-js 不会丢错，是回 {error}：断线 / 5xx 是 AuthRetryableFetchError（status 0 / 5xx），
+ * 回的不是 JSON 是 AuthUnknownError；JWT 不对（401 / 403、session 不在了）才是真的 UNAUTHORIZED。
+ */
+export function authUnavailable(e: unknown): boolean {
+  if (!e || typeof e !== "object") return false;
+  const { name, status } = e as { name?: unknown; status?: unknown };
+  if (name === "AuthRetryableFetchError" || name === "AuthUnknownError") return true;
+  return typeof status === "number" && (status === 0 || status === 429 || status >= 500);
+}

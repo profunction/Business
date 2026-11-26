@@ -12,10 +12,12 @@ final List<_Dest> _destinations = [
   (path: '/dashboard', icon: Icons.dashboard_outlined, label: (l) => l.navDashboard),
   (path: '/orders', icon: Icons.receipt_long_outlined, label: (l) => l.navOrders),
   (path: '/followup', icon: Icons.phone_in_talk_outlined, label: (l) => l.navFollowup),
+  (path: '/whatsapp-orders', icon: Icons.chat_outlined, label: (l) => l.navWhatsappOrders),
   (path: '/place-order', icon: Icons.add_shopping_cart, label: (l) => l.navPlaceOrder),
   (path: '/wholesalers', icon: Icons.store_outlined, label: (l) => l.navWholesalers),
   (path: '/subscriptions', icon: Icons.card_membership_outlined, label: (l) => l.navSubscriptions),
   (path: '/commission', icon: Icons.request_quote_outlined, label: (l) => l.navCommission),
+  (path: '/payments', icon: Icons.payments_outlined, label: (l) => l.navPayments),
   (path: '/audit', icon: Icons.history, label: (l) => l.navAudit),
 ];
 

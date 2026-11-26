@@ -1,0 +1,129 @@
+{
+    "id": "e611f54c-483c-41d1-a487-4dad202cc79a",
+    "items": [
+        {
+            "id": "654181b3-a92a-4f7c-bbd3-bcb0183c604e",
+            "qty": 2,
+            "said": "两箱十六安士杯",
+            "unit": "carton",
+            "pack_qty": 1000,
+            "orderable": true,
+            "confidence": 0.93,
+            "product_id": "180d9c66-f012-4523-a396-a0a1d7fb7881",
+            "product_name": "16安士 PP杯 95口径",
+            "stock_status": "in_stock",
+            "min_order_qty": 1,
+            "wholesaler_id": "00000000-0000-4000-a000-00000000000a",
+            "unit_price_sen": 8500,
+            "wholesaler_name": "示范批发 A：新山包装行"
+        },
+        {
+            "id": "0bd136a0-6852-4c52-b454-77d9c77d8706",
+            "qty": 2,
+            "said": "两箱九五平盖",
+            "unit": "carton",
+            "pack_qty": 1000,
+            "orderable": true,
+            "confidence": 0.90,
+            "product_id": "1d9389cc-4a5b-41d1-95be-3135b8fca00e",
+            "product_name": "95 平盖",
+            "stock_status": "in_stock",
+            "min_order_qty": 1,
+            "wholesaler_id": "00000000-0000-4000-a000-00000000000a",
+            "unit_price_sen": 4500,
+            "wholesaler_name": "示范批发 A：新山包装行"
+        },
+        {
+            "id": "059dec06-ae3f-4862-970e-815566ec864a",
+            "qty": 1,
+            "said": "一包黑色吸管",
+            "unit": "pack",
+            "pack_qty": 250,
+            "orderable": true,
+            "confidence": 0.62,
+            "product_id": "8cda68ff-d45e-4eac-a294-7361187fd934",
+            "product_name": "黑色吸管 6mm 独立包",
+            "stock_status": "in_stock",
+            "min_order_qty": 2,
+            "wholesaler_id": "00000000-0000-4000-a000-00000000000a",
+            "unit_price_sen": 950,
+            "wholesaler_name": "示范批发 A：新山包装行"
+        }
+    ],
+    "quote": {
+        "groups": [
+            {
+                "lines": [
+                    {
+                        "qty": 2,
+                        "unit": "carton",
+                        "problem": null,
+                        "pack_qty": 1000,
+                        "product_id": "180d9c66-f012-4523-a396-a0a1d7fb7881",
+                        "product_name": "16安士 PP杯 95口径",
+                        "min_order_qty": 1,
+                        "line_total_sen": 17000,
+                        "unit_price_sen": 8500
+                    },
+                    {
+                        "qty": 2,
+                        "unit": "carton",
+                        "problem": null,
+                        "pack_qty": 1000,
+                        "product_id": "1d9389cc-4a5b-41d1-95be-3135b8fca00e",
+                        "product_name": "95 平盖",
+                        "min_order_qty": 1,
+                        "line_total_sen": 9000,
+                        "unit_price_sen": 4500
+                    },
+                    {
+                        "qty": 1,
+                        "unit": "pack",
+                        "problem": "BELOW_MIN_QTY",
+                        "pack_qty": 250,
+                        "product_id": "8cda68ff-d45e-4eac-a294-7361187fd934",
+                        "product_name": "黑色吸管 6mm 独立包",
+                        "min_order_qty": 2,
+                        "line_total_sen": 950,
+                        "unit_price_sen": 950
+                    }
+                ],
+                "problem": null,
+                "short_by_sen": 0,
+                "min_order_sen": 5000,
+                "wholesaler_id": "00000000-0000-4000-a000-00000000000a",
+                "wholesaler_name": "示范批发 A：新山包装行",
+                "shipping_fee_sen": 0,
+                "goods_subtotal_sen": 26000,
+                "free_shipping_min_sen": 15000,
+                "expected_delivery_date": "2026-11-27"
+            }
+        ],
+        "shop_id": "00000000-0000-4000-b000-000000000001",
+        "can_place": false,
+        "total_sen": 26000,
+        "goods_total_sen": 26000,
+        "shipping_total_sen": 0
+    },
+    "source": "app_voice",
+    "status": "pending_review",
+    "shop_id": "00000000-0000-4000-b000-000000000001",
+    "language": "zh",
+    "has_audio": true,
+    "shop_name": "阿明茶餐室",
+    "unmatched": [
+        {
+            "said": "明天早上十点前送",
+            "reason": "note"
+        }
+    ],
+    "created_at": "2026-11-26T04:49:03.393755+00:00",
+    "error_code": null,
+    "transcript": "两箱十六安士杯，两箱九五平盖，还有一包黑色吸管，明天早上十点前送",
+    "updated_at": "2026-11-26T04:49:03.393755+00:00",
+    "checkout_id": null,
+    "reviewed_at": null,
+    "sender_phone": null,
+    "reject_reason": null,
+    "whatsapp_window_open": null
+}

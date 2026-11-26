@@ -12,6 +12,16 @@ final sellerHomeProvider = FutureProvider.autoDispose<SellerHome>(
   (ref) => ref.watch(apiProvider).getSellerHome(ref.watch(wholesalerIdProvider)),
 );
 
+/// 收费页：创始上架费、佣金、账单（get_seller_billing）
+final sellerBillingProvider = FutureProvider.autoDispose<SellerBilling>(
+  (ref) => ref.watch(apiProvider).getSellerBilling(ref.watch(wholesalerIdProvider)),
+);
+
+/// 一张佣金账单的明细
+final invoiceDetailProvider = FutureProvider.autoDispose.family<InvoiceDetail, String>(
+  (ref, id) => ref.watch(apiProvider).getCommissionInvoice(id),
+);
+
 /// 订单列表的三个分页
 enum SellerOrdersTab { pending, today, all }
 

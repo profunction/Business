@@ -13,12 +13,12 @@
   },
   "tasks": {
     "test": "deno test --allow-env --allow-read --allow-import=cdn.sheetjs.com,jsr.io,registry.npmjs.org tests/",
-    "check": "deno check --allow-import=cdn.sheetjs.com,jsr.io,registry.npmjs.org _shared/ dispatch-notifications/ whatsapp-webhook/ parse-price-list/ tests/ bundle.ts",
+    "check": "deno check --allow-import=cdn.sheetjs.com,jsr.io,registry.npmjs.org _shared/ dispatch-notifications/ whatsapp-webhook/ parse-price-list/ voice-order/ create-payment/ payment-webhook/ tests/ bundle.ts",
     "lint": "deno lint",
     "fmt": "deno fmt --check",
     "bundle": "deno run --allow-run --allow-read --allow-write=_dist --allow-env --allow-import=cdn.sheetjs.com,jsr.io,registry.npmjs.org bundle.ts",
     "serve": "deno task bundle && supabase --workdir ../.. functions serve",
-    "deploy": "deno task bundle && supabase --workdir ../.. functions deploy dispatch-notifications whatsapp-webhook parse-price-list --yes"
+    "deploy": "deno task bundle && supabase --workdir ../.. functions deploy dispatch-notifications whatsapp-webhook parse-price-list voice-order create-payment payment-webhook --yes"
   },
   "exclude": [
     "_dist/"

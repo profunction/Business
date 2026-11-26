@@ -2,7 +2,9 @@
 // 平台自动给：SUPABASE_URL、SUPABASE_SECRET_KEYS、SUPABASE_PUBLISHABLE_KEYS（JSON，取 "default"），
 // 旧项目退回 SUPABASE_SERVICE_ROLE_KEY / SUPABASE_ANON_KEY。
 // 自己设（名字不能以 SUPABASE_ 开头）：FCM_SERVICE_ACCOUNT_JSON、WHATSAPP_TOKEN、WHATSAPP_PHONE_NUMBER_ID、
-// WHATSAPP_APP_SECRET、WHATSAPP_VERIFY_TOKEN、WHATSAPP_GRAPH_VERSION（默认 v27.0）、ANTHROPIC_API_KEY。
+// WHATSAPP_APP_SECRET、WHATSAPP_VERIFY_TOKEN、WHATSAPP_GRAPH_VERSION（默认 v27.0）、ANTHROPIC_API_KEY、
+// ELEVENLABS_API_KEY（语音转文字）、STT_MODEL（默认 scribe_v2）、
+// HITPAY_API_KEY + HITPAY_SALT（付款网关）、HITPAY_ENV（sandbox 默认 / production）、PAYMENT_RETURN_URL（付完回到哪里，https）。
 // 可以选设的服务没设定时回传 null（调用的地方跳过并在日志说明）。
 
 export class ConfigError extends Error {
@@ -115,9 +117,52 @@ export function anthropicApiKey(): string | null {
   return get("ANTHROPIC_API_KEY");
 }
 
+/** 语音转文字（ElevenLabs Scribe）。没设钥匙 → null */
+export function sttConfig(): { apiKey: string; model: string } | null {
+  const apiKey = get("ELEVENLABS_API_KEY");
+  if (!apiKey) return null;
+  const model = get("STT_MODEL") ?? "scribe_v2";
+  return { apiKey, model: /^[a-z0-9_]{1,40}$/.test(model) ? model : "scribe_v2" };
+}
+
 /** 整数环境变量（测试或付费方案调整时间预算用）；没设或不合理就用默认值。 */
 export function intEnv(name: string, fallback: number, min: number, max: number): number {
   const raw = get(name);
   const n = raw == null ? NaN : Number(raw);
   return Number.isInteger(n) && n >= min && n <= max ? n : fallback;
+}
+
+export interface PaymentGatewayConfig {
+  gateway: "hitpay";
+  apiKey: string;
+  /** webhook 签名用的 salt（Dashboard → Developers → Webhook endpoints） */
+  salt: string | null;
+  baseUrl: string;
+  /** 付完浏览器回到哪里（App 的网页 / deep link 的 https 网址）；没设 → 网关自己的「付款成功」页 */
+  returnUrl: string | null;
+}
+
+export const HITPAY_URLS = {
+  sandbox: "https://api.sandbox.hit-pay.com/v1",
+  production: "https://api.hit-pay.com/v1",
+} as const;
+
+/** 付款网关（HitPay）。没设 HITPAY_API_KEY → null（create-payment 回 503 PAYMENT_NOT_CONFIGURED）。默认用 sandbox。 */
+export function paymentConfig(): PaymentGatewayConfig | null {
+  const apiKey = get("HITPAY_API_KEY");
+  if (!apiKey) return null;
+  const env = get("HITPAY_ENV") === "production" ? "production" : "sandbox";
+  const ret = get("PAYMENT_RETURN_URL");
+  return {
+    gateway: "hitpay",
+    apiKey,
+    salt: get("HITPAY_SALT"),
+    baseUrl: HITPAY_URLS[env],
+    returnUrl: ret && /^https:\/\/[^\s]+$/.test(ret) ? ret : null,
+  };
+}
+
+/** webhook 只要 salt 就能验签名（开单要 API key） */
+export function paymentWebhookSalt(): string | null {
+  return get("HITPAY_SALT");
 }

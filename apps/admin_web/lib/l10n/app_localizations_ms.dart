@@ -948,4 +948,204 @@ class L10nMs extends L10n {
 
   @override
   String get auditActDelete => 'Padam';
+
+  @override
+  String get navWhatsappOrders => 'Pesanan WhatsApp';
+
+  @override
+  String get waOrdersHint =>
+      'Pesanan yang kedai hantar melalui WhatsApp (teks atau suara). AI sediakan draf dahulu: semak, betulkan, kemudian buat pesanan untuk kedai. Yang ditolak akan dibalas dengan sebab melalui WhatsApp (dalam 24 jam).';
+
+  @override
+  String get waOrdersEmpty => 'Tiada pesanan WhatsApp untuk diuruskan sekarang';
+
+  @override
+  String get waVoice => 'Suara';
+
+  @override
+  String get waText => 'Teks';
+
+  @override
+  String waItems(int count) {
+    return '$count barang';
+  }
+
+  @override
+  String waUnmatchedCount(int count) {
+    return '$count tidak dipadankan';
+  }
+
+  @override
+  String get waWindowOpen => 'Dalam 24 jam: boleh balas di WhatsApp';
+
+  @override
+  String get waWindowClosed => 'Lebih 24 jam: tidak boleh balas di WhatsApp, sila telefon';
+
+  @override
+  String waAiFailed(String code) {
+    return 'AI tidak dapat memproses ($code). Sila dengar / baca sendiri';
+  }
+
+  @override
+  String get waMessage => 'Kata kedai';
+
+  @override
+  String get waNoTranscript => '(Tiada teks: nota suara tidak ditranskripsi)';
+
+  @override
+  String get waUnmatched => 'Frasa yang tidak dipadankan dengan barang';
+
+  @override
+  String get waAddItem => 'Tambah barang';
+
+  @override
+  String get waRemove => 'Buang';
+
+  @override
+  String waSubmit(String total) {
+    return 'Buat pesanan untuk kedai $total';
+  }
+
+  @override
+  String get waReject => 'Tolak';
+
+  @override
+  String get waRejectReason => 'Sebab (dihantar kepada kedai melalui WhatsApp)';
+
+  @override
+  String waSubmitted(String orders) {
+    return 'Pesanan dibuat: $orders';
+  }
+
+  @override
+  String get waRejectedDone => 'Ditolak. Balasan WhatsApp telah dijadualkan';
+
+  @override
+  String get waDone => 'Ini sudah diuruskan';
+
+  @override
+  String get waSearchProduct => 'Cari nama barang';
+
+  @override
+  String get waNoProducts => 'Tiada barang dijumpai';
+
+  @override
+  String get waEmptyDraft => 'Draf belum ada barang';
+
+  @override
+  String get waNotFound => 'Draf ini tidak dijumpai';
+
+  @override
+  String waSaid(String said) {
+    return 'Kedai sebut: \"$said\"';
+  }
+
+  @override
+  String get waUnsure => 'AI kurang pasti';
+
+  @override
+  String get waTagAiFailed => 'AI gagal';
+
+  @override
+  String get waTagWindowClosed => 'Lebih 24 jam';
+
+  @override
+  String get auditActSaveDraft => 'Ubah draf pesanan';
+
+  @override
+  String get auditActSubmitDraft => 'Buat pesanan WhatsApp untuk kedai';
+
+  @override
+  String get auditActRejectDraft => 'Tolak draf pesanan';
+
+  @override
+  String get navPayments => 'Bayaran';
+
+  @override
+  String get paymentsEmpty => 'Tiada bayaran';
+
+  @override
+  String get payReviewOnly => 'Perlu tindakan sahaja';
+
+  @override
+  String payNeedsReview(String reason) {
+    return 'Perlu tindakan: $reason';
+  }
+
+  @override
+  String get purposeSubscription => 'Langganan pembeli';
+
+  @override
+  String get purposeListingFee => 'Yuran penyenaraian pengasas';
+
+  @override
+  String get purposeCommission => 'Invois komisen';
+
+  @override
+  String get payStatusPending => 'Menunggu';
+
+  @override
+  String get payStatusPaid => 'Dibayar';
+
+  @override
+  String get payStatusFailed => 'Gagal';
+
+  @override
+  String get payStatusRefunded => 'Dipulangkan';
+
+  @override
+  String get colMethod => 'Kaedah';
+
+  @override
+  String get colReference => 'Rujukan gateway';
+
+  @override
+  String get colTime => 'Masa';
+
+  @override
+  String monthsN(int n) {
+    return '$n bulan';
+  }
+
+  @override
+  String get payLink => 'Pautan bayaran';
+
+  @override
+  String get payLinkTitle => 'Pautan bayaran';
+
+  @override
+  String payLinkAmount(String amount) {
+    return 'Jumlah $amount (dikira oleh pelayan)';
+  }
+
+  @override
+  String get payLinkHelp =>
+      'Salin dan hantar melalui WhatsApp. Mereka boleh bayar dengan FPX, DuitNow atau e-dompet; bayaran direkod secara automatik.';
+
+  @override
+  String get payLinkCopy => 'Salin';
+
+  @override
+  String get payLinkCopied => 'Disalin';
+
+  @override
+  String get wsListingFeePaid => 'Yuran penyenaraian dibayar';
+
+  @override
+  String get wsListingFeeUnpaid => 'Yuran penyenaraian belum dibayar';
+
+  @override
+  String get wsMarkListingFee => 'Tanda yuran penyenaraian dibayar';
+
+  @override
+  String get errNothingDue => 'Sudah dibayar';
+
+  @override
+  String get errPaymentNotConfigured => 'Gateway bayaran belum ditetapkan (HITPAY_API_KEY)';
+
+  @override
+  String get errGateway => 'Gateway bayaran tidak tersedia, sila cuba lagi nanti';
+
+  @override
+  String get errTooManyPayments => 'Terlalu banyak pautan bayaran, sila tunggu';
 }

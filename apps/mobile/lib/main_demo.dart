@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'app/billing_config.dart';
 import 'app/providers.dart';
 import 'demo/demo_api.dart';
 import 'demo/demo_session.dart';
@@ -28,8 +29,20 @@ Future<void> main() async {
   runApp(
     ProviderScope(
       retry: (_, _) => null,
-      overrides: [apiProvider.overrideWithValue(api), sessionProvider.overrideWith((ref) => session)],
+      overrides: [
+        apiProvider.overrideWithValue(api),
+        sessionProvider.overrideWith((ref) => session),
+        // 示范模式没有真的网关：不开浏览器，按「我付好了」就当作付了
+        paymentLauncherProvider.overrideWithValue(const DemoPaymentLauncher()),
+      ],
       child: WholesaleApp(session: session),
     ),
   );
+}
+
+class DemoPaymentLauncher implements PaymentLauncher {
+  const DemoPaymentLauncher();
+
+  @override
+  Future<bool> open(Uri url) async => true;
 }

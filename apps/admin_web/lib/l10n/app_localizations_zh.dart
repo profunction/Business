@@ -945,4 +945,202 @@ class L10nZh extends L10n {
 
   @override
   String get auditActDelete => '删除';
+
+  @override
+  String get navWhatsappOrders => 'WhatsApp 订单';
+
+  @override
+  String get waOrdersHint => '老板用 WhatsApp 发来的订单（文字或语音），AI 先做好草稿。看一下、改好再代老板下单；不处理的会用 WhatsApp 回原因（24 小时内）。';
+
+  @override
+  String get waOrdersEmpty => '现在没有要处理的 WhatsApp 订单';
+
+  @override
+  String get waVoice => '语音';
+
+  @override
+  String get waText => '文字';
+
+  @override
+  String waItems(int count) {
+    return '$count 样';
+  }
+
+  @override
+  String waUnmatchedCount(int count) {
+    return '$count 句没对上';
+  }
+
+  @override
+  String get waWindowOpen => '24 小时内：可以用 WhatsApp 回';
+
+  @override
+  String get waWindowClosed => '超过 24 小时：WhatsApp 回不了，请打电话';
+
+  @override
+  String waAiFailed(String code) {
+    return 'AI 没做好（$code），请自己听 / 看';
+  }
+
+  @override
+  String get waMessage => '老板说的';
+
+  @override
+  String get waNoTranscript => '（没有文字：语音没转成文字）';
+
+  @override
+  String get waUnmatched => '没对上商品的话';
+
+  @override
+  String get waAddItem => '加商品';
+
+  @override
+  String get waRemove => '删掉';
+
+  @override
+  String waSubmit(String total) {
+    return '代老板下单 $total';
+  }
+
+  @override
+  String get waReject => '不处理';
+
+  @override
+  String get waRejectReason => '原因（会用 WhatsApp 回老板）';
+
+  @override
+  String waSubmitted(String orders) {
+    return '已经下单：$orders';
+  }
+
+  @override
+  String get waRejectedDone => '不处理，已经排好 WhatsApp 回复';
+
+  @override
+  String get waDone => '这张已经处理了';
+
+  @override
+  String get waSearchProduct => '搜商品名字';
+
+  @override
+  String get waNoProducts => '找不到商品';
+
+  @override
+  String get waEmptyDraft => '草稿里还没有商品';
+
+  @override
+  String get waNotFound => '找不到这张草稿';
+
+  @override
+  String waSaid(String said) {
+    return '老板说：「$said」';
+  }
+
+  @override
+  String get waUnsure => 'AI 不太确定';
+
+  @override
+  String get waTagAiFailed => 'AI 没做好';
+
+  @override
+  String get waTagWindowClosed => '超过 24 小时';
+
+  @override
+  String get auditActSaveDraft => '改订单草稿';
+
+  @override
+  String get auditActSubmitDraft => '代老板送出 WhatsApp 订单';
+
+  @override
+  String get auditActRejectDraft => '不处理订单草稿';
+
+  @override
+  String get navPayments => '付款记录';
+
+  @override
+  String get paymentsEmpty => '没有付款记录';
+
+  @override
+  String get payReviewOnly => '只看要处理的';
+
+  @override
+  String payNeedsReview(String reason) {
+    return '要处理：$reason';
+  }
+
+  @override
+  String get purposeSubscription => '买家月费';
+
+  @override
+  String get purposeListingFee => '创始上架费';
+
+  @override
+  String get purposeCommission => '佣金账单';
+
+  @override
+  String get payStatusPending => '等付款';
+
+  @override
+  String get payStatusPaid => '已付';
+
+  @override
+  String get payStatusFailed => '没付成';
+
+  @override
+  String get payStatusRefunded => '已退款';
+
+  @override
+  String get colMethod => '方式';
+
+  @override
+  String get colReference => '网关单号';
+
+  @override
+  String get colTime => '时间';
+
+  @override
+  String monthsN(int n) {
+    return '$n 个月';
+  }
+
+  @override
+  String get payLink => '付款链接';
+
+  @override
+  String get payLinkTitle => '付款链接';
+
+  @override
+  String payLinkAmount(String amount) {
+    return '金额 $amount（服务器算的）';
+  }
+
+  @override
+  String get payLinkHelp => '复制后用 WhatsApp 发给对方。可以用 FPX 网银、DuitNow、电子钱包付；付了系统自动记下来。';
+
+  @override
+  String get payLinkCopy => '复制';
+
+  @override
+  String get payLinkCopied => '复制好了';
+
+  @override
+  String get wsListingFeePaid => '上架费已付';
+
+  @override
+  String get wsListingFeeUnpaid => '上架费未付';
+
+  @override
+  String get wsMarkListingFee => '标记上架费已付';
+
+  @override
+  String get errNothingDue => '已经付过了';
+
+  @override
+  String get errPaymentNotConfigured => '付款网关还没设定（HITPAY_API_KEY）';
+
+  @override
+  String get errGateway => '付款网关暂时不能用，请等一下再试';
+
+  @override
+  String get errTooManyPayments => '开太多付款链接了，请等一下';
 }

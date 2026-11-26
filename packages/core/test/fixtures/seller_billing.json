@@ -1,0 +1,36 @@
+{
+    "invoices": [
+        {
+            "id": "9a0cb11e-470d-4880-ab99-0365bd617c03",
+            "status": "issued",
+            "gmv_sen": 28100,
+            "paid_at": null,
+            "due_date": "2026-12-10",
+            "issued_at": "2026-11-26T05:46:24.483135+00:00",
+            "invoice_no": "INV2610-0001",
+            "order_count": 1,
+            "period_month": "2026-10-01",
+            "commission_sen": 281
+        }
+    ],
+    "commission": {
+        "rate": 0.0100,
+        "rate_source": "founding"
+    },
+    "this_month": {
+        "gmv_sen": 0,
+        "order_count": 0,
+        "period_month": "2026-11-01",
+        "commission_sen": 0
+    },
+    "listing_fee": {
+        "can_pay": true,
+        "fee_sen": 10000,
+        "paid_at": null,
+        "seats_left": 98,
+        "founding_no": 1,
+        "is_founding": true
+    },
+    "wholesaler_id": "00000000-0000-4000-a000-00000000000a",
+    "outstanding_sen": 281
+}

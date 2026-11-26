@@ -1,0 +1,32 @@
+[
+    {
+        "id": "9c4c7b44-491c-4fbb-9d35-17a8fadbfe27",
+        "source": "whatsapp_text",
+        "status": "pending_review",
+        "shop_id": "00000000-0000-4000-b000-000000000002",
+        "shop_name": "Kedai Runcit Siti",
+        "created_at": "2026-11-26T04:49:03.406439+00:00",
+        "error_code": null,
+        "item_count": 1,
+        "shop_phone": "60120000004",
+        "transcript": "Salam boss, nak 3 kotak bekas 650ml esok pagi",
+        "sender_phone": "60120000004",
+        "unmatched_count": 1,
+        "whatsapp_window_open": true
+    },
+    {
+        "id": "341e1b71-b8ea-4679-acc1-2cdaf7f5d6b8",
+        "source": "whatsapp_voice",
+        "status": "pending_review",
+        "shop_id": "00000000-0000-4000-b000-000000000001",
+        "shop_name": "阿明茶餐室",
+        "created_at": "2026-11-26T04:49:03.411759+00:00",
+        "error_code": "STT_NOT_CONFIGURED",
+        "item_count": 0,
+        "shop_phone": "60120000001",
+        "transcript": null,
+        "sender_phone": "60120000001",
+        "unmatched_count": 0,
+        "whatsapp_window_open": true
+    }
+]

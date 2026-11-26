@@ -1850,6 +1850,366 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'删除'**
   String get auditActDelete;
+
+  /// No description provided for @navWhatsappOrders.
+  ///
+  /// In zh, this message translates to:
+  /// **'WhatsApp 订单'**
+  String get navWhatsappOrders;
+
+  /// No description provided for @waOrdersHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'老板用 WhatsApp 发来的订单（文字或语音），AI 先做好草稿。看一下、改好再代老板下单；不处理的会用 WhatsApp 回原因（24 小时内）。'**
+  String get waOrdersHint;
+
+  /// No description provided for @waOrdersEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'现在没有要处理的 WhatsApp 订单'**
+  String get waOrdersEmpty;
+
+  /// No description provided for @waVoice.
+  ///
+  /// In zh, this message translates to:
+  /// **'语音'**
+  String get waVoice;
+
+  /// No description provided for @waText.
+  ///
+  /// In zh, this message translates to:
+  /// **'文字'**
+  String get waText;
+
+  /// No description provided for @waItems.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 样'**
+  String waItems(int count);
+
+  /// No description provided for @waUnmatchedCount.
+  ///
+  /// In zh, this message translates to:
+  /// **'{count} 句没对上'**
+  String waUnmatchedCount(int count);
+
+  /// No description provided for @waWindowOpen.
+  ///
+  /// In zh, this message translates to:
+  /// **'24 小时内：可以用 WhatsApp 回'**
+  String get waWindowOpen;
+
+  /// No description provided for @waWindowClosed.
+  ///
+  /// In zh, this message translates to:
+  /// **'超过 24 小时：WhatsApp 回不了，请打电话'**
+  String get waWindowClosed;
+
+  /// No description provided for @waAiFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 没做好（{code}），请自己听 / 看'**
+  String waAiFailed(String code);
+
+  /// No description provided for @waMessage.
+  ///
+  /// In zh, this message translates to:
+  /// **'老板说的'**
+  String get waMessage;
+
+  /// No description provided for @waNoTranscript.
+  ///
+  /// In zh, this message translates to:
+  /// **'（没有文字：语音没转成文字）'**
+  String get waNoTranscript;
+
+  /// No description provided for @waUnmatched.
+  ///
+  /// In zh, this message translates to:
+  /// **'没对上商品的话'**
+  String get waUnmatched;
+
+  /// No description provided for @waAddItem.
+  ///
+  /// In zh, this message translates to:
+  /// **'加商品'**
+  String get waAddItem;
+
+  /// No description provided for @waRemove.
+  ///
+  /// In zh, this message translates to:
+  /// **'删掉'**
+  String get waRemove;
+
+  /// No description provided for @waSubmit.
+  ///
+  /// In zh, this message translates to:
+  /// **'代老板下单 {total}'**
+  String waSubmit(String total);
+
+  /// No description provided for @waReject.
+  ///
+  /// In zh, this message translates to:
+  /// **'不处理'**
+  String get waReject;
+
+  /// No description provided for @waRejectReason.
+  ///
+  /// In zh, this message translates to:
+  /// **'原因（会用 WhatsApp 回老板）'**
+  String get waRejectReason;
+
+  /// No description provided for @waSubmitted.
+  ///
+  /// In zh, this message translates to:
+  /// **'已经下单：{orders}'**
+  String waSubmitted(String orders);
+
+  /// No description provided for @waRejectedDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'不处理，已经排好 WhatsApp 回复'**
+  String get waRejectedDone;
+
+  /// No description provided for @waDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'这张已经处理了'**
+  String get waDone;
+
+  /// No description provided for @waSearchProduct.
+  ///
+  /// In zh, this message translates to:
+  /// **'搜商品名字'**
+  String get waSearchProduct;
+
+  /// No description provided for @waNoProducts.
+  ///
+  /// In zh, this message translates to:
+  /// **'找不到商品'**
+  String get waNoProducts;
+
+  /// No description provided for @waEmptyDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'草稿里还没有商品'**
+  String get waEmptyDraft;
+
+  /// No description provided for @waNotFound.
+  ///
+  /// In zh, this message translates to:
+  /// **'找不到这张草稿'**
+  String get waNotFound;
+
+  /// No description provided for @waSaid.
+  ///
+  /// In zh, this message translates to:
+  /// **'老板说：「{said}」'**
+  String waSaid(String said);
+
+  /// No description provided for @waUnsure.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 不太确定'**
+  String get waUnsure;
+
+  /// No description provided for @waTagAiFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 没做好'**
+  String get waTagAiFailed;
+
+  /// No description provided for @waTagWindowClosed.
+  ///
+  /// In zh, this message translates to:
+  /// **'超过 24 小时'**
+  String get waTagWindowClosed;
+
+  /// No description provided for @auditActSaveDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'改订单草稿'**
+  String get auditActSaveDraft;
+
+  /// No description provided for @auditActSubmitDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'代老板送出 WhatsApp 订单'**
+  String get auditActSubmitDraft;
+
+  /// No description provided for @auditActRejectDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'不处理订单草稿'**
+  String get auditActRejectDraft;
+
+  /// No description provided for @navPayments.
+  ///
+  /// In zh, this message translates to:
+  /// **'付款记录'**
+  String get navPayments;
+
+  /// No description provided for @paymentsEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'没有付款记录'**
+  String get paymentsEmpty;
+
+  /// No description provided for @payReviewOnly.
+  ///
+  /// In zh, this message translates to:
+  /// **'只看要处理的'**
+  String get payReviewOnly;
+
+  /// No description provided for @payNeedsReview.
+  ///
+  /// In zh, this message translates to:
+  /// **'要处理：{reason}'**
+  String payNeedsReview(String reason);
+
+  /// No description provided for @purposeSubscription.
+  ///
+  /// In zh, this message translates to:
+  /// **'买家月费'**
+  String get purposeSubscription;
+
+  /// No description provided for @purposeListingFee.
+  ///
+  /// In zh, this message translates to:
+  /// **'创始上架费'**
+  String get purposeListingFee;
+
+  /// No description provided for @purposeCommission.
+  ///
+  /// In zh, this message translates to:
+  /// **'佣金账单'**
+  String get purposeCommission;
+
+  /// No description provided for @payStatusPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'等付款'**
+  String get payStatusPending;
+
+  /// No description provided for @payStatusPaid.
+  ///
+  /// In zh, this message translates to:
+  /// **'已付'**
+  String get payStatusPaid;
+
+  /// No description provided for @payStatusFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'没付成'**
+  String get payStatusFailed;
+
+  /// No description provided for @payStatusRefunded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已退款'**
+  String get payStatusRefunded;
+
+  /// No description provided for @colMethod.
+  ///
+  /// In zh, this message translates to:
+  /// **'方式'**
+  String get colMethod;
+
+  /// No description provided for @colReference.
+  ///
+  /// In zh, this message translates to:
+  /// **'网关单号'**
+  String get colReference;
+
+  /// No description provided for @colTime.
+  ///
+  /// In zh, this message translates to:
+  /// **'时间'**
+  String get colTime;
+
+  /// No description provided for @monthsN.
+  ///
+  /// In zh, this message translates to:
+  /// **'{n} 个月'**
+  String monthsN(int n);
+
+  /// No description provided for @payLink.
+  ///
+  /// In zh, this message translates to:
+  /// **'付款链接'**
+  String get payLink;
+
+  /// No description provided for @payLinkTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'付款链接'**
+  String get payLinkTitle;
+
+  /// No description provided for @payLinkAmount.
+  ///
+  /// In zh, this message translates to:
+  /// **'金额 {amount}（服务器算的）'**
+  String payLinkAmount(String amount);
+
+  /// No description provided for @payLinkHelp.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制后用 WhatsApp 发给对方。可以用 FPX 网银、DuitNow、电子钱包付；付了系统自动记下来。'**
+  String get payLinkHelp;
+
+  /// No description provided for @payLinkCopy.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制'**
+  String get payLinkCopy;
+
+  /// No description provided for @payLinkCopied.
+  ///
+  /// In zh, this message translates to:
+  /// **'复制好了'**
+  String get payLinkCopied;
+
+  /// No description provided for @wsListingFeePaid.
+  ///
+  /// In zh, this message translates to:
+  /// **'上架费已付'**
+  String get wsListingFeePaid;
+
+  /// No description provided for @wsListingFeeUnpaid.
+  ///
+  /// In zh, this message translates to:
+  /// **'上架费未付'**
+  String get wsListingFeeUnpaid;
+
+  /// No description provided for @wsMarkListingFee.
+  ///
+  /// In zh, this message translates to:
+  /// **'标记上架费已付'**
+  String get wsMarkListingFee;
+
+  /// No description provided for @errNothingDue.
+  ///
+  /// In zh, this message translates to:
+  /// **'已经付过了'**
+  String get errNothingDue;
+
+  /// No description provided for @errPaymentNotConfigured.
+  ///
+  /// In zh, this message translates to:
+  /// **'付款网关还没设定（HITPAY_API_KEY）'**
+  String get errPaymentNotConfigured;
+
+  /// No description provided for @errGateway.
+  ///
+  /// In zh, this message translates to:
+  /// **'付款网关暂时不能用，请等一下再试'**
+  String get errGateway;
+
+  /// No description provided for @errTooManyPayments.
+  ///
+  /// In zh, this message translates to:
+  /// **'开太多付款链接了，请等一下'**
+  String get errTooManyPayments;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

@@ -44,6 +44,7 @@ interface Db {
   graph: Record<string, unknown>[];
   buttonResult: (p: Record<string, unknown>) => Response;
   failRecord?: Response;
+  intake?: (p: Record<string, unknown>) => Response;
 }
 
 function backend(db: Db) {
@@ -54,7 +55,10 @@ function backend(db: Db) {
       const params = c.json();
       db.rpc.push({ name, params });
       if (name === "handle_whatsapp_button") return db.buttonResult(params);
-      if (name === "record_whatsapp_message") return db.failRecord ?? Response.json({ result: "recorded", id: "m1" });
+      if (name === "record_whatsapp_message") {
+        return db.failRecord ?? Response.json({ result: "recorded", id: crypto.randomUUID() });
+      }
+      if (name === "reserve_whatsapp_order") return db.intake?.(params) ?? Response.json({ result: "wholesaler" });
       if (name === "update_whatsapp_status") {
         return Response.json({ result: "updated", delivery_status: params.p_status });
       }
@@ -205,7 +209,9 @@ Deno.test("POST：一次多笔（按钮、BSUID 按钮、重复、文字、语�
     assertEquals(res.status, 200);
     assertEquals(await res.json(), { ok: true, events: 8 });
 
-    // 数据库写入照顺序、参数名照 SQL
+    // 数据库写入照顺序、参数名照 SQL（第六步：每条消息记好之后问 reserve_whatsapp_order，这里是批发商的号码，不做草稿）
+    assertEquals(t.db.rpc.filter((r) => r.name === "reserve_whatsapp_order").length, 2);
+    t.db.rpc = t.db.rpc.filter((r) => r.name !== "reserve_whatsapp_order");
     assertEquals(t.db.rpc.map((r) => r.name), [
       "handle_whatsapp_button",
       "handle_whatsapp_button",

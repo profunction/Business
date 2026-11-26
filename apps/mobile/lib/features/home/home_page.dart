@@ -8,6 +8,8 @@ import '../../app/l10n_x.dart';
 import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../widgets/common.dart';
+import '../voice/mic_button.dart';
+import '../voice/voice_draft_page.dart';
 
 /// 买家首页：几个大按钮，最上面是「跟上次一样」
 class HomePage extends ConsumerStatefulWidget {
@@ -77,7 +79,10 @@ class _HomePageState extends ConsumerState<HomePage> {
         value: home,
         onRetry: () => ref.invalidate(buyerHomeProvider),
         builder: (h) => RefreshIndicator(
-          onRefresh: () => ref.refresh(buyerHomeProvider.future),
+          onRefresh: () {
+            ref.invalidate(pendingDraftsProvider);
+            return ref.refresh(buyerHomeProvider.future);
+          },
           child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
@@ -123,9 +128,36 @@ class _HomePageState extends ConsumerState<HomePage> {
                   onTap: () => context.push('/cart'),
                 ),
               ],
+              // 语音下单（第六步）：按住说话，AI 做成草稿，老板确认后才下单
+              const SizedBox(height: 14),
+              const MicButton(),
+              const SizedBox(height: 14),
+              const _PendingDrafts(),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 还没确认的语音订单（录完没按「确认下单」就离开了）
+class _PendingDrafts extends ConsumerWidget {
+  const _PendingDrafts();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final drafts = ref.watch(pendingDraftsProvider).value ?? const [];
+    if (drafts.isEmpty) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: BigTile(
+        key: const Key('voice-pending'),
+        icon: Icons.record_voice_over,
+        title: context.l10n.voicePendingDrafts(drafts.length),
+        subtitle: drafts.first.transcript,
+        color: const Color(0xFFFFE0B2),
+        onTap: () => context.push('/voice-draft/${drafts.first.id}'),
       ),
     );
   }
@@ -142,11 +174,17 @@ class _SubscriptionBanner extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final days = info.trialDaysLeft(DateTime.now());
     if (days != null) {
-      return NoticeBanner(
-        color: AppTheme.successBg,
-        icon: Icons.celebration,
-        text: l.trialBanner(days),
-        textStyle: t.titleMedium,
+      // 点一下看订阅（不加按钮：横幅不会变高，把下面的东西挤下去）
+      return InkWell(
+        key: const Key('banner-subscription'),
+        borderRadius: BorderRadius.circular(16),
+        onTap: () => context.push('/subscription'),
+        child: NoticeBanner(
+          color: AppTheme.successBg,
+          icon: Icons.celebration,
+          text: l.trialBanner(days),
+          textStyle: t.titleMedium,
+        ),
       );
     }
     if (info.hasFullAccess) return const SizedBox.shrink();

@@ -1493,4 +1493,332 @@ class L10nEn extends L10n {
   String sellerOrdersLimited(int count) {
     return 'Only the latest $count orders are shown here';
   }
+
+  @override
+  String get voiceHold => 'Hold to order by voice';
+
+  @override
+  String get voiceHoldHint =>
+      'Hold the button and say what you need (Mandarin, Cantonese, Hokkien, Malay or English), then let go';
+
+  @override
+  String voiceRecording(int seconds) {
+    return 'Recording ${seconds}s… let go to send';
+  }
+
+  @override
+  String get voiceListening => 'The AI is listening…';
+
+  @override
+  String get voiceTooShort => 'Too short. Hold the button and say it again';
+
+  @override
+  String get voiceNoPermission => 'Please allow the microphone to order by voice';
+
+  @override
+  String get voiceDraftTitle => 'Check your voice order';
+
+  @override
+  String get voiceHeard => 'What we heard:';
+
+  @override
+  String voiceYouSaid(String said) {
+    return 'You said: \"$said\"';
+  }
+
+  @override
+  String get voiceUnsure => 'The AI is not sure. Please check this line';
+
+  @override
+  String get voiceUnmatched => 'We could not match these:';
+
+  @override
+  String get voiceFind => 'Find item';
+
+  @override
+  String get voiceSwap => 'Change';
+
+  @override
+  String get voiceRemove => 'Remove';
+
+  @override
+  String get voiceAddItem => 'Add an item';
+
+  @override
+  String get voiceNoItems => 'No items yet. Tap \"Add an item\", or go back and say it again.';
+
+  @override
+  String voiceSubmit(String total) {
+    return 'Place order $total';
+  }
+
+  @override
+  String get voiceDiscard => 'Discard';
+
+  @override
+  String get voiceDiscardConfirm => 'Discard this voice order?';
+
+  @override
+  String get voiceDiscarded => 'Discarded';
+
+  @override
+  String get voiceDone => 'This order has been placed';
+
+  @override
+  String get voiceRejected => 'This voice order was discarded';
+
+  @override
+  String voicePendingDrafts(int count) {
+    return 'You have $count voice order(s) to check';
+  }
+
+  @override
+  String get voicePickTitle => 'Choose an item';
+
+  @override
+  String get voiceSearch => 'Search item name';
+
+  @override
+  String get voicePickEmpty => 'Nothing found. Try another name';
+
+  @override
+  String voiceErrTooMany(int minutes) {
+    return 'Too many voice orders just now. Please wait $minutes minute(s)';
+  }
+
+  @override
+  String get voiceErrNoSpeech => 'We could not hear anything. Hold the phone closer and try again';
+
+  @override
+  String get voiceErrTooLong => 'Too long. Please keep it under one minute';
+
+  @override
+  String get voiceErrUnavailable => 'Voice ordering is not available right now. Please order the usual way';
+
+  @override
+  String get voiceErrNotUnderstood => 'The AI could not understand. Please try again, or order the usual way';
+
+  @override
+  String get voiceErrRecordAgain => 'Something was wrong with the recording. Please record again';
+
+  @override
+  String get voiceErrNoProducts => 'There are no items you can order yet';
+
+  @override
+  String get voiceErrNotPending => 'This voice order has already been handled';
+
+  @override
+  String get voiceErrNotFound => 'This voice order was not found';
+
+  @override
+  String get voiceErrInvalidProduct => 'This item cannot be ordered now. Please choose another';
+
+  @override
+  String get subDetails => 'Subscription details';
+
+  @override
+  String billTrial(int days) {
+    return 'Free trial: $days days left';
+  }
+
+  @override
+  String get billActive => 'Subscribed. You can see all prices.';
+
+  @override
+  String get billPastDue => 'Your subscription has ended';
+
+  @override
+  String billUntil(String date, int days) {
+    return 'Until $date ($days days left)';
+  }
+
+  @override
+  String billGraceUntil(String date) {
+    return 'Renew before $date to keep your price';
+  }
+
+  @override
+  String billCurrentPrice(String price) {
+    return 'Current monthly fee $price';
+  }
+
+  @override
+  String get payChooseMonths => 'How many months?';
+
+  @override
+  String payMonths(int n) {
+    String _temp0 = intl.Intl.pluralLogic(n, locale: localeName, other: '$n months', one: '1 month');
+    return '$_temp0';
+  }
+
+  @override
+  String get payTotal => 'Total';
+
+  @override
+  String payButton(String amount) {
+    return 'Pay $amount';
+  }
+
+  @override
+  String get payMethodsNote => 'FPX online banking, DuitNow, Touch \'n Go, GrabPay, ShopeePay, Boost';
+
+  @override
+  String get payCheck => 'I have paid, check now';
+
+  @override
+  String get payOpenFailed => 'Could not open the payment page. Please try again.';
+
+  @override
+  String payDone(String amount) {
+    return 'Payment of $amount received. Thank you!';
+  }
+
+  @override
+  String get payNotYet => 'Payment not received yet. If you have paid, check again in a moment.';
+
+  @override
+  String get payHistory => 'Payments';
+
+  @override
+  String get payMethodFpx => 'FPX';
+
+  @override
+  String get payMethodDuitnow => 'DuitNow';
+
+  @override
+  String get payMethodEwallet => 'E-wallet';
+
+  @override
+  String get payMethodCard => 'Card';
+
+  @override
+  String get payMethodOther => 'Other';
+
+  @override
+  String get payErrNotReady => 'Online payment is not available yet. Please contact us.';
+
+  @override
+  String get payErrNothingDue => 'This has already been paid';
+
+  @override
+  String get payErrFoundingFull => 'Founding member places are full';
+
+  @override
+  String get payErrTooMany => 'Too many attempts. Please wait and try again.';
+
+  @override
+  String get payErrGateway => 'The payment system is busy. Please try again later.';
+
+  @override
+  String get sellerBillingTitle => 'Fees and invoices';
+
+  @override
+  String get sellerBillingHint => 'Commission invoices, founding listing fee';
+
+  @override
+  String sellerBillingOutstanding(String amount) {
+    return '$amount commission unpaid';
+  }
+
+  @override
+  String sellerCommissionRate(String rate) {
+    return 'Your commission: $rate per order';
+  }
+
+  @override
+  String get sellerCommissionRule =>
+      'Only delivered goods count, not shipping. Out-of-stock and cancelled orders are not charged. You get last month\'s invoice on the 1st.';
+
+  @override
+  String get sellerThisMonthOrders => 'Delivered orders';
+
+  @override
+  String get sellerThisMonthGoods => 'Goods (excl. shipping)';
+
+  @override
+  String get sellerThisMonthCommission => 'Commission this month so far';
+
+  @override
+  String get sellerInvoices => 'Monthly invoices';
+
+  @override
+  String get sellerNoInvoices => 'No invoices yet';
+
+  @override
+  String get listingFeeTitle => 'Founding member listing fee';
+
+  @override
+  String get listingFeePaid => 'Paid. Thank you!';
+
+  @override
+  String listingFeePaidNo(int no) {
+    return 'Founding member no. $no, listing fee paid';
+  }
+
+  @override
+  String listingFeeDue(String fee, int no) {
+    return 'You are founding member no. $no. Listing fee $fee (one time).';
+  }
+
+  @override
+  String listingFeeJoin(String fee, int seats) {
+    return 'Pay $fee (one time) to become a founding member with a lower commission. $seats places left.';
+  }
+
+  @override
+  String get listingFeeFull => 'Founding member places are full';
+
+  @override
+  String get invoiceTitle => 'Commission invoice';
+
+  @override
+  String get invoicePdf => 'Print / save PDF';
+
+  @override
+  String get invoiceDraft => 'Draft';
+
+  @override
+  String get invoiceIssued => 'Unpaid';
+
+  @override
+  String get invoiceOverdue => 'Overdue';
+
+  @override
+  String get invoicePaid => 'Paid';
+
+  @override
+  String get invoiceVoid => 'Void';
+
+  @override
+  String invoiceDue(String date) {
+    return 'due $date';
+  }
+
+  @override
+  String invoicePaidOn(String date) {
+    return 'paid $date';
+  }
+
+  @override
+  String get invoiceCommission => 'Commission';
+
+  @override
+  String get invoiceLines => 'Orders';
+
+  @override
+  String invoiceLineText(String goods, String rate) {
+    return 'Goods $goods x $rate';
+  }
+
+  @override
+  String get invoiceColOrder => 'Order';
+
+  @override
+  String get invoiceColShop => 'Shop';
+
+  @override
+  String get invoiceColGoods => 'Goods';
+
+  @override
+  String get invoiceColRate => 'Rate';
 }

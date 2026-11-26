@@ -948,4 +948,205 @@ class L10nEn extends L10n {
 
   @override
   String get auditActDelete => 'Delete';
+
+  @override
+  String get navWhatsappOrders => 'WhatsApp orders';
+
+  @override
+  String get waOrdersHint =>
+      'Orders shops sent on WhatsApp (text or voice). The AI makes a draft first: check it, fix it, then place the order for the shop. Rejected ones get a WhatsApp reply with the reason (within 24 hours).';
+
+  @override
+  String get waOrdersEmpty => 'No WhatsApp orders to handle right now';
+
+  @override
+  String get waVoice => 'Voice';
+
+  @override
+  String get waText => 'Text';
+
+  @override
+  String waItems(int count) {
+    return '$count item(s)';
+  }
+
+  @override
+  String waUnmatchedCount(int count) {
+    return '$count not matched';
+  }
+
+  @override
+  String get waWindowOpen => 'Within 24 h: can reply on WhatsApp';
+
+  @override
+  String get waWindowClosed => 'Over 24 h: cannot reply on WhatsApp, please call';
+
+  @override
+  String waAiFailed(String code) {
+    return 'The AI could not process it ($code). Please listen / read it yourself';
+  }
+
+  @override
+  String get waMessage => 'What the shop said';
+
+  @override
+  String get waNoTranscript => '(No text: the voice note was not transcribed)';
+
+  @override
+  String get waUnmatched => 'Phrases not matched to a product';
+
+  @override
+  String get waAddItem => 'Add item';
+
+  @override
+  String get waRemove => 'Remove';
+
+  @override
+  String waSubmit(String total) {
+    return 'Place order for shop $total';
+  }
+
+  @override
+  String get waReject => 'Reject';
+
+  @override
+  String get waRejectReason => 'Reason (sent to the shop on WhatsApp)';
+
+  @override
+  String waSubmitted(String orders) {
+    return 'Order placed: $orders';
+  }
+
+  @override
+  String get waRejectedDone => 'Rejected. A WhatsApp reply has been queued';
+
+  @override
+  String get waDone => 'This one has been handled';
+
+  @override
+  String get waSearchProduct => 'Search product name';
+
+  @override
+  String get waNoProducts => 'No products found';
+
+  @override
+  String get waEmptyDraft => 'The draft has no items yet';
+
+  @override
+  String get waNotFound => 'This draft was not found';
+
+  @override
+  String waSaid(String said) {
+    return 'Shop said: \"$said\"';
+  }
+
+  @override
+  String get waUnsure => 'AI not sure';
+
+  @override
+  String get waTagAiFailed => 'AI failed';
+
+  @override
+  String get waTagWindowClosed => 'Over 24 h';
+
+  @override
+  String get auditActSaveDraft => 'Edit order draft';
+
+  @override
+  String get auditActSubmitDraft => 'Place WhatsApp order for shop';
+
+  @override
+  String get auditActRejectDraft => 'Reject order draft';
+
+  @override
+  String get navPayments => 'Payments';
+
+  @override
+  String get paymentsEmpty => 'No payments';
+
+  @override
+  String get payReviewOnly => 'Needs attention only';
+
+  @override
+  String payNeedsReview(String reason) {
+    return 'Needs attention: $reason';
+  }
+
+  @override
+  String get purposeSubscription => 'Buyer subscription';
+
+  @override
+  String get purposeListingFee => 'Founding listing fee';
+
+  @override
+  String get purposeCommission => 'Commission invoice';
+
+  @override
+  String get payStatusPending => 'Pending';
+
+  @override
+  String get payStatusPaid => 'Paid';
+
+  @override
+  String get payStatusFailed => 'Failed';
+
+  @override
+  String get payStatusRefunded => 'Refunded';
+
+  @override
+  String get colMethod => 'Method';
+
+  @override
+  String get colReference => 'Gateway ref';
+
+  @override
+  String get colTime => 'Time';
+
+  @override
+  String monthsN(int n) {
+    String _temp0 = intl.Intl.pluralLogic(n, locale: localeName, other: '$n months', one: '1 month');
+    return '$_temp0';
+  }
+
+  @override
+  String get payLink => 'Payment link';
+
+  @override
+  String get payLinkTitle => 'Payment link';
+
+  @override
+  String payLinkAmount(String amount) {
+    return 'Amount $amount (calculated by the server)';
+  }
+
+  @override
+  String get payLinkHelp =>
+      'Copy and send it on WhatsApp. They can pay with FPX, DuitNow or e-wallets; the payment is recorded automatically.';
+
+  @override
+  String get payLinkCopy => 'Copy';
+
+  @override
+  String get payLinkCopied => 'Copied';
+
+  @override
+  String get wsListingFeePaid => 'Listing fee paid';
+
+  @override
+  String get wsListingFeeUnpaid => 'Listing fee unpaid';
+
+  @override
+  String get wsMarkListingFee => 'Mark listing fee paid';
+
+  @override
+  String get errNothingDue => 'Already paid';
+
+  @override
+  String get errPaymentNotConfigured => 'Payment gateway not configured (HITPAY_API_KEY)';
+
+  @override
+  String get errGateway => 'Payment gateway unavailable, please try again later';
+
+  @override
+  String get errTooManyPayments => 'Too many payment links, please wait';
 }

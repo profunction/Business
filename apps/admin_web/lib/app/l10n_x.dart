@@ -30,9 +30,18 @@ extension L10nText on L10n {
       'SUBSCRIPTION_ALREADY_OPEN' => errSubscriptionOpen,
       'INVALID_INVOICE_STATE' => errInvoiceState,
       'FOUNDING_QUOTA_FULL' => errFoundingFull,
+      'FOUNDING_FULL' => errFoundingFull,
+      'LISTING_FEE_ALREADY_PAID' || 'NOTHING_DUE' => errNothingDue,
+      'PAYMENT_NOT_CONFIGURED' => errPaymentNotConfigured,
+      'GATEWAY_UNAVAILABLE' || 'GATEWAY_AUTH_FAILED' || 'GATEWAY_REJECTED' || 'GATEWAY_BAD_RESPONSE' => errGateway,
+      'TOO_MANY_PAYMENTS' => errTooManyPayments,
       'INVALID_PRODUCT' || 'INVALID_FIELD' => errInvalidProduct,
       'INVALID_NOTE' => errInvalidNote,
       'NO_PRICING_PLAN' => errNoPricingPlan,
+      // WhatsApp 订单（第六步）
+      'DRAFT_NOT_PENDING' => waDone,
+      'DRAFT_EMPTY' => waEmptyDraft,
+      'DRAFT_NOT_FOUND' => waNotFound,
       _ => errUnknown(code),
     };
   }
@@ -115,6 +124,19 @@ extension L10nText on L10n {
     PaymentMethod.other => methodOther,
   };
 
+  String paymentPurpose(PaymentPurpose p) => switch (p) {
+    PaymentPurpose.subscription => purposeSubscription,
+    PaymentPurpose.listingFee => purposeListingFee,
+    PaymentPurpose.commissionInvoice => purposeCommission,
+  };
+
+  String paymentStatus(PaymentStatus s) => switch (s) {
+    PaymentStatus.pending => payStatusPending,
+    PaymentStatus.paid => payStatusPaid,
+    PaymentStatus.failed => payStatusFailed,
+    PaymentStatus.refunded => payStatusRefunded,
+  };
+
   String? cartProblem(CartProblem? p, {int minQty = 1}) => switch (p) {
     null || CartProblem.belowMinOrder => null,
     CartProblem.productUnavailable || CartProblem.unknown => problemProductUnavailable,
@@ -145,6 +167,9 @@ extension L10nText on L10n {
     'admin_generate_invoices' => auditActGenerateInvoices,
     'admin_issue_invoice' => auditActIssueInvoice,
     'admin_mark_invoice_paid' => auditActInvoicePaid,
+    'admin_save_order_draft' => auditActSaveDraft,
+    'admin_submit_order_draft' => auditActSubmitDraft,
+    'admin_reject_order_draft' => auditActRejectDraft,
     'insert' => auditActInsert,
     'update' => auditActUpdate,
     'delete' => auditActDelete,

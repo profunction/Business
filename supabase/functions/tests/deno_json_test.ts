@@ -29,7 +29,7 @@ async function bareSpecifiers(entry: URL): Promise<Set<string>> {
   return bare;
 }
 
-for (const fn of ["dispatch-notifications", "whatsapp-webhook", "parse-price-list"]) {
+for (const fn of FUNCTIONS) {
   Deno.test(`${fn}/deno.json：用到的套件都有，版本跟根目录一样`, async () => {
     const rootMap = await imports("deno.json");
     const fnMap = await imports(`${fn}/deno.json`);
@@ -74,7 +74,7 @@ Deno.test("deno.lock：frozen；直接用到的套件、间接用到的 npm 套�
     assert(/^[0-9a-f]{64}$/.test(v.integrity ?? ""), `${k} integrity`);
   }
   // 部署用各函数自己的 deno.json：那里不能有 lock 档（新格式 edge-runtime 读不懂），也不能指到这一份
-  for (const fn of ["dispatch-notifications", "whatsapp-webhook", "parse-price-list"]) {
+  for (const fn of FUNCTIONS) {
     const fnCfg = JSON.parse(await Deno.readTextFile(new URL(`${fn}/deno.json`, root)));
     assert(!("lock" in fnCfg), `${fn}/deno.json must not configure a lockfile`);
     let exists = true;

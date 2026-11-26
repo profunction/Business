@@ -2546,6 +2546,576 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'这里只显示最近的 {count} 张单'**
   String sellerOrdersLimited(int count);
+
+  /// No description provided for @voiceHold.
+  ///
+  /// In zh, this message translates to:
+  /// **'按住说话下单'**
+  String get voiceHold;
+
+  /// No description provided for @voiceHoldHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'按住按钮，说要买什么（华语、广东话、福建话、马来文、英文都可以），说完放开'**
+  String get voiceHoldHint;
+
+  /// No description provided for @voiceRecording.
+  ///
+  /// In zh, this message translates to:
+  /// **'正在录音 {seconds} 秒…放开就送出'**
+  String voiceRecording(int seconds);
+
+  /// No description provided for @voiceListening.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 正在听…'**
+  String get voiceListening;
+
+  /// No description provided for @voiceTooShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'太短了。请按住按钮再说一次'**
+  String get voiceTooShort;
+
+  /// No description provided for @voiceNoPermission.
+  ///
+  /// In zh, this message translates to:
+  /// **'要允许使用麦克风，才能语音下单'**
+  String get voiceNoPermission;
+
+  /// No description provided for @voiceDraftTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认语音订单'**
+  String get voiceDraftTitle;
+
+  /// No description provided for @voiceHeard.
+  ///
+  /// In zh, this message translates to:
+  /// **'我听到的：'**
+  String get voiceHeard;
+
+  /// No description provided for @voiceYouSaid.
+  ///
+  /// In zh, this message translates to:
+  /// **'你说：「{said}」'**
+  String voiceYouSaid(String said);
+
+  /// No description provided for @voiceUnsure.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 不太确定，请看一下对不对'**
+  String get voiceUnsure;
+
+  /// No description provided for @voiceUnmatched.
+  ///
+  /// In zh, this message translates to:
+  /// **'这些没对上商品：'**
+  String get voiceUnmatched;
+
+  /// No description provided for @voiceFind.
+  ///
+  /// In zh, this message translates to:
+  /// **'找商品'**
+  String get voiceFind;
+
+  /// No description provided for @voiceSwap.
+  ///
+  /// In zh, this message translates to:
+  /// **'换一样'**
+  String get voiceSwap;
+
+  /// No description provided for @voiceRemove.
+  ///
+  /// In zh, this message translates to:
+  /// **'删掉'**
+  String get voiceRemove;
+
+  /// No description provided for @voiceAddItem.
+  ///
+  /// In zh, this message translates to:
+  /// **'加一样'**
+  String get voiceAddItem;
+
+  /// No description provided for @voiceNoItems.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有商品。按「加一样」，或回去再说一次。'**
+  String get voiceNoItems;
+
+  /// No description provided for @voiceSubmit.
+  ///
+  /// In zh, this message translates to:
+  /// **'确认下单 {total}'**
+  String voiceSubmit(String total);
+
+  /// No description provided for @voiceDiscard.
+  ///
+  /// In zh, this message translates to:
+  /// **'不要了'**
+  String get voiceDiscard;
+
+  /// No description provided for @voiceDiscardConfirm.
+  ///
+  /// In zh, this message translates to:
+  /// **'不要这张语音订单？'**
+  String get voiceDiscardConfirm;
+
+  /// No description provided for @voiceDiscarded.
+  ///
+  /// In zh, this message translates to:
+  /// **'已经不要了'**
+  String get voiceDiscarded;
+
+  /// No description provided for @voiceDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'这张已经下单了'**
+  String get voiceDone;
+
+  /// No description provided for @voiceRejected.
+  ///
+  /// In zh, this message translates to:
+  /// **'这张已经不要了'**
+  String get voiceRejected;
+
+  /// No description provided for @voicePendingDrafts.
+  ///
+  /// In zh, this message translates to:
+  /// **'你有 {count} 张语音订单还没确认'**
+  String voicePendingDrafts(int count);
+
+  /// No description provided for @voicePickTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'选商品'**
+  String get voicePickTitle;
+
+  /// No description provided for @voiceSearch.
+  ///
+  /// In zh, this message translates to:
+  /// **'找商品名字'**
+  String get voiceSearch;
+
+  /// No description provided for @voicePickEmpty.
+  ///
+  /// In zh, this message translates to:
+  /// **'找不到。换个名字试试'**
+  String get voicePickEmpty;
+
+  /// No description provided for @voiceErrTooMany.
+  ///
+  /// In zh, this message translates to:
+  /// **'刚才说太多次了。请等 {minutes} 分钟再试'**
+  String voiceErrTooMany(int minutes);
+
+  /// No description provided for @voiceErrNoSpeech.
+  ///
+  /// In zh, this message translates to:
+  /// **'听不到声音。请靠近手机再说一次'**
+  String get voiceErrNoSpeech;
+
+  /// No description provided for @voiceErrTooLong.
+  ///
+  /// In zh, this message translates to:
+  /// **'太长了，请一次说一分钟以内'**
+  String get voiceErrTooLong;
+
+  /// No description provided for @voiceErrUnavailable.
+  ///
+  /// In zh, this message translates to:
+  /// **'语音下单现在不能用，请用一般方式下单'**
+  String get voiceErrUnavailable;
+
+  /// No description provided for @voiceErrNotUnderstood.
+  ///
+  /// In zh, this message translates to:
+  /// **'AI 听不懂。请再说一次，或用一般方式下单'**
+  String get voiceErrNotUnderstood;
+
+  /// No description provided for @voiceErrRecordAgain.
+  ///
+  /// In zh, this message translates to:
+  /// **'录音有问题，请再录一次'**
+  String get voiceErrRecordAgain;
+
+  /// No description provided for @voiceErrNoProducts.
+  ///
+  /// In zh, this message translates to:
+  /// **'现在还没有可以下单的商品'**
+  String get voiceErrNoProducts;
+
+  /// No description provided for @voiceErrNotPending.
+  ///
+  /// In zh, this message translates to:
+  /// **'这张语音订单已经处理过了'**
+  String get voiceErrNotPending;
+
+  /// No description provided for @voiceErrNotFound.
+  ///
+  /// In zh, this message translates to:
+  /// **'找不到这张语音订单'**
+  String get voiceErrNotFound;
+
+  /// No description provided for @voiceErrInvalidProduct.
+  ///
+  /// In zh, this message translates to:
+  /// **'这样商品现在不能下单，请换一样'**
+  String get voiceErrInvalidProduct;
+
+  /// No description provided for @subDetails.
+  ///
+  /// In zh, this message translates to:
+  /// **'看订阅和付款记录'**
+  String get subDetails;
+
+  /// No description provided for @billTrial.
+  ///
+  /// In zh, this message translates to:
+  /// **'免费试用中，还有 {days} 天'**
+  String billTrial(int days);
+
+  /// No description provided for @billActive.
+  ///
+  /// In zh, this message translates to:
+  /// **'已订阅，全部价钱都看得到'**
+  String get billActive;
+
+  /// No description provided for @billPastDue.
+  ///
+  /// In zh, this message translates to:
+  /// **'订阅到期了'**
+  String get billPastDue;
+
+  /// No description provided for @billUntil.
+  ///
+  /// In zh, this message translates to:
+  /// **'用到 {date}（还有 {days} 天）'**
+  String billUntil(String date, int days);
+
+  /// No description provided for @billGraceUntil.
+  ///
+  /// In zh, this message translates to:
+  /// **'{date} 前续费可以保留原价'**
+  String billGraceUntil(String date);
+
+  /// No description provided for @billCurrentPrice.
+  ///
+  /// In zh, this message translates to:
+  /// **'现在的月费 {price}'**
+  String billCurrentPrice(String price);
+
+  /// No description provided for @payChooseMonths.
+  ///
+  /// In zh, this message translates to:
+  /// **'付几个月？'**
+  String get payChooseMonths;
+
+  /// No description provided for @payMonths.
+  ///
+  /// In zh, this message translates to:
+  /// **'{n} 个月'**
+  String payMonths(int n);
+
+  /// No description provided for @payTotal.
+  ///
+  /// In zh, this message translates to:
+  /// **'总共'**
+  String get payTotal;
+
+  /// No description provided for @payButton.
+  ///
+  /// In zh, this message translates to:
+  /// **'付款 {amount}'**
+  String payButton(String amount);
+
+  /// No description provided for @payMethodsNote.
+  ///
+  /// In zh, this message translates to:
+  /// **'可以用 FPX 网银、DuitNow、Touch \'n Go、GrabPay、ShopeePay、Boost'**
+  String get payMethodsNote;
+
+  /// No description provided for @payCheck.
+  ///
+  /// In zh, this message translates to:
+  /// **'我付好了，看一下'**
+  String get payCheck;
+
+  /// No description provided for @payOpenFailed.
+  ///
+  /// In zh, this message translates to:
+  /// **'打不开付款页，请再试一次'**
+  String get payOpenFailed;
+
+  /// No description provided for @payDone.
+  ///
+  /// In zh, this message translates to:
+  /// **'收到付款 {amount}，谢谢！'**
+  String payDone(String amount);
+
+  /// No description provided for @payNotYet.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没收到付款。付好了的话，等一下再看'**
+  String get payNotYet;
+
+  /// No description provided for @payHistory.
+  ///
+  /// In zh, this message translates to:
+  /// **'付过的'**
+  String get payHistory;
+
+  /// No description provided for @payMethodFpx.
+  ///
+  /// In zh, this message translates to:
+  /// **'FPX 网银'**
+  String get payMethodFpx;
+
+  /// No description provided for @payMethodDuitnow.
+  ///
+  /// In zh, this message translates to:
+  /// **'DuitNow'**
+  String get payMethodDuitnow;
+
+  /// No description provided for @payMethodEwallet.
+  ///
+  /// In zh, this message translates to:
+  /// **'电子钱包'**
+  String get payMethodEwallet;
+
+  /// No description provided for @payMethodCard.
+  ///
+  /// In zh, this message translates to:
+  /// **'银行卡'**
+  String get payMethodCard;
+
+  /// No description provided for @payMethodOther.
+  ///
+  /// In zh, this message translates to:
+  /// **'其他'**
+  String get payMethodOther;
+
+  /// No description provided for @payErrNotReady.
+  ///
+  /// In zh, this message translates to:
+  /// **'网上付款还没开通，请联络客服'**
+  String get payErrNotReady;
+
+  /// No description provided for @payErrNothingDue.
+  ///
+  /// In zh, this message translates to:
+  /// **'这一项已经付过了'**
+  String get payErrNothingDue;
+
+  /// No description provided for @payErrFoundingFull.
+  ///
+  /// In zh, this message translates to:
+  /// **'创始会员名额满了'**
+  String get payErrFoundingFull;
+
+  /// No description provided for @payErrTooMany.
+  ///
+  /// In zh, this message translates to:
+  /// **'按太多次了，请等一下再试'**
+  String get payErrTooMany;
+
+  /// No description provided for @payErrGateway.
+  ///
+  /// In zh, this message translates to:
+  /// **'付款系统暂时不能用，请等一下再试'**
+  String get payErrGateway;
+
+  /// No description provided for @sellerBillingTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'收费和账单'**
+  String get sellerBillingTitle;
+
+  /// No description provided for @sellerBillingHint.
+  ///
+  /// In zh, this message translates to:
+  /// **'佣金账单、创始会员上架费'**
+  String get sellerBillingHint;
+
+  /// No description provided for @sellerBillingOutstanding.
+  ///
+  /// In zh, this message translates to:
+  /// **'还有 {amount} 佣金没付'**
+  String sellerBillingOutstanding(String amount);
+
+  /// No description provided for @sellerCommissionRate.
+  ///
+  /// In zh, this message translates to:
+  /// **'你的佣金：每张单 {rate}'**
+  String sellerCommissionRate(String rate);
+
+  /// No description provided for @sellerCommissionRule.
+  ///
+  /// In zh, this message translates to:
+  /// **'只算已送达的货价，不算运费；缺货和取消的不算。每个月 1 号收到上个月的账单。'**
+  String get sellerCommissionRule;
+
+  /// No description provided for @sellerThisMonthOrders.
+  ///
+  /// In zh, this message translates to:
+  /// **'已送达的单'**
+  String get sellerThisMonthOrders;
+
+  /// No description provided for @sellerThisMonthGoods.
+  ///
+  /// In zh, this message translates to:
+  /// **'货价（不含运费）'**
+  String get sellerThisMonthGoods;
+
+  /// No description provided for @sellerThisMonthCommission.
+  ///
+  /// In zh, this message translates to:
+  /// **'这个月到现在的佣金'**
+  String get sellerThisMonthCommission;
+
+  /// No description provided for @sellerInvoices.
+  ///
+  /// In zh, this message translates to:
+  /// **'每月账单'**
+  String get sellerInvoices;
+
+  /// No description provided for @sellerNoInvoices.
+  ///
+  /// In zh, this message translates to:
+  /// **'还没有账单'**
+  String get sellerNoInvoices;
+
+  /// No description provided for @listingFeeTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'创始会员上架费'**
+  String get listingFeeTitle;
+
+  /// No description provided for @listingFeePaid.
+  ///
+  /// In zh, this message translates to:
+  /// **'已付，谢谢！'**
+  String get listingFeePaid;
+
+  /// No description provided for @listingFeePaidNo.
+  ///
+  /// In zh, this message translates to:
+  /// **'创始会员第 {no} 号，上架费已付'**
+  String listingFeePaidNo(int no);
+
+  /// No description provided for @listingFeeDue.
+  ///
+  /// In zh, this message translates to:
+  /// **'你是创始会员第 {no} 号，上架费 {fee}（一次）'**
+  String listingFeeDue(String fee, int no);
+
+  /// No description provided for @listingFeeJoin.
+  ///
+  /// In zh, this message translates to:
+  /// **'付 {fee}（一次）成为创始会员，佣金比较低。还有 {seats} 个名额'**
+  String listingFeeJoin(String fee, int seats);
+
+  /// No description provided for @listingFeeFull.
+  ///
+  /// In zh, this message translates to:
+  /// **'创始会员名额满了'**
+  String get listingFeeFull;
+
+  /// No description provided for @invoiceTitle.
+  ///
+  /// In zh, this message translates to:
+  /// **'佣金账单'**
+  String get invoiceTitle;
+
+  /// No description provided for @invoicePdf.
+  ///
+  /// In zh, this message translates to:
+  /// **'印 / 存 PDF'**
+  String get invoicePdf;
+
+  /// No description provided for @invoiceDraft.
+  ///
+  /// In zh, this message translates to:
+  /// **'草稿'**
+  String get invoiceDraft;
+
+  /// No description provided for @invoiceIssued.
+  ///
+  /// In zh, this message translates to:
+  /// **'待付款'**
+  String get invoiceIssued;
+
+  /// No description provided for @invoiceOverdue.
+  ///
+  /// In zh, this message translates to:
+  /// **'逾期'**
+  String get invoiceOverdue;
+
+  /// No description provided for @invoicePaid.
+  ///
+  /// In zh, this message translates to:
+  /// **'已付'**
+  String get invoicePaid;
+
+  /// No description provided for @invoiceVoid.
+  ///
+  /// In zh, this message translates to:
+  /// **'作废'**
+  String get invoiceVoid;
+
+  /// No description provided for @invoiceDue.
+  ///
+  /// In zh, this message translates to:
+  /// **'{date} 前付'**
+  String invoiceDue(String date);
+
+  /// No description provided for @invoicePaidOn.
+  ///
+  /// In zh, this message translates to:
+  /// **'{date} 付了'**
+  String invoicePaidOn(String date);
+
+  /// No description provided for @invoiceCommission.
+  ///
+  /// In zh, this message translates to:
+  /// **'佣金'**
+  String get invoiceCommission;
+
+  /// No description provided for @invoiceLines.
+  ///
+  /// In zh, this message translates to:
+  /// **'每张单'**
+  String get invoiceLines;
+
+  /// No description provided for @invoiceLineText.
+  ///
+  /// In zh, this message translates to:
+  /// **'货价 {goods} x {rate}'**
+  String invoiceLineText(String goods, String rate);
+
+  /// No description provided for @invoiceColOrder.
+  ///
+  /// In zh, this message translates to:
+  /// **'订单'**
+  String get invoiceColOrder;
+
+  /// No description provided for @invoiceColShop.
+  ///
+  /// In zh, this message translates to:
+  /// **'店'**
+  String get invoiceColShop;
+
+  /// No description provided for @invoiceColGoods.
+  ///
+  /// In zh, this message translates to:
+  /// **'货价'**
+  String get invoiceColGoods;
+
+  /// No description provided for @invoiceColRate.
+  ///
+  /// In zh, this message translates to:
+  /// **'比例'**
+  String get invoiceColRate;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

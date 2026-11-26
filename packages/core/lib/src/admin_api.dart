@@ -21,6 +21,17 @@ class AdminApi extends WholesaleApi {
     {'p_status': status?.name, 'p_search': search},
   )).map(AdminWholesaler.fromJson).toList();
 
+  // ---------------- WhatsApp 订单（第六步） ----------------
+
+  /// 草稿队列：默认待确认的 WhatsApp 订单（旧的先）。channel：'whatsapp' / 'app' / null（全部）
+  Future<List<DraftSummary>> listOrderDraftQueue({
+    DraftStatus? status = DraftStatus.pendingReview,
+    String? channel = 'whatsapp',
+  }) async => (await _rpcList('admin_list_order_drafts', {
+    'p_status': status == null ? null : draftStatusCode(status),
+    'p_channel': channel,
+  })).map(DraftSummary.fromJson).toList();
+
   // ---------------- 订单 ----------------
 
   Future<AdminOrderPage> listAllOrders(AdminOrderFilter filter) async =>
@@ -190,6 +201,30 @@ class AdminApi extends WholesaleApi {
   // ---------------- 操作记录 ----------------
 
   /// 新到旧；beforeId = 上一页最后一行的 id
+  /// 付款记录（网关的和客服手动记的）。reviewOnly = 只看收到钱但要处理的
+  Future<List<PaymentInfo>> listPayments({
+    PaymentStatus? status,
+    PaymentPurpose? purpose,
+    bool reviewOnly = false,
+  }) async => (await _rpcList('admin_list_payments', {
+    'p_status': status?.name,
+    'p_purpose': purpose == null ? null : paymentPurposeCode(purpose),
+    'p_review_only': reviewOnly,
+  })).map(PaymentInfo.fromJson).toList();
+
+  /// 批发商转账 / 现金付了创始上架费（还不是创始会员的自动编号；名额满 → FOUNDING_QUOTA_FULL）
+  Future<AdminWholesaler> markListingFeePaid(
+    String wholesalerId, {
+    PaymentMethod method = PaymentMethod.other,
+    String? reference,
+  }) async => AdminWholesaler.fromJson(
+    await _rpcJson('admin_mark_listing_fee_paid', {
+      'p_wholesaler_id': wholesalerId,
+      'p_method': method.name,
+      'p_reference': reference,
+    }),
+  );
+
   Future<List<AuditEntry>> listAuditLogs({
     String? action,
     String? tableName,

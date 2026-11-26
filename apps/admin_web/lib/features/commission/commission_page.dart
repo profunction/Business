@@ -8,6 +8,7 @@ import 'package:wholesale_core/wholesale_core.dart';
 import '../../app/l10n_x.dart';
 import '../../app/providers.dart';
 import '../../widgets/common.dart';
+import '../../widgets/payment_link.dart';
 import 'invoice_pdf.dart';
 
 /// 这个月（马来西亚时间）的 1 号
@@ -170,6 +171,15 @@ class _CommissionPageState extends ConsumerState<CommissionPage> {
                             onPaid: w.invoice != null && const {'issued', 'overdue'}.contains(w.invoice!.status)
                                 ? () => _markPaid(w.invoice!)
                                 : null,
+                            onPayLink: w.invoice != null && w.invoice!.isOutstanding && w.invoice!.commissionSen > 0
+                                ? () => showPaymentLink(
+                                    context,
+                                    ref,
+                                    PaymentPurpose.commissionInvoice,
+                                    w.invoice!.id,
+                                    title: '${w.name} ${w.invoice!.invoiceNo}',
+                                  )
+                                : null,
                           ),
                           const Divider(height: 1),
                         ],
@@ -204,12 +214,13 @@ class _CommissionPageState extends ConsumerState<CommissionPage> {
 }
 
 class _Row extends StatelessWidget {
-  const _Row({required this.w, required this.onPdf, this.onIssue, this.onPaid});
+  const _Row({required this.w, required this.onPdf, this.onIssue, this.onPaid, this.onPayLink});
 
   final WholesalerCommission w;
   final VoidCallback onPdf;
   final VoidCallback? onIssue;
   final VoidCallback? onPaid;
+  final VoidCallback? onPayLink;
 
   @override
   Widget build(BuildContext context) {
@@ -266,6 +277,13 @@ class _Row extends StatelessWidget {
                   key: Key('invpaid-${w.wholesalerId}'),
                   onPressed: onPaid,
                   child: Text(l.markInvoicePaid),
+                ),
+              if (onPayLink != null)
+                OutlinedButton.icon(
+                  key: Key('invlink-${w.wholesalerId}'),
+                  onPressed: onPayLink,
+                  icon: const Icon(Icons.link),
+                  label: Text(l.payLink),
                 ),
             ],
           ),

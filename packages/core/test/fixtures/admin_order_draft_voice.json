@@ -1,0 +1,31 @@
+{
+    "id": "341e1b71-b8ea-4679-acc1-2cdaf7f5d6b8",
+    "items": [
+    ],
+    "quote": {
+        "groups": [
+        ],
+        "shop_id": "00000000-0000-4000-b000-000000000001",
+        "can_place": false,
+        "total_sen": 0,
+        "goods_total_sen": 0,
+        "shipping_total_sen": 0
+    },
+    "source": "whatsapp_voice",
+    "status": "pending_review",
+    "shop_id": "00000000-0000-4000-b000-000000000001",
+    "language": null,
+    "has_audio": false,
+    "shop_name": "阿明茶餐室",
+    "unmatched": [
+    ],
+    "created_at": "2026-11-26T04:49:03.411759+00:00",
+    "error_code": "STT_NOT_CONFIGURED",
+    "transcript": null,
+    "updated_at": "2026-11-26T04:49:03.411759+00:00",
+    "checkout_id": null,
+    "reviewed_at": null,
+    "sender_phone": "60120000001",
+    "reject_reason": null,
+    "whatsapp_window_open": true
+}

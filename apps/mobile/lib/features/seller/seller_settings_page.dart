@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:wholesale_core/wholesale_core.dart';
 
 import '../../app/l10n_x.dart';
@@ -119,6 +120,17 @@ class _SellerSettingsPageState extends ConsumerState<SellerSettingsPage> {
                       ],
                     ),
                   ),
+          ),
+          const SizedBox(height: 8),
+          Card(
+            child: ListTile(
+              key: const Key('seller-billing'),
+              leading: const Icon(Icons.receipt_long, size: 32),
+              title: Text(l.sellerBillingTitle),
+              subtitle: Text(l.sellerBillingHint),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => context.push('/seller/billing'),
+            ),
           ),
           const SizedBox(height: 20),
           Text(l.sellerNotifyTitle, style: t.titleMedium),

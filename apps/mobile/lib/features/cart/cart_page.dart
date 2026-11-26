@@ -7,6 +7,7 @@ import '../../app/l10n_x.dart';
 import '../../app/providers.dart';
 import '../../app/theme.dart';
 import '../../widgets/common.dart';
+import '../voice/mic_button.dart';
 import 'cart_widgets.dart';
 
 /// 购物车：改数量、拿掉。按批发商分组，每组显示运费和问题。
@@ -31,15 +32,18 @@ class CartPage extends ConsumerWidget {
                   const Icon(Icons.shopping_cart_outlined, size: 80, color: Colors.black38),
                   const SizedBox(height: 12),
                   Text(l.cartEmpty, style: Theme.of(context).textTheme.titleLarge),
+                  const SizedBox(height: 24),
+                  const Padding(padding: EdgeInsets.symmetric(horizontal: 16), child: MicButton(compact: true)),
                 ],
               ),
             );
           }
           return ListView.separated(
             padding: const EdgeInsets.all(16),
-            itemCount: q.groups.length,
+            // 最上面：语音下单（第六步；做成另一张草稿，不会动到这个购物车）
+            itemCount: q.groups.length + 1,
             separatorBuilder: (_, _) => const SizedBox(height: 14),
-            itemBuilder: (_, i) => _GroupCard(group: q.groups[i]),
+            itemBuilder: (_, i) => i == 0 ? const MicButton(compact: true) : _GroupCard(group: q.groups[i - 1]),
           );
         },
       ),

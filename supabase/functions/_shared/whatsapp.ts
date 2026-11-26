@@ -430,3 +430,45 @@ export function parseWebhook(body: unknown): WebhookEvent[] {
   }
   return out;
 }
+
+// ---------------------------------------------------------------------------
+// 媒体（第六步：老板发来的语音）：GET /{media-id} 拿下载网址，再带同一个 token 下载（网址 5 分钟内有效）
+// ---------------------------------------------------------------------------
+
+export type MediaResult =
+  | { ok: true; bytes: Uint8Array; mime: string }
+  | { ok: false; code: "MEDIA_NOT_FOUND" | "MEDIA_TOO_LARGE" | "MEDIA_DOWNLOAD_FAILED"; message: string };
+
+export async function downloadMedia(
+  cfg: WhatsAppConfig,
+  mediaId: string,
+  maxBytes: number,
+  deadline?: number | null,
+): Promise<MediaResult> {
+  const auth = { Authorization: `Bearer ${cfg.token}` };
+  try {
+    const meta = await fetch(`${GRAPH}/${cfg.graphVersion}/${encodeURIComponent(mediaId)}`, {
+      headers: auth,
+      signal: AbortSignal.timeout(requestTimeoutMs(deadline)),
+    });
+    const info = await meta.json().catch(() => null) as Record<string, unknown> | null;
+    if (!meta.ok || typeof info?.url !== "string") {
+      return {
+        ok: false,
+        code: meta.status === 404 ? "MEDIA_NOT_FOUND" : "MEDIA_DOWNLOAD_FAILED",
+        message: `HTTP ${meta.status}`,
+      };
+    }
+    if (typeof info.file_size === "number" && info.file_size > maxBytes) {
+      return { ok: false, code: "MEDIA_TOO_LARGE", message: `${info.file_size}` };
+    }
+    const res = await fetch(info.url, { headers: auth, signal: AbortSignal.timeout(requestTimeoutMs(deadline)) });
+    if (!res.ok) return { ok: false, code: "MEDIA_DOWNLOAD_FAILED", message: `HTTP ${res.status}` };
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length > maxBytes) return { ok: false, code: "MEDIA_TOO_LARGE", message: `${bytes.length}` };
+    const mime = typeof info.mime_type === "string" ? info.mime_type.split(";")[0].trim() : "audio/ogg";
+    return { ok: true, bytes, mime };
+  } catch (e) {
+    return { ok: false, code: "MEDIA_DOWNLOAD_FAILED", message: e instanceof Error ? e.message : String(e) };
+  }
+}

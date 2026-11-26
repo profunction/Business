@@ -1,0 +1,28 @@
+[
+    {
+        "id": "993651a6-9389-4374-a1dc-a5b11a09317c",
+        "method": "fpx",
+        "months": 3,
+        "status": "paid",
+        "gateway": "hitpay",
+        "paid_at": "2026-11-26T05:46:24.499548+00:00",
+        "purpose": "subscription",
+        "shop_id": "00000000-0000-4000-b000-000000000001",
+        "amount_sen": 15000,
+        "created_at": "2026-11-26T05:46:24.495414+00:00",
+        "expires_at": "2026-11-27T05:46:24.495414+00:00",
+        "invoice_no": null,
+        "payer_name": "阿明茶餐室",
+        "payer_type": "shop",
+        "period_end": "2027-03-10T05:46:24.399206+00:00",
+        "description": "Monthly subscription x3",
+        "gateway_ref": "HP-DEMO-1",
+        "checkout_url": null,
+        "period_start": "2026-12-10T05:46:24.399206+00:00",
+        "reference_id": "d93fa315-72b6-4355-87c9-1d25bb80a7b9",
+        "review_reason": null,
+        "wholesaler_id": null,
+        "failure_reason": null,
+        "unit_price_sen": 5000
+    }
+]

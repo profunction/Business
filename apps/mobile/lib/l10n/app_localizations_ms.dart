@@ -1461,4 +1461,331 @@ class L10nMs extends L10n {
   String sellerOrdersLimited(int count) {
     return 'Hanya $count pesanan terkini ditunjukkan di sini';
   }
+
+  @override
+  String get voiceHold => 'Tahan untuk pesan dengan suara';
+
+  @override
+  String get voiceHoldHint =>
+      'Tahan butang dan sebut apa yang anda perlukan (Mandarin, Kantonis, Hokkien, Melayu atau Inggeris), kemudian lepaskan';
+
+  @override
+  String voiceRecording(int seconds) {
+    return 'Merakam ${seconds}s… lepaskan untuk hantar';
+  }
+
+  @override
+  String get voiceListening => 'AI sedang mendengar…';
+
+  @override
+  String get voiceTooShort => 'Terlalu pendek. Tahan butang dan sebut sekali lagi';
+
+  @override
+  String get voiceNoPermission => 'Sila benarkan mikrofon untuk pesan dengan suara';
+
+  @override
+  String get voiceDraftTitle => 'Semak pesanan suara';
+
+  @override
+  String get voiceHeard => 'Apa yang kami dengar:';
+
+  @override
+  String voiceYouSaid(String said) {
+    return 'Anda sebut: \"$said\"';
+  }
+
+  @override
+  String get voiceUnsure => 'AI kurang pasti. Sila semak baris ini';
+
+  @override
+  String get voiceUnmatched => 'Kami tidak dapat padankan:';
+
+  @override
+  String get voiceFind => 'Cari barang';
+
+  @override
+  String get voiceSwap => 'Tukar';
+
+  @override
+  String get voiceRemove => 'Buang';
+
+  @override
+  String get voiceAddItem => 'Tambah barang';
+
+  @override
+  String get voiceNoItems => 'Belum ada barang. Tekan \"Tambah barang\", atau kembali dan sebut sekali lagi.';
+
+  @override
+  String voiceSubmit(String total) {
+    return 'Buat pesanan $total';
+  }
+
+  @override
+  String get voiceDiscard => 'Buang';
+
+  @override
+  String get voiceDiscardConfirm => 'Buang pesanan suara ini?';
+
+  @override
+  String get voiceDiscarded => 'Telah dibuang';
+
+  @override
+  String get voiceDone => 'Pesanan ini telah dibuat';
+
+  @override
+  String get voiceRejected => 'Pesanan suara ini telah dibuang';
+
+  @override
+  String voicePendingDrafts(int count) {
+    return 'Anda ada $count pesanan suara untuk disemak';
+  }
+
+  @override
+  String get voicePickTitle => 'Pilih barang';
+
+  @override
+  String get voiceSearch => 'Cari nama barang';
+
+  @override
+  String get voicePickEmpty => 'Tiada hasil. Cuba nama lain';
+
+  @override
+  String voiceErrTooMany(int minutes) {
+    return 'Terlalu banyak pesanan suara tadi. Sila tunggu $minutes minit';
+  }
+
+  @override
+  String get voiceErrNoSpeech => 'Kami tidak dapat mendengar apa-apa. Dekatkan telefon dan cuba lagi';
+
+  @override
+  String get voiceErrTooLong => 'Terlalu panjang. Sila kurang daripada satu minit';
+
+  @override
+  String get voiceErrUnavailable => 'Pesanan suara tidak tersedia sekarang. Sila pesan seperti biasa';
+
+  @override
+  String get voiceErrNotUnderstood => 'AI tidak faham. Sila cuba lagi, atau pesan seperti biasa';
+
+  @override
+  String get voiceErrRecordAgain => 'Rakaman bermasalah. Sila rakam semula';
+
+  @override
+  String get voiceErrNoProducts => 'Belum ada barang yang boleh dipesan';
+
+  @override
+  String get voiceErrNotPending => 'Pesanan suara ini sudah diuruskan';
+
+  @override
+  String get voiceErrNotFound => 'Pesanan suara ini tidak dijumpai';
+
+  @override
+  String get voiceErrInvalidProduct => 'Barang ini tidak boleh dipesan sekarang. Sila pilih yang lain';
+
+  @override
+  String get subDetails => 'Butiran langganan';
+
+  @override
+  String billTrial(int days) {
+    return 'Percubaan percuma: tinggal $days hari';
+  }
+
+  @override
+  String get billActive => 'Sudah melanggan. Semua harga boleh dilihat.';
+
+  @override
+  String get billPastDue => 'Langganan anda telah tamat';
+
+  @override
+  String billUntil(String date, int days) {
+    return 'Sehingga $date (tinggal $days hari)';
+  }
+
+  @override
+  String billGraceUntil(String date) {
+    return 'Perbaharui sebelum $date untuk kekalkan harga';
+  }
+
+  @override
+  String billCurrentPrice(String price) {
+    return 'Yuran bulanan semasa $price';
+  }
+
+  @override
+  String get payChooseMonths => 'Berapa bulan?';
+
+  @override
+  String payMonths(int n) {
+    return '$n bulan';
+  }
+
+  @override
+  String get payTotal => 'Jumlah';
+
+  @override
+  String payButton(String amount) {
+    return 'Bayar $amount';
+  }
+
+  @override
+  String get payMethodsNote => 'FPX perbankan dalam talian, DuitNow, Touch \'n Go, GrabPay, ShopeePay, Boost';
+
+  @override
+  String get payCheck => 'Saya sudah bayar, semak sekarang';
+
+  @override
+  String get payOpenFailed => 'Halaman bayaran tidak dapat dibuka. Sila cuba lagi.';
+
+  @override
+  String payDone(String amount) {
+    return 'Bayaran $amount diterima. Terima kasih!';
+  }
+
+  @override
+  String get payNotYet => 'Bayaran belum diterima. Jika sudah bayar, semak semula sebentar lagi.';
+
+  @override
+  String get payHistory => 'Bayaran';
+
+  @override
+  String get payMethodFpx => 'FPX';
+
+  @override
+  String get payMethodDuitnow => 'DuitNow';
+
+  @override
+  String get payMethodEwallet => 'E-dompet';
+
+  @override
+  String get payMethodCard => 'Kad';
+
+  @override
+  String get payMethodOther => 'Lain-lain';
+
+  @override
+  String get payErrNotReady => 'Bayaran dalam talian belum tersedia. Sila hubungi kami.';
+
+  @override
+  String get payErrNothingDue => 'Ini sudah dibayar';
+
+  @override
+  String get payErrFoundingFull => 'Tempat ahli pengasas sudah penuh';
+
+  @override
+  String get payErrTooMany => 'Terlalu banyak cubaan. Sila tunggu dan cuba lagi.';
+
+  @override
+  String get payErrGateway => 'Sistem bayaran sibuk. Sila cuba lagi nanti.';
+
+  @override
+  String get sellerBillingTitle => 'Yuran dan invois';
+
+  @override
+  String get sellerBillingHint => 'Invois komisen, yuran penyenaraian pengasas';
+
+  @override
+  String sellerBillingOutstanding(String amount) {
+    return 'Komisen $amount belum dibayar';
+  }
+
+  @override
+  String sellerCommissionRate(String rate) {
+    return 'Komisen anda: $rate setiap pesanan';
+  }
+
+  @override
+  String get sellerCommissionRule =>
+      'Hanya barang yang dihantar dikira, bukan caj penghantaran. Pesanan habis stok dan dibatalkan tidak dicaj. Invois bulan lepas diterima pada 1hb.';
+
+  @override
+  String get sellerThisMonthOrders => 'Pesanan dihantar';
+
+  @override
+  String get sellerThisMonthGoods => 'Barang (tanpa penghantaran)';
+
+  @override
+  String get sellerThisMonthCommission => 'Komisen bulan ini setakat ini';
+
+  @override
+  String get sellerInvoices => 'Invois bulanan';
+
+  @override
+  String get sellerNoInvoices => 'Belum ada invois';
+
+  @override
+  String get listingFeeTitle => 'Yuran penyenaraian ahli pengasas';
+
+  @override
+  String get listingFeePaid => 'Sudah dibayar. Terima kasih!';
+
+  @override
+  String listingFeePaidNo(int no) {
+    return 'Ahli pengasas no. $no, yuran penyenaraian sudah dibayar';
+  }
+
+  @override
+  String listingFeeDue(String fee, int no) {
+    return 'Anda ahli pengasas no. $no. Yuran penyenaraian $fee (sekali).';
+  }
+
+  @override
+  String listingFeeJoin(String fee, int seats) {
+    return 'Bayar $fee (sekali) untuk menjadi ahli pengasas dengan komisen lebih rendah. Tinggal $seats tempat.';
+  }
+
+  @override
+  String get listingFeeFull => 'Tempat ahli pengasas sudah penuh';
+
+  @override
+  String get invoiceTitle => 'Invois komisen';
+
+  @override
+  String get invoicePdf => 'Cetak / simpan PDF';
+
+  @override
+  String get invoiceDraft => 'Draf';
+
+  @override
+  String get invoiceIssued => 'Belum dibayar';
+
+  @override
+  String get invoiceOverdue => 'Lewat';
+
+  @override
+  String get invoicePaid => 'Dibayar';
+
+  @override
+  String get invoiceVoid => 'Batal';
+
+  @override
+  String invoiceDue(String date) {
+    return 'perlu dibayar $date';
+  }
+
+  @override
+  String invoicePaidOn(String date) {
+    return 'dibayar $date';
+  }
+
+  @override
+  String get invoiceCommission => 'Komisen';
+
+  @override
+  String get invoiceLines => 'Pesanan';
+
+  @override
+  String invoiceLineText(String goods, String rate) {
+    return 'Barang $goods x $rate';
+  }
+
+  @override
+  String get invoiceColOrder => 'Pesanan';
+
+  @override
+  String get invoiceColShop => 'Kedai';
+
+  @override
+  String get invoiceColGoods => 'Barang';
+
+  @override
+  String get invoiceColRate => 'Kadar';
 }

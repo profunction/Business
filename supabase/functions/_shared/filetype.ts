@@ -73,3 +73,14 @@ export function sniffFileType(b: Uint8Array): FileKind {
   if (startsWith(b, [0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1])) return "xls"; // OLE2（旧 Excel）
   return looksLikeText(b) ? "csv" : "unknown";
 }
+
+/** 录音的格式（语音下单）：看魔术字节，不信档名。回传副档名和 MIME；不认得 → null */
+export function sniffAudio(b: Uint8Array): { ext: "wav" | "ogg" | "m4a" | "webm" | "mp3"; mime: string } | null {
+  if (b.length < 12) return null;
+  if (ascii(b, 0, 4) === "RIFF" && ascii(b, 8, 4) === "WAVE") return { ext: "wav", mime: "audio/wav" };
+  if (ascii(b, 0, 4) === "OggS") return { ext: "ogg", mime: "audio/ogg" };
+  if (ascii(b, 4, 4) === "ftyp" && !HEIF_BRANDS.has(ascii(b, 8, 4))) return { ext: "m4a", mime: "audio/mp4" };
+  if (startsWith(b, [0x1a, 0x45, 0xdf, 0xa3])) return { ext: "webm", mime: "audio/webm" };
+  if (ascii(b, 0, 3) === "ID3" || (b[0] === 0xff && (b[1] & 0xe0) === 0xe0)) return { ext: "mp3", mime: "audio/mpeg" };
+  return null;
+}

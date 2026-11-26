@@ -122,6 +122,33 @@ extension L10nText on L10n {
       'TOO_MANY_IMPORTS' => sellerErrTooManyImports(_waitMinutes(e)),
       'WHOLESALER_SUSPENDED' => sellerErrSuspended,
       'QUOTA_UNAVAILABLE' => sellerErrQuotaUnavailable,
+      // 付款（第七步）
+      'PAYMENT_NOT_CONFIGURED' => payErrNotReady,
+      'NOTHING_DUE' => payErrNothingDue,
+      'FOUNDING_FULL' => payErrFoundingFull,
+      'TOO_MANY_PAYMENTS' => payErrTooMany,
+      'GATEWAY_UNAVAILABLE' || 'GATEWAY_AUTH_FAILED' || 'GATEWAY_REJECTED' || 'GATEWAY_BAD_RESPONSE' => payErrGateway,
+      // 语音下单（第六步）
+      'TOO_MANY_VOICE_ORDERS' => voiceErrTooMany(_voiceWaitMinutes(e)),
+      'NO_SPEECH' => voiceErrNoSpeech,
+      'AUDIO_TOO_LONG' => voiceErrTooLong,
+      'STT_NOT_CONFIGURED' ||
+      'AI_NOT_CONFIGURED' ||
+      'STT_BUSY' ||
+      'STT_FAILED' ||
+      'STT_AUTH_FAILED' ||
+      'AI_BUSY' ||
+      'AI_UNAVAILABLE' ||
+      'AI_AUTH_FAILED' ||
+      'AI_TIMEOUT' ||
+      'AI_FAILED' => voiceErrUnavailable,
+      'AI_REFUSED' || 'AI_INVALID_OUTPUT' || 'AI_TRUNCATED' || 'AI_REQUEST_REJECTED' => voiceErrNotUnderstood,
+      'UNSUPPORTED_AUDIO' || 'AUDIO_TOO_LARGE' || 'AUDIO_NOT_FOUND' || 'INVALID_FILE_PATH' => voiceErrRecordAgain,
+      'NO_ORDERABLE_PRODUCTS' => voiceErrNoProducts,
+      'DRAFT_NOT_PENDING' => voiceErrNotPending,
+      'DRAFT_NOT_FOUND' => voiceErrNotFound,
+      'DRAFT_EMPTY' => voiceNoItems,
+      'INVALID_PRODUCT' => voiceErrInvalidProduct,
       _ => errUnknown,
     };
   }
@@ -132,6 +159,13 @@ extension L10nText on L10n {
     if (wait == null) return 10;
     final m = (wait.inSeconds / 60).ceil();
     return m < 1 ? 1 : m;
+  }
+
+  /// voice-order 用量满了：detail 是要等几秒（进位成分钟，最少 1）
+  int _voiceWaitMinutes(Object e) {
+    final sec = int.tryParse(e is AppError ? e.detail ?? '' : '');
+    if (sec == null || sec <= 0) return 10;
+    return (sec / 60).ceil();
   }
 
   int _row(Object e) => (e is AppError ? e.rowNo : null) ?? 0;
@@ -218,6 +252,26 @@ extension L10nText on L10n {
   String dateTime(DateTime d) => DateFormat.MMMd(localeName).add_Hm().format(toMyt(d));
 
   String dateOnly(DateTime d) => DateFormat.MMMd(localeName).format(toMyt(d));
+
+  /// 2026年10月 / Oct 2026（账单的月份）
+  String month(DateTime d) => DateFormat.yMMM(localeName).format(d);
+
+  /// 账单状态
+  String invoiceStatus(String s) => switch (s) {
+    'issued' => invoiceIssued,
+    'overdue' => invoiceOverdue,
+    'paid' => invoicePaid,
+    'void' => invoiceVoid,
+    _ => invoiceDraft,
+  };
+
+  String paymentMethod(PaymentMethod? m) => switch (m) {
+    PaymentMethod.fpx => payMethodFpx,
+    PaymentMethod.duitnow => payMethodDuitnow,
+    PaymentMethod.ewallet => payMethodEwallet,
+    PaymentMethod.card => payMethodCard,
+    _ => payMethodOther,
+  };
 }
 
 /// 服务器的时间是 UTC，马来西亚是 UTC+8（没有夏令时）

@@ -1,12 +1,12 @@
 {
-    "name": "jb_admin",
-    "short_name": "jb_admin",
+    "name": "新山批发 · 客服后台",
+    "short_name": "客服后台",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
+    "background_color": "#1B6E4A",
+    "theme_color": "#1B6E4A",
     "description": "新山批发：客服后台（Flutter Web）",
-    "orientation": "portrait-primary",
+    "orientation": "any",
     "prefer_related_applications": false,
     "icons": [
         {

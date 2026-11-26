@@ -89,6 +89,39 @@ Flutter 里用 `supabase.rpc('函数名', params: {...})` 调用。每个函数�
 
 `price_list_imports` 有保护（trigger）：批发商只能新增 processing 的导入、只能把 processing 标成 failed（App 的代码 `START_FAILED` / `NETWORK` / `AUTH`），其他栏位（档案、`ai_raw`……）都不能改，否则 `COLUMN_PROTECTED`。`price_list_runs` 只有服务器碰得到（批发商删掉自己的导入，用量记录也留着）。
 
+### 客服后台（第五步，`…20261128000100_admin.sql`）
+
+全部只给客服（`is_admin()`，否则 `NOT_ALLOWED`），每个会改东西的函数写一行 `audit_logs`（`action` = 函数名，`acting_for_*` = 代哪家店 / 批发商）。
+改订单、下单还是走 `set_order_status` / `confirm_order` / `place_order`（规则只有一份）。
+
+| 函数 | 做什么 |
+|---|---|
+| `admin_dashboard()` | 首页数字：超过 30 分钟没确认的单、待审核批发商、今天的单、订阅、这个月佣金 |
+| `admin_list_shops(p_search, p_limit)`、`admin_list_wholesalers(p_status, p_search)` | 店铺 / 批发商列表（名字或电话搜索） |
+| `admin_list_orders(p_from, p_to, p_wholesaler_id, p_shop_id, p_statuses, p_sources, p_unconfirmed_only, p_limit, p_offset)` | 全部订单 `{total, orders}`；`p_unconfirmed_only` = 跟进名单（旧的先） |
+| `admin_log_followup(p_order_id, p_note)` | 记下跟进（列表回传 `last_followup`） |
+| `admin_set_order_status(p_order_id, p_status, p_note)`、`admin_confirm_order(p_order_id, p_out_of_stock_item_ids)` | 代改状态 / 代确认，回传 `get_order` |
+| `admin_set_cart_item(p_shop_id, p_product_id, p_qty)`、`admin_clear_cart(p_shop_id)`、`admin_place_order(p_shop_id, p_expected_total_sen, p_note)` | 代买家下单（来源 `admin`；付费规则照样） |
+| `admin_list_products(p_wholesaler_id)`、`admin_save_product(p_wholesaler_id, p_product_id, p_fields)` | 代批发商管商品（`p_product_id` 空 = 新增；`p_fields` 只能有商品的几栏，否则 `INVALID_FIELD`） |
+| `admin_set_wholesaler_status(…)`、`admin_set_commission_rate(…)`、`admin_set_wholesaler_founding(…)`、`admin_set_whatsapp_opt_in(…)` | 审核 / 停权（不能改回 pending）、佣金比例（0–0.2，空 = 取消）、创始会员、WhatsApp 同意 |
+| `admin_list_subscriptions(…)`、`admin_extend_trial(…)`、`admin_mark_subscription_paid(…)`、`admin_cancel_subscription(…)`、`admin_set_subscription_founding(…)` | 订阅：延长试用（试用过期没付过的可以重开）、手动付款（lapsed → 新订阅按今天价钱锁定）、取消、创始价 |
+| `admin_commission_report(p_period_month)`、`admin_generate_invoices(…)`、`admin_issue_invoice(…)`、`admin_mark_invoice_paid(…)` | 每月佣金报表（已送达货价，不含运费）、草稿 → 发出 → 已付 |
+| `admin_list_audit_logs(p_action, p_table, p_shop_id, p_wholesaler_id, p_admin_only, p_limit, p_before_id)` | 操作记录 |
+
+新的错误代码：`SHOP_NOT_FOUND`、`PRODUCT_NOT_FOUND`、`WHOLESALER_NOT_FOUND`、`SUBSCRIPTION_NOT_FOUND`、`INVOICE_NOT_FOUND`、`INVALID_QTY`、`INVALID_PRODUCT`、
+`INVALID_FIELD`、`INVALID_RATE`、`INVALID_DAYS`、`INVALID_MONTHS`、`INVALID_AMOUNT`、`INVALID_VALUE`、`INVALID_NOTE`、`INVALID_SUBSCRIPTION_STATE`、
+`SUBSCRIPTION_ALREADY_OPEN`、`INVALID_INVOICE_STATE`、`DUPLICATE_PAYMENT_REFERENCE`、`EXPECTED_TOTAL_REQUIRED`。画面在 `apps/admin_web`。
+
+### 语音 / WhatsApp 订单草稿（第六步，`…20261129000100_voice_whatsapp.sql`）
+
+函数、流程和新的错误代码见 [`06-voice-whatsapp.md`](06-voice-whatsapp.md) 第 3 节。草稿送出还是走 `place_order`（来源 `voice` / `whatsapp`）。
+
+### 收费（第七步，`…20261130000100_billing.sql`）
+
+- 服务器（create-payment / payment-webhook）：`create_payment_intent`、`attach_payment_checkout`、`fail_payment`、`mark_payment_paid`（同一笔只算一次）、`run_billing_daily`（定时任务）。
+- App：`get_buyer_billing`、`get_seller_billing`、`get_commission_invoice`、`get_payment`。客服：`admin_list_payments`、`admin_mark_listing_fee_paid`。
+- 新的错误代码：`PAYMENT_NOT_FOUND`、`LISTING_FEE_ALREADY_PAID`、`INVALID_CHECKOUT`。规则和网关见 [`07-billing.md`](07-billing.md)。
+
 ## 4. 错误代码
 
 函数出错时返回英文代码，App 按代码显示三语提示（第三步会做）。

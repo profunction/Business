@@ -68,3 +68,10 @@ final subscriptionsProvider = FutureProvider.autoDispose.family<List<AdminSubscr
 final commissionReportProvider = FutureProvider.autoDispose.family<CommissionReport, DateTime>(
   (ref, month) => ref.watch(apiProvider).getCommissionReport(month: month),
 );
+
+typedef PaymentQuery = ({PaymentPurpose? purpose, bool reviewOnly});
+
+/// 付款记录（网关的、客服手动记的）
+final paymentsProvider = FutureProvider.autoDispose.family<List<PaymentInfo>, PaymentQuery>(
+  (ref, q) => ref.watch(apiProvider).listPayments(purpose: q.purpose, reviewOnly: q.reviewOnly),
+);

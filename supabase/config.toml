@@ -320,6 +320,24 @@ enabled = true
 verify_jwt = false
 entrypoint = "./functions/_dist/parse-price-list/index.js"
 
+# App 用 functions.invoke 叫（语音下单）：代码用 auth.getUser(jwt) 验用户
+[functions.voice-order]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/_dist/voice-order/index.js"
+
+# App / 客服后台用 functions.invoke 叫（开付款页）：代码用 auth.getUser(jwt) 验用户，金额由数据库算
+[functions.create-payment]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/_dist/create-payment/index.js"
+
+# HitPay 叫：代码验 Hitpay-Signature（HMAC-SHA256(HITPAY_SALT, 原始 body)）
+[functions.payment-webhook]
+enabled = true
+verify_jwt = false
+entrypoint = "./functions/_dist/payment-webhook/index.js"
+
 [analytics]
 enabled = true
 port = 54327

@@ -14,4 +14,7 @@
 - `supabase/`：数据库迁移、种子数据、测试
 - `packages/core/`：手机 App 和客服后台共用的 Dart 代码
 - `apps/mobile/`：Flutter 手机 App（怎么跑见 [`apps/mobile/README.md`](apps/mobile/README.md)）
+- `apps/admin_web/`：Flutter Web 客服后台（怎么跑见 [`apps/admin_web/README.md`](apps/admin_web/README.md)）
+- 语音下单、WhatsApp 下单（第六步）：[`docs/06-voice-whatsapp.md`](docs/06-voice-whatsapp.md)
+- 收费（第七步：月费、佣金账单、付款网关、App Store / Google Play 规定）：[`docs/07-billing.md`](docs/07-billing.md)
 - `scripts/test-db.sh`：不用 Docker 的数据库测试（`./scripts/test-db.sh`）

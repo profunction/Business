@@ -27,6 +27,8 @@
 	</array>
 	<!-- 价目表和商品照片：拍照 / 从相册选照片（image_picker）。这里是英文（预设）；中文、马来文在
 	     en.lproj / ms.lproj / zh-Hans.lproj 的 InfoPlist.strings（照手机的语言显示） -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Hold the microphone button and say what you want to order. The AI turns it into an order draft that you check before anything is sent.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Take photos of your price list or your products. The AI turns a price list into products and prices, and product photos are shown to buyers.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

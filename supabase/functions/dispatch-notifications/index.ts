@@ -39,7 +39,7 @@ import {
 } from "../_shared/http.ts";
 import { type NotificationItem, pushContent, type PushTarget, whatsappTemplate } from "../_shared/messages.ts";
 import { sendFcm } from "../_shared/fcm.ts";
-import { sendTemplate } from "../_shared/whatsapp.ts";
+import { sendTemplate, sendText } from "../_shared/whatsapp.ts";
 import { adminClient, DbError, rpc } from "../_shared/supabase.ts";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -203,6 +203,7 @@ async function sendWhatsApp(
   deadline?: number | null,
 ): Promise<Outcome> {
   if (!item.whatsapp_phone) return skipped("whatsapp", "NO_WHATSAPP_PHONE");
+  if (item.event_type === "whatsapp_reply") return await sendReply(item, item.whatsapp_phone, cfg);
   const template = whatsappTemplate(item);
   if (!template) return skipped("whatsapp", "NO_WHATSAPP_TEMPLATE");
   if (!cfg) return failed("whatsapp", "WHATSAPP_NOT_CONFIGURED", false);
@@ -218,6 +219,26 @@ async function sendWhatsApp(
     code: r.code,
     retryable: r.retryable,
     message: r.message,
+  });
+  return failed("whatsapp", `WHATSAPP_${r.code ?? `HTTP_${r.httpStatus}`}: ${r.message}`, r.retryable);
+}
+
+/**
+ * 回 WhatsApp 下单的老板（第六步：客服送出 / 不处理草稿）：普通文字，只在 24 小时客服窗口内
+ * （数据库选渠道时已经检查，窗口过了不会到这里）。文字在 payload.text（数据库按店的语言写好）。
+ */
+async function sendReply(item: NotificationItem, phone: string, cfg: WhatsAppConfig | null): Promise<Outcome> {
+  const body = typeof item.payload.text === "string" ? item.payload.text.trim() : "";
+  if (!body) return skipped("whatsapp", "EMPTY_REPLY");
+  if (!cfg) return failed("whatsapp", "WHATSAPP_NOT_CONFIGURED", false);
+  const r = await sendText(cfg, { phone }, body.slice(0, 1000));
+  if (r.ok) {
+    return { status: "sent", channel: "whatsapp", error: null, waMessageId: r.messageId, retry: false, deadTokens: [] };
+  }
+  log(r.alert ? "error" : "warn", "whatsapp_reply_failed", {
+    notification_id: item.id,
+    http: r.httpStatus,
+    code: r.code,
   });
   return failed("whatsapp", `WHATSAPP_${r.code ?? `HTTP_${r.httpStatus}`}: ${r.message}`, r.retryable);
 }

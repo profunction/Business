@@ -1431,4 +1431,329 @@ class L10nZh extends L10n {
   String sellerOrdersLimited(int count) {
     return '这里只显示最近的 $count 张单';
   }
+
+  @override
+  String get voiceHold => '按住说话下单';
+
+  @override
+  String get voiceHoldHint => '按住按钮，说要买什么（华语、广东话、福建话、马来文、英文都可以），说完放开';
+
+  @override
+  String voiceRecording(int seconds) {
+    return '正在录音 $seconds 秒…放开就送出';
+  }
+
+  @override
+  String get voiceListening => 'AI 正在听…';
+
+  @override
+  String get voiceTooShort => '太短了。请按住按钮再说一次';
+
+  @override
+  String get voiceNoPermission => '要允许使用麦克风，才能语音下单';
+
+  @override
+  String get voiceDraftTitle => '确认语音订单';
+
+  @override
+  String get voiceHeard => '我听到的：';
+
+  @override
+  String voiceYouSaid(String said) {
+    return '你说：「$said」';
+  }
+
+  @override
+  String get voiceUnsure => 'AI 不太确定，请看一下对不对';
+
+  @override
+  String get voiceUnmatched => '这些没对上商品：';
+
+  @override
+  String get voiceFind => '找商品';
+
+  @override
+  String get voiceSwap => '换一样';
+
+  @override
+  String get voiceRemove => '删掉';
+
+  @override
+  String get voiceAddItem => '加一样';
+
+  @override
+  String get voiceNoItems => '还没有商品。按「加一样」，或回去再说一次。';
+
+  @override
+  String voiceSubmit(String total) {
+    return '确认下单 $total';
+  }
+
+  @override
+  String get voiceDiscard => '不要了';
+
+  @override
+  String get voiceDiscardConfirm => '不要这张语音订单？';
+
+  @override
+  String get voiceDiscarded => '已经不要了';
+
+  @override
+  String get voiceDone => '这张已经下单了';
+
+  @override
+  String get voiceRejected => '这张已经不要了';
+
+  @override
+  String voicePendingDrafts(int count) {
+    return '你有 $count 张语音订单还没确认';
+  }
+
+  @override
+  String get voicePickTitle => '选商品';
+
+  @override
+  String get voiceSearch => '找商品名字';
+
+  @override
+  String get voicePickEmpty => '找不到。换个名字试试';
+
+  @override
+  String voiceErrTooMany(int minutes) {
+    return '刚才说太多次了。请等 $minutes 分钟再试';
+  }
+
+  @override
+  String get voiceErrNoSpeech => '听不到声音。请靠近手机再说一次';
+
+  @override
+  String get voiceErrTooLong => '太长了，请一次说一分钟以内';
+
+  @override
+  String get voiceErrUnavailable => '语音下单现在不能用，请用一般方式下单';
+
+  @override
+  String get voiceErrNotUnderstood => 'AI 听不懂。请再说一次，或用一般方式下单';
+
+  @override
+  String get voiceErrRecordAgain => '录音有问题，请再录一次';
+
+  @override
+  String get voiceErrNoProducts => '现在还没有可以下单的商品';
+
+  @override
+  String get voiceErrNotPending => '这张语音订单已经处理过了';
+
+  @override
+  String get voiceErrNotFound => '找不到这张语音订单';
+
+  @override
+  String get voiceErrInvalidProduct => '这样商品现在不能下单，请换一样';
+
+  @override
+  String get subDetails => '看订阅和付款记录';
+
+  @override
+  String billTrial(int days) {
+    return '免费试用中，还有 $days 天';
+  }
+
+  @override
+  String get billActive => '已订阅，全部价钱都看得到';
+
+  @override
+  String get billPastDue => '订阅到期了';
+
+  @override
+  String billUntil(String date, int days) {
+    return '用到 $date（还有 $days 天）';
+  }
+
+  @override
+  String billGraceUntil(String date) {
+    return '$date 前续费可以保留原价';
+  }
+
+  @override
+  String billCurrentPrice(String price) {
+    return '现在的月费 $price';
+  }
+
+  @override
+  String get payChooseMonths => '付几个月？';
+
+  @override
+  String payMonths(int n) {
+    return '$n 个月';
+  }
+
+  @override
+  String get payTotal => '总共';
+
+  @override
+  String payButton(String amount) {
+    return '付款 $amount';
+  }
+
+  @override
+  String get payMethodsNote => '可以用 FPX 网银、DuitNow、Touch \'n Go、GrabPay、ShopeePay、Boost';
+
+  @override
+  String get payCheck => '我付好了，看一下';
+
+  @override
+  String get payOpenFailed => '打不开付款页，请再试一次';
+
+  @override
+  String payDone(String amount) {
+    return '收到付款 $amount，谢谢！';
+  }
+
+  @override
+  String get payNotYet => '还没收到付款。付好了的话，等一下再看';
+
+  @override
+  String get payHistory => '付过的';
+
+  @override
+  String get payMethodFpx => 'FPX 网银';
+
+  @override
+  String get payMethodDuitnow => 'DuitNow';
+
+  @override
+  String get payMethodEwallet => '电子钱包';
+
+  @override
+  String get payMethodCard => '银行卡';
+
+  @override
+  String get payMethodOther => '其他';
+
+  @override
+  String get payErrNotReady => '网上付款还没开通，请联络客服';
+
+  @override
+  String get payErrNothingDue => '这一项已经付过了';
+
+  @override
+  String get payErrFoundingFull => '创始会员名额满了';
+
+  @override
+  String get payErrTooMany => '按太多次了，请等一下再试';
+
+  @override
+  String get payErrGateway => '付款系统暂时不能用，请等一下再试';
+
+  @override
+  String get sellerBillingTitle => '收费和账单';
+
+  @override
+  String get sellerBillingHint => '佣金账单、创始会员上架费';
+
+  @override
+  String sellerBillingOutstanding(String amount) {
+    return '还有 $amount 佣金没付';
+  }
+
+  @override
+  String sellerCommissionRate(String rate) {
+    return '你的佣金：每张单 $rate';
+  }
+
+  @override
+  String get sellerCommissionRule => '只算已送达的货价，不算运费；缺货和取消的不算。每个月 1 号收到上个月的账单。';
+
+  @override
+  String get sellerThisMonthOrders => '已送达的单';
+
+  @override
+  String get sellerThisMonthGoods => '货价（不含运费）';
+
+  @override
+  String get sellerThisMonthCommission => '这个月到现在的佣金';
+
+  @override
+  String get sellerInvoices => '每月账单';
+
+  @override
+  String get sellerNoInvoices => '还没有账单';
+
+  @override
+  String get listingFeeTitle => '创始会员上架费';
+
+  @override
+  String get listingFeePaid => '已付，谢谢！';
+
+  @override
+  String listingFeePaidNo(int no) {
+    return '创始会员第 $no 号，上架费已付';
+  }
+
+  @override
+  String listingFeeDue(String fee, int no) {
+    return '你是创始会员第 $no 号，上架费 $fee（一次）';
+  }
+
+  @override
+  String listingFeeJoin(String fee, int seats) {
+    return '付 $fee（一次）成为创始会员，佣金比较低。还有 $seats 个名额';
+  }
+
+  @override
+  String get listingFeeFull => '创始会员名额满了';
+
+  @override
+  String get invoiceTitle => '佣金账单';
+
+  @override
+  String get invoicePdf => '印 / 存 PDF';
+
+  @override
+  String get invoiceDraft => '草稿';
+
+  @override
+  String get invoiceIssued => '待付款';
+
+  @override
+  String get invoiceOverdue => '逾期';
+
+  @override
+  String get invoicePaid => '已付';
+
+  @override
+  String get invoiceVoid => '作废';
+
+  @override
+  String invoiceDue(String date) {
+    return '$date 前付';
+  }
+
+  @override
+  String invoicePaidOn(String date) {
+    return '$date 付了';
+  }
+
+  @override
+  String get invoiceCommission => '佣金';
+
+  @override
+  String get invoiceLines => '每张单';
+
+  @override
+  String invoiceLineText(String goods, String rate) {
+    return '货价 $goods x $rate';
+  }
+
+  @override
+  String get invoiceColOrder => '订单';
+
+  @override
+  String get invoiceColShop => '店';
+
+  @override
+  String get invoiceColGoods => '货价';
+
+  @override
+  String get invoiceColRate => '比例';
 }

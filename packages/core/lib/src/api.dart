@@ -9,8 +9,10 @@ import 'ids.dart';
 import 'json.dart';
 import 'models/account.dart';
 import 'models/admin.dart';
+import 'models/billing.dart';
 import 'models/catalog.dart';
 import 'models/common.dart';
+import 'models/drafts.dart';
 import 'models/orders.dart';
 import 'models/seller.dart';
 
@@ -72,7 +74,7 @@ class AppError implements Exception {
     if (code == 'UNAUTHORIZED' || code == 'AUTH') {
       return AppError('AUTH', detail: sessionExpired, message: e.reasonPhrase);
     }
-    // parse-price-list 用量满了（429）：detail 是要等几秒（body 的 retry_after），老板才知道要等多久
+    // parse-price-list / voice-order 用量满了（429）：detail 是要等几秒（body 的 retry_after），老板才知道要等多久
     if (code == 'TOO_MANY_IMPORTS') {
       final after = details is Map ? details['retry_after'] : null;
       final sec = after is num ? after.ceil() : int.tryParse('${after ?? ''}');
@@ -207,6 +209,40 @@ class WholesaleApi {
   Future<SubscriptionInfo> getSubscriptionStatus(String shopId) async =>
       SubscriptionInfo.fromJson(await _rpcJson('get_subscription_status', {'p_shop_id': shopId}));
 
+  // ---------------- 收费（第七步） ----------------
+
+  /// 买家「我的订阅」：状态、还剩几天、续费的价钱（锁定的还是现在的）、付过的
+  Future<BuyerBilling> getBuyerBilling(String shopId) async =>
+      BuyerBilling.fromJson(await _rpcJson('get_buyer_billing', {'p_shop_id': shopId}));
+
+  /// 叫 Edge Function create-payment：开付款单 → 网关的付款页网址（用浏览器打开）。金额由服务器算。
+  /// 错误：PAYMENT_NOT_CONFIGURED（还没接网关）、NOTHING_DUE、FOUNDING_FULL、TOO_MANY_PAYMENTS、GATEWAY_*、NOT_ALLOWED
+  Future<PaymentCheckout> createPayment(PaymentPurpose purpose, String targetId, {int months = 1}) => _call(() async {
+    final res = await client.functions.invoke(
+      'create-payment',
+      body: {
+        'purpose': paymentPurposeCode(purpose),
+        'target_id': targetId,
+        if (purpose == PaymentPurpose.subscription) 'months': months,
+      },
+    );
+    final out = PaymentCheckout.fromJson(asJson(res.data));
+    if (!out.checkoutUrl.startsWith('https://')) throw const AppError('UNKNOWN', message: 'no checkout url');
+    return out;
+  });
+
+  /// 付完回到 App：这张付款单现在的状态
+  Future<PaymentInfo> getPayment(String paymentId) async =>
+      PaymentInfo.fromJson(await _rpcJson('get_payment', {'p_payment_id': paymentId}));
+
+  /// 批发商的「收费」页：创始上架费、佣金比例、这个月的佣金、账单
+  Future<SellerBilling> getSellerBilling(String wholesalerId) async =>
+      SellerBilling.fromJson(await _rpcJson('get_seller_billing', {'p_wholesaler_id': wholesalerId}));
+
+  /// 一张佣金账单的明细（每张单一行）
+  Future<InvoiceDetail> getCommissionInvoice(String invoiceId) async =>
+      InvoiceDetail.fromJson(await _rpcJson('get_commission_invoice', {'p_invoice_id': invoiceId}));
+
   Future<void> setUnlockedWholesalers(String shopId, List<String> wholesalerIds) => _call(
     () => client.rpc<dynamic>(
       'set_unlocked_wholesalers',
@@ -275,6 +311,69 @@ class WholesaleApi {
 
   Future<ReorderResult> reorderLast(String shopId) async =>
       ReorderResult.fromJson(await _rpcJson('reorder_last', {'p_shop_id': shopId}));
+
+  // ---------------- 语音下单 / 订单草稿（第六步） ----------------
+
+  /// 上传录音到 Storage `voice-orders/<shopId>/<uuid>.wav`，回传 bucket 里的路径
+  Future<String> uploadVoiceOrder(String shopId, Uint8List wavBytes) => _call(() async {
+    final path = '$shopId/${newUuidV4()}.wav';
+    await client.storage
+        .from('voice-orders')
+        .uploadBinary(path, wavBytes, fileOptions: const FileOptions(contentType: 'audio/wav'));
+    return path;
+  });
+
+  /// 叫 Edge Function voice-order：录音 → 文字 → AI 对商品 → 草稿（老板确认后才下单）。
+  /// 用量满了 → TOO_MANY_VOICE_ORDERS（detail = 要等几秒）；没说话 → NO_SPEECH；
+  /// 语音 / AI 服务没设定或暂时不能用 → STT_NOT_CONFIGURED / AI_NOT_CONFIGURED / *_BUSY（503）
+  Future<OrderDraft> createVoiceDraft(String shopId, String audioPath) => _call(() async {
+    try {
+      final res = await client.functions.invoke('voice-order', body: {'shop_id': shopId, 'audio_path': audioPath});
+      return OrderDraft.fromJson(asJson(asJson(res.data)['draft']));
+    } on FunctionException catch (e) {
+      final err = AppError.fromFunction(e);
+      if (err.code == 'TOO_MANY_VOICE_ORDERS') {
+        final details = e.details;
+        final after = details is Map ? details['retry_after'] : null;
+        throw AppError(err.code, detail: after?.toString(), message: err.message);
+      }
+      throw err;
+    }
+  });
+
+  /// 一次做完：上传 → 做草稿
+  Future<OrderDraft> submitVoiceOrder(String shopId, Uint8List wavBytes) async =>
+      createVoiceDraft(shopId, await uploadVoiceOrder(shopId, wavBytes));
+
+  Future<OrderDraft> getOrderDraft(String draftId) async =>
+      OrderDraft.fromJson(await _rpcJson('get_order_draft', {'p_draft_id': draftId}));
+
+  /// 这家店还没确认的语音草稿（7 天内）
+  Future<List<DraftSummary>> listOrderDrafts(String shopId) async =>
+      (await _rpcList('list_order_drafts', {'p_shop_id': shopId})).map(DraftSummary.fromJson).toList();
+
+  /// 整份换掉（改数量、换商品、删掉、加）。unmatched 给了就换掉「没听懂」的列表
+  Future<OrderDraft> saveOrderDraft(String draftId, List<DraftItem> items, {List<UnmatchedPhrase>? unmatched}) async =>
+      OrderDraft.fromJson(
+        await _rpcJson('save_order_draft', {
+          'p_draft_id': draftId,
+          'p_items': [for (final i in items) i.toSaveJson()],
+          'p_unmatched': unmatched == null ? null : [for (final u in unmatched) u.toJson()],
+        }),
+      );
+
+  /// 照草稿下单（走 place_order）。总额对不上 → PRICE_CHANGED（error.quote 是新报价）
+  Future<DraftSubmitResult> submitOrderDraft(String draftId, {required int expectedTotalSen, String? note}) async =>
+      DraftSubmitResult.fromJson(
+        await _rpcJson('submit_order_draft', {
+          'p_draft_id': draftId,
+          'p_expected_total_sen': expectedTotalSen,
+          'p_note': note,
+        }),
+      );
+
+  Future<OrderDraft> rejectOrderDraft(String draftId, {String? reason}) async =>
+      OrderDraft.fromJson(await _rpcJson('reject_order_draft', {'p_draft_id': draftId, 'p_reason': reason}));
 
   // ---------------- 订单 ----------------
 

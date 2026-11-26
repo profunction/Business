@@ -128,7 +128,8 @@ select tests.login_as(tests.uid('buyer1'));
 select lives_ok(format('select public.set_order_status(%L, %L)', :'o_w3', 'delivered'), '老板也可以按「收到了」');
 
 select is((select count(*)::int from public.order_status_events where order_id = :'o_w1'), 3, 'W1 的记录：待确认 → 已确认 → 已送达');
-select is((select count(*)::int from public.notifications where shop_id = tests.uid('S1')), 6, '老板收到 6 个状态通知');
+select is((select count(*)::int from public.notifications where shop_id = tests.uid('S1')), 5,
+  '老板收到 5 个状态通知（自己按「收到了」的那次不通知自己，第六步）');
 
 -- ---------- 佣金（送达时自动生成，比例当时就存下来）----------
 select tests.logout();

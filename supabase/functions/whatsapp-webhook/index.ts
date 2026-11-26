@@ -5,12 +5,15 @@
 //        超过 → 413（Content-Length 写超过就不读；没写就边读边数）——公开的端点，不能让人用大 body 塞爆 worker 记忆体
 //        一次可能很多笔（entry[] / changes[] / messages[] / statuses[]），全部照顺序处理：
 //          按钮 → handle_whatsapp_button → 回一句普通文字（Meta 重送的 duplicate 不回）
-//          其他消息 → record_whatsapp_message（只记录，第六步再处理）
+//          其他消息 → record_whatsapp_message（记录）→ 第六步：reserve_whatsapp_order 决定要不要做成订单草稿：
+//            注册过的店发文字 / 语音 → 背景：（语音先从 Graph 下载、存到 voice-orders、转文字）→ Claude → 草稿，
+//              进客服后台的「WhatsApp 订单」，然后回一句「收到，客服确认后帮您下单」（店的语言）；
+//            不认识的号码 → 「请先注册」（24 小时内第一条才回）；照片 / 文件 → 「请用文字或语音」；批发商的号码不处理
 //          送达状态 → update_whatsapp_status
 //        数据库的写入（会去重）做完才回 200；回复文字交给 EdgeRuntime.waitUntil 在背景发。
 //        数据库暂时有问题 → 回 500，Meta 会重送（已经处理过的会变 duplicate，重送是安全的）。
 
-import { whatsappAppSecret, whatsappConfig, whatsappVerifyToken } from "../_shared/env.ts";
+import { anthropicApiKey, sttConfig, whatsappAppSecret, whatsappConfig, whatsappVerifyToken } from "../_shared/env.ts";
 import {
   BodyTooLargeError,
   errorMessage,
@@ -21,12 +24,26 @@ import {
   text,
   timingSafeEqual,
 } from "../_shared/http.ts";
-import { buttonReplyText, toLocale } from "../_shared/messages.ts";
+import { buttonReplyText, orderReplyText, REGISTER_REPLY, toLocale } from "../_shared/messages.ts";
 import { adminClient, DbError, rpc } from "../_shared/supabase.ts";
-import { parseWebhook, type Recipient, sendText, verifySignature, type WebhookEvent } from "../_shared/whatsapp.ts";
+import { sniffAudio } from "../_shared/filetype.ts";
+import { makeDraft } from "../_shared/voice_order.ts";
+import {
+  downloadMedia,
+  parseWebhook,
+  type Recipient,
+  sendText,
+  verifySignature,
+  type WebhookEvent,
+} from "../_shared/whatsapp.ts";
 
 /** Meta 的 webhook 最多 3 MB（docs/research/step4/verifications.json）；留一点余地 */
 export const MAX_WEBHOOK_BODY_BYTES = 4 * 1024 * 1024;
+
+/** WhatsApp 语音最多存多大（跟 voice-orders bucket 一样 3 MB；一分钟的语音大约 100 KB） */
+export const MAX_VOICE_BYTES = 3 * 1024 * 1024;
+/** 背景做草稿最多多久 */
+export const ORDER_TIME_BUDGET_MS = 120_000;
 
 const SIGNATURE_RE = /^\s*sha256=[0-9a-fA-F]{64}\s*$/;
 
@@ -131,12 +148,13 @@ export async function handler(req: Request): Promise<Response> {
     return json({ error: "WEBHOOK_NOT_CONFIGURED" }, 500);
   }
   const replies: Reply[] = [];
-  const counts = { buttons: 0, messages: 0, statuses: 0, duplicates: 0, dropped: 0 };
+  const jobs: (() => Promise<void>)[] = [];
+  const counts = { buttons: 0, messages: 0, statuses: 0, duplicates: 0, dropped: 0, orders: 0 };
   let retryLater = false;
 
   for (const ev of events) {
     try {
-      await handleEvent(admin, ev, replies, counts);
+      await handleEvent(admin, ev, replies, counts, jobs);
     } catch (e) {
       if (e instanceof DbError && !e.transient) {
         // 数据本身的问题（重送也一样）：记下来，不要让 Meta 重送 7 天
@@ -149,7 +167,10 @@ export async function handler(req: Request): Promise<Response> {
     }
   }
 
-  const sending = sendReplies(replies);
+  // 先回答按钮 / 注册的那几句，再做草稿（语音转文字 + AI 要几十秒，Meta 不用等）
+  const sending = sendReplies(replies).then(async () => {
+    for (const job of jobs) await job();
+  });
   if (!runInBackground(sending)) await sending;
 
   log("info", "whatsapp_webhook_done", {
@@ -167,6 +188,7 @@ async function handleEvent(
   ev: WebhookEvent,
   replies: Reply[],
   counts: Record<string, number>,
+  jobs: (() => Promise<void>)[],
 ): Promise<void> {
   if (ev.kind === "button") {
     counts.buttons++;
@@ -198,7 +220,13 @@ async function handleEvent(
       p_wa_message_id: ev.id,
       p_raw: ev.raw,
     });
-    if (res?.result === "duplicate") counts.duplicates++;
+    if (res?.result === "duplicate") {
+      counts.duplicates++;
+      return;
+    }
+    const messageId = (res as { id?: unknown } | null)?.id;
+    if (res?.result !== "recorded" || typeof messageId !== "string") return;
+    await handleOrderMessage(admin, ev, messageId, replies, counts, jobs);
     return;
   }
   counts.statuses++;
@@ -207,6 +235,111 @@ async function handleEvent(
     p_status: ev.status,
     p_error_code: ev.errorCode,
     p_error: ev.error,
+  });
+}
+
+/** reserve_whatsapp_order 回传的 JSON */
+export interface IntakeResult {
+  result: string;
+  reply?: boolean;
+  run_id?: string;
+  shop_id?: string;
+  locale?: string | null;
+  message_type?: string;
+  body?: string | null;
+  media_id?: string | null;
+}
+
+async function handleOrderMessage(
+  admin: ReturnType<typeof adminClient>,
+  ev: Extract<WebhookEvent, { kind: "message" }>,
+  messageId: string,
+  replies: Reply[],
+  counts: Record<string, number>,
+  jobs: (() => Promise<void>)[],
+): Promise<void> {
+  const to: Recipient | null = ev.from ? { phone: ev.from } : ev.fromUserId ? { userId: ev.fromUserId } : null;
+  const intake = await rpc<IntakeResult>(admin, "reserve_whatsapp_order", {
+    p_message_id: messageId,
+    p_run_id: crypto.randomUUID(),
+  });
+  const locale = toLocale(intake?.locale);
+  const reply = (text: string, result: string) => {
+    if (to) replies.push({ to, text, replyTo: ev.id, phoneNumberId: ev.phoneNumberId, result });
+  };
+  switch (intake?.result) {
+    case "unknown_sender":
+      if (intake.reply) reply(REGISTER_REPLY, "unknown_sender");
+      return;
+    case "unsupported":
+      if (intake.reply) reply(orderReplyText("unsupported", locale), "unsupported");
+      return;
+    case "ok":
+      break;
+    default:
+      if (intake?.result === "quota") log("warn", "whatsapp_order_quota", { shop_id: intake.shop_id ?? null });
+      return;
+  }
+  const runId = intake.run_id;
+  const shopId = intake.shop_id;
+  if (!runId || !shopId) return;
+  counts.orders++;
+  jobs.push(async () => {
+    try {
+      const deadline = Date.now() + ORDER_TIME_BUDGET_MS;
+      const deps = { admin, stt: sttConfig(), anthropicKey: anthropicApiKey(), deadline };
+      let out;
+      if (intake.message_type === "audio") {
+        const cfg = whatsappConfig();
+        const media = cfg && intake.media_id
+          ? await downloadMedia(cfg, intake.media_id, MAX_VOICE_BYTES, deadline)
+          : { ok: false as const, code: cfg ? "MEDIA_NOT_FOUND" : "WHATSAPP_NOT_CONFIGURED", message: "" };
+        const audio = media.ok ? sniffAudio(media.bytes) : null;
+        let audioPath: string | null = null;
+        if (media.ok && audio) {
+          audioPath = `${shopId}/${crypto.randomUUID()}.${audio.ext}`;
+          const up = await admin.storage.from("voice-orders").upload(audioPath, media.bytes, {
+            contentType: audio.mime,
+            upsert: false,
+          });
+          if (up.error) {
+            log("warn", "whatsapp_voice_store_failed", { error: up.error.message });
+            audioPath = null;
+          }
+        }
+        if (media.ok && audio && audioPath) {
+          out = await makeDraft(deps, { runId, shopId }, {
+            kind: "audio",
+            bytes: media.bytes,
+            mime: audio.mime,
+            audioPath,
+          }, true);
+        } else {
+          // 拿不到 / 存不了录音：照样放进客服的队列（空的草稿 + 原因），客服自己处理
+          const code = !media.ok ? media.code : !audio ? "UNSUPPORTED_AUDIO" : "STORAGE_FAILED";
+          out = await rpc<{ draft_id: string }>(admin, "create_order_draft", {
+            p_run_id: runId,
+            p_transcript: null,
+            p_ai_meta: { error_code: code },
+          }).then((draft) => ({ ok: true as const, draft: { ...draft, item_count: 0 } }));
+        }
+      } else {
+        out = await makeDraft(deps, { runId, shopId }, { kind: "text", text: intake.body ?? "" }, true);
+      }
+      if (!out.ok || !to) return;
+      const n = out.draft.item_count ?? 0;
+      const cfg = whatsappConfig();
+      if (!cfg) {
+        log("warn", "whatsapp_reply_skipped", { reason: "WHATSAPP_NOT_CONFIGURED", count: 1 });
+        return;
+      }
+      const text = n > 0 ? orderReplyText("received", locale, { n }) : orderReplyText("received_unclear", locale);
+      const sent = await sendText(cfg, to, text, { replyTo: ev.id, phoneNumberId: ev.phoneNumberId });
+      if (!sent.ok) log("warn", "whatsapp_reply_failed", { result: "order_received", code: sent.code });
+    } catch (e) {
+      log("error", "whatsapp_order_failed", { error: errorMessage(e) });
+      await rpc(admin, "fail_voice_order_run", { p_run_id: runId, p_error_code: "INTERNAL_ERROR" }).catch(() => {});
+    }
   });
 }
 

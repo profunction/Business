@@ -255,6 +255,9 @@ void main() {
     expect(find.text('这部手机收不到 App 推送，可以改用 WhatsApp 收订单'), findsOneWidget);
     expect(find.textContaining('订阅', skipOffstage: false), findsNothing, reason: '批发商端没有付费按钮');
 
+    // 滚回最上面（设定页有「收费和账单」之后变长了）
+    await tester.drag(pageScrollable, const Offset(0, 3000));
+    await tester.pumpAndSettle();
     await tapAndSettle(tester, find.byKey(const Key('settings-lang-en')));
     expect(find.text('Settings'), findsOneWidget);
     expect(find.text('My business'), findsOneWidget);

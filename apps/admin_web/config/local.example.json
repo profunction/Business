@@ -1,0 +1,9 @@
+{
+  "SUPABASE_URL": "http://127.0.0.1:54321",
+  "SUPABASE_PUBLISHABLE_KEY": "把 npx supabase status 显示的 Publishable key 贴在这里",
+  "INVOICE_COMPANY_NAME": "",
+  "INVOICE_COMPANY_SSM": "",
+  "INVOICE_COMPANY_ADDRESS": "",
+  "INVOICE_COMPANY_EMAIL": "",
+  "INVOICE_BANK_DETAILS": ""
+}

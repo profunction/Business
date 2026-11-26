@@ -3,6 +3,8 @@
     <uses-permission android:name="android.permission.INTERNET"/>
     <!-- Android 13+ 显示通知要问（firebase_messaging 也会自动合并进来，这里写清楚） -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 语音下单：按住麦克风说要买什么 -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <application
         android:label="新山批发"
         android:name="${applicationName}"

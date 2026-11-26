@@ -20,6 +20,7 @@ class DemoAdminApi extends AdminApi {
     _subs = _list('admin_subscriptions');
     _report = _j('admin_commission_report') as Json;
     _audit = _list('admin_audit_logs');
+    _payments = _list('admin_payments');
     final detail = _j('admin_order_detail') as Json;
     _details[detail['id'] as String] = detail;
     _products['00000000-0000-4000-a000-00000000000a'] = _list('admin_products');
@@ -49,6 +50,7 @@ class DemoAdminApi extends AdminApi {
   late final List<Json> _subs;
   late final Json _report;
   late final List<Json> _audit;
+  late final List<Json> _payments;
   final _details = <String, Json>{};
   final _products = <String, List<Json>>{};
   final _carts = <String, Map<String, int>>{};
@@ -389,8 +391,10 @@ class DemoAdminApi extends AdminApi {
     String? categoryId,
     String? search,
   }) => _later('getOffers', () {
+    // WhatsApp 订单的样本是 Siti 的店：用她那一份（get_offers 真的回传的）
+    final source = shopId == _sitiShop ? _list('admin_draft_offers') : _offers;
     return [
-      for (final o in _offers)
+      for (final o in source)
         if (_matches(search, [o['product_name']]) && (wholesalerId == null || o['wholesaler_id'] == wholesalerId))
           Offer.fromJson(
             _visible(shopId, o)
@@ -1033,4 +1037,253 @@ class DemoAdminApi extends AdminApi {
         .map(AuditEntry.fromJson)
         .toList(),
   );
+
+  // ---------------- WhatsApp 订单（第六步） ----------------
+
+  static const _sitiShop = '00000000-0000-4000-b000-000000000002';
+
+  late final Map<String, OrderDraft> _drafts = {
+    for (final name in ['admin_order_draft', 'admin_order_draft_voice'])
+      (_j(name) as Json)['id'] as String: OrderDraft.fromJson(_j(name) as Json),
+  };
+
+  OrderDraft _draft(String id) => _drafts[id] ?? (throw const AppError('DRAFT_NOT_FOUND'));
+
+  @override
+  Future<List<DraftSummary>> listOrderDraftQueue({
+    DraftStatus? status = DraftStatus.pendingReview,
+    String? channel = 'whatsapp',
+  }) => _later('listOrderDraftQueue', () {
+    return [
+      for (final row in _list('admin_order_drafts'))
+        if (status == null || _drafts[row['id']]?.status == status)
+          DraftSummary.fromJson({...row, 'item_count': _drafts[row['id']]?.items.length ?? row['item_count']}),
+    ];
+  });
+
+  @override
+  Future<OrderDraft> getOrderDraft(String draftId) => _later('getOrderDraft', () => _draft(draftId));
+
+  @override
+  Future<OrderDraft> saveOrderDraft(String draftId, List<DraftItem> items, {List<UnmatchedPhrase>? unmatched}) =>
+      _later('saveOrderDraft', () {
+        final d = _draft(draftId);
+        if (!d.isPending) throw const AppError('DRAFT_NOT_PENDING');
+        final offers = {for (final o in _list('admin_draft_offers')) o['product_id']: o};
+        final full = [
+          for (final i in items)
+            if (offers[i.productId] case final o?)
+              DraftItem.fromJson({
+                'product_id': i.productId,
+                'qty': i.qty,
+                'said': i.said,
+                'confidence': i.confidence,
+                'product_name': o['product_name'],
+                'unit': o['unit'],
+                'pack_qty': o['pack_qty'],
+                'min_order_qty': o['min_order_qty'],
+                'stock_status': o['stock_status'],
+                'wholesaler_id': o['wholesaler_id'],
+                'wholesaler_name': o['wholesaler_name'],
+                'unit_price_sen': o['price_sen'],
+              })
+            else
+              i,
+        ];
+        _log('admin_save_order_draft', 'order_drafts', draftId, shopId: d.shopId);
+        return _drafts[draftId] = _withItems(d, full, unmatched ?? d.unmatched, d.status);
+      });
+
+  @override
+  Future<DraftSubmitResult> submitOrderDraft(String draftId, {required int expectedTotalSen, String? note}) =>
+      _later('submitOrderDraft $expectedTotalSen', () {
+        final d = _draft(draftId);
+        if (!d.isPending) throw const AppError('DRAFT_NOT_PENDING');
+        final q = d.quote;
+        if (q == null || !q.canPlace) throw const AppError('CART_HAS_PROBLEMS');
+        if (q.totalSen != expectedTotalSen) throw const AppError('PRICE_CHANGED');
+        _drafts[draftId] = _withItems(d, d.items, d.unmatched, DraftStatus.confirmed);
+        _log('admin_submit_order_draft', 'order_drafts', draftId, shopId: d.shopId, after: {'source': 'whatsapp'});
+        return DraftSubmitResult(checkoutId: _id('chk'), orderNos: 'JHB261129-00041', totalSen: expectedTotalSen);
+      });
+
+  @override
+  Future<OrderDraft> rejectOrderDraft(String draftId, {String? reason}) =>
+      _later('rejectOrderDraft ${reason ?? ''}', () {
+        final d = _draft(draftId);
+        if (!d.isPending) throw const AppError('DRAFT_NOT_PENDING');
+        _log('admin_reject_order_draft', 'order_drafts', draftId, shopId: d.shopId, after: {'reason': reason});
+        return _drafts[draftId] = _withItems(d, d.items, d.unmatched, DraftStatus.rejected);
+      });
+
+  /// 报价照服务器的规则简单算：未到起订量 / 缺货的不算钱；每家满 RM150 免运费，否则 RM8
+  OrderDraft _withItems(OrderDraft d, List<DraftItem> items, List<UnmatchedPhrase> unmatched, DraftStatus status) {
+    final byWholesaler = <String, List<DraftItem>>{};
+    for (final i in items) {
+      byWholesaler.putIfAbsent(i.wholesalerId, () => []).add(i);
+    }
+    final groups = <CartGroup>[];
+    for (final e in byWholesaler.entries) {
+      final lines = [
+        for (final i in e.value)
+          CartLine(
+            productId: i.productId,
+            productName: i.productName,
+            unit: i.unit,
+            packQty: i.packQty,
+            qty: i.qty,
+            minOrderQty: i.minOrderQty,
+            unitPriceSen: i.unitPriceSen,
+            lineTotalSen: (i.unitPriceSen ?? 0) * i.qty,
+            problem: i.stockStatus == StockStatus.outOfStock
+                ? CartProblem.outOfStock
+                : i.qty < i.minOrderQty
+                ? CartProblem.belowMinQty
+                : null,
+          ),
+      ];
+      final goods = lines.where((l) => l.problem == null).fold<int>(0, (a, l) => a + (l.lineTotalSen ?? 0));
+      groups.add(
+        CartGroup(
+          wholesalerId: e.key,
+          wholesalerName: e.value.first.wholesalerName,
+          goodsSubtotalSen: goods,
+          shippingFeeSen: goods >= 15000 ? 0 : 800,
+          shortBySen: 0,
+          lines: lines,
+        ),
+      );
+    }
+    final goods = groups.fold<int>(0, (a, g) => a + g.goodsSubtotalSen);
+    final ship = groups.fold<int>(0, (a, g) => a + (g.shippingFeeSen ?? 0));
+    return OrderDraft(
+      id: d.id,
+      shopId: d.shopId,
+      shopName: d.shopName,
+      source: d.source,
+      status: status,
+      transcript: d.transcript,
+      language: d.language,
+      unmatched: unmatched,
+      createdAt: d.createdAt,
+      senderPhone: d.senderPhone,
+      whatsappWindowOpen: d.whatsappWindowOpen,
+      errorCode: d.errorCode,
+      items: items,
+      quote: status != DraftStatus.pendingReview
+          ? null
+          : CartQuote(
+              canPlace: items.isNotEmpty && !groups.any((g) => g.hasProblem),
+              goodsTotalSen: goods,
+              shippingTotalSen: ship,
+              totalSen: goods + ship,
+              groups: groups,
+            ),
+    );
+  }
+
+  // ---------------- 收费（第七步） ----------------
+
+  /// 测试用：create-payment 回传这个错误（例如 PAYMENT_NOT_CONFIGURED）
+  String? paymentError;
+
+  @override
+  Future<List<PaymentInfo>> listPayments({PaymentStatus? status, PaymentPurpose? purpose, bool reviewOnly = false}) =>
+      _later('listPayments', () {
+        return _payments
+            .map(PaymentInfo.fromJson)
+            .where(
+              (p) =>
+                  (status == null || p.status == status) &&
+                  (purpose == null || p.purpose == purpose) &&
+                  (!reviewOnly || p.reviewReason != null),
+            )
+            .toList();
+      });
+
+  @override
+  Future<PaymentCheckout> createPayment(PaymentPurpose purpose, String targetId, {int months = 1}) =>
+      _later('createPayment ${paymentPurposeCode(purpose)}', () {
+        if (paymentError != null) throw AppError(paymentError!);
+        final amount = switch (purpose) {
+          PaymentPurpose.subscription =>
+            asInt(
+                  _subs.firstWhere(
+                    (x) => x['shop_id'] == targetId,
+                    orElse: () => {'locked_price_sen': 5000},
+                  )['locked_price_sen'],
+                ) *
+                months,
+          PaymentPurpose.listingFee => 10000,
+          PaymentPurpose.commissionInvoice => asInt(
+            asJsonList(_report['wholesalers'])
+                .map((w) => asJson(w['invoice']))
+                .firstWhere((i) => i['id'] == targetId, orElse: () => {'commission_sen': 0})['commission_sen'],
+          ),
+        };
+        final id = _id('pay');
+        _payments.insert(0, {
+          'id': id,
+          'purpose': paymentPurposeCode(purpose),
+          'status': 'pending',
+          'amount_sen': amount,
+          'gateway': 'hitpay',
+          'created_at': _now,
+          'payer_name': switch (purpose) {
+            PaymentPurpose.subscription => _subs.firstWhere(
+              (x) => x['shop_id'] == targetId,
+              orElse: () => {'shop_name': null},
+            )['shop_name'],
+            PaymentPurpose.listingFee => _wholesalers.firstWhere(
+              (x) => x['id'] == targetId,
+              orElse: () => {'name': null},
+            )['name'],
+            PaymentPurpose.commissionInvoice => null,
+          },
+        });
+        return PaymentCheckout(
+          paymentId: id,
+          checkoutUrl: 'https://securecheckout.sandbox.hit-pay.com/$id',
+          amountSen: amount,
+        );
+      });
+
+  @override
+  Future<AdminWholesaler> markListingFeePaid(
+    String wholesalerId, {
+    PaymentMethod method = PaymentMethod.other,
+    String? reference,
+  }) => _later('markListingFeePaid', () {
+    final w = _find(_wholesalers, wholesalerId);
+    if (w['founding_fee_paid_at'] != null) throw const AppError('LISTING_FEE_ALREADY_PAID');
+    if (reference != null && !_references.add(reference)) throw const AppError('DUPLICATE_PAYMENT_REFERENCE');
+    if (w['is_founding'] != true) {
+      w['is_founding'] = true;
+      w['founding_no'] =
+          _wholesalers.fold<int>(0, (m, x) => asInt(x['founding_no']) > m ? asInt(x['founding_no']) : m) + 1;
+      _recomputeRate(w);
+    }
+    w['founding_fee_paid_at'] = _now;
+    final id = _id('pay');
+    _payments.insert(0, {
+      'id': id,
+      'purpose': 'listing_fee',
+      'status': 'paid',
+      'amount_sen': 10000,
+      'gateway': 'manual',
+      'method': method.name,
+      'gateway_ref': reference,
+      'paid_at': _now,
+      'created_at': _now,
+      'payer_name': w['name'],
+    });
+    _log(
+      'admin_mark_listing_fee_paid',
+      'wholesalers',
+      wholesalerId,
+      wholesalerId: wholesalerId,
+      after: {'payment_id': id, 'amount_sen': 10000, 'reference': reference},
+    );
+    return AdminWholesaler.fromJson(w);
+  });
 }

@@ -36,6 +36,11 @@ final subscriptionProvider = FutureProvider.autoDispose<SubscriptionInfo>(
   (ref) => ref.watch(apiProvider).getSubscriptionStatus(ref.watch(shopIdProvider)),
 );
 
+/// 「我的订阅」页（get_buyer_billing）
+final buyerBillingProvider = FutureProvider.autoDispose<BuyerBilling>(
+  (ref) => ref.watch(apiProvider).getBuyerBilling(ref.watch(shopIdProvider)),
+);
+
 final categoriesProvider = FutureProvider.autoDispose<List<CategorySummary>>(
   (ref) => ref.watch(apiProvider).getCategories(ref.watch(shopIdProvider)),
 );

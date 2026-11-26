@@ -1,0 +1,35 @@
+{
+    "id": "9a0cb11e-470d-4880-ab99-0365bd617c03",
+    "lines": [
+        {
+            "rate": 0.0100,
+            "order_id": "660e0f03-ad78-4f97-af9a-4ac383865fbf",
+            "order_no": "JHB261126-00001",
+            "shop_name": "阿明茶餐室",
+            "rate_source": "founding",
+            "delivered_at": "2026-11-26T05:46:24.429534+00:00",
+            "commission_sen": 281,
+            "base_amount_sen": 28100,
+            "shipping_fee_sen": 0
+        }
+    ],
+    "status": "issued",
+    "billing": {
+        "name": "示范批发 A：新山包装行",
+        "email": null,
+        "ssm_no": null,
+        "address": "Jalan Demo 1, Johor Bahru"
+    },
+    "gmv_sen": 28100,
+    "paid_at": null,
+    "due_date": "2026-12-10",
+    "payments": [
+    ],
+    "issued_at": "2026-11-26T05:46:24.483135+00:00",
+    "invoice_no": "INV2610-0001",
+    "order_count": 1,
+    "period_month": "2026-10-01",
+    "wholesaler_id": "00000000-0000-4000-a000-00000000000a",
+    "commission_sen": 281,
+    "wholesaler_name": "示范批发 A：新山包装行"
+}
