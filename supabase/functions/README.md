@@ -133,7 +133,7 @@ deno task deploy   # = deno task bundle，再 supabase functions deploy dispatch
 | 429  | `TOO_MANY_IMPORTS`（`retry_after` 秒、`window`：`burst` / `hour` / `day`；`Retry-After` 头） | `quota`：用量满了；等 `retry_after` 秒再叫就不会被别段挡住                    | 没动、不算次数                               |
 | 500  | `CONFIG_MISSING`、`DB_ERROR`、`INTERNAL_ERROR`                                               | 函数没设定好；用户身份读 import 出错；程式错误                                | 没动（`CONFIG_MISSING` 时什么都还没碰）      |
 | 503  | `QUOTA_UNAVAILABLE`                                                                          | 叫不到 `reserve_price_list_run`（数据库暂时出错、断线、迁移还没跑）           | 没动：暂时的，等一下再叫一样可以             |
-| 503  | `AUTH_UNAVAILABLE`                                                                           | Auth 服务暂时出错（断线、逾时、5xx、429、回的不是 JSON），验不了 JWT          | 没动：暂时的（**不是**登录过期），等一下再叫 |
+| 503  | `QUOTA_UNAVAILABLE`（多带 `cause: "AUTH"`）                                                  | Auth 服务暂时出错（断线、逾时、5xx、429、回的不是 JSON），验不了 JWT          | 没动：暂时的（**不是**登录过期），等一下再叫 |
 
 极少数：数据库已经占好位、回应在路上断了 → 503，但 import 是「在跑」又没人在读：10 分钟后再叫可以重新占位，15
 分钟后定时任务标 `AI_TIMEOUT`。

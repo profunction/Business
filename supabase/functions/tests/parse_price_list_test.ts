@@ -363,32 +363,53 @@ Deno.test("parse-price-list：身份、参数、设定不全、RLS 读不到 →
   }
 });
 
-Deno.test("Auth 服务出问题（断线、5xx、429、回的不是 JSON）→ 503 AUTH_UNAVAILABLE（不是 401：JWT 可能是好的）；JWT 真的不对才 401", async () => {
-  const cases: [string, () => Response, number, string][] = [
-    ["503", () => Response.json({ code: 503, msg: "unavailable" }, { status: 503 }), 503, "AUTH_UNAVAILABLE"],
-    ["500", () => Response.json({ code: 500, msg: "boom" }, { status: 500 }), 503, "AUTH_UNAVAILABLE"],
-    ["502 HTML（gateway）", () => new Response("<html>Bad Gateway</html>", { status: 502 }), 503, "AUTH_UNAVAILABLE"],
-    ["504 逾时", () => new Response("upstream timeout", { status: 504 }), 503, "AUTH_UNAVAILABLE"],
+Deno.test("跟 App 的约定：「没开始、什么都没改」的回应（403 / 429 / 503）用的代码 App 都认得（WholesaleApi.importStartRefused）", async () => {
+  // App 认不得的代码会走「叫不到 AI」那条：把导入标 START_FAILED、文件留着、显示「不明错误」
+  const dart = await Deno.readTextFile(new URL("../../../packages/core/lib/src/api.dart", import.meta.url)).catch(() =>
+    null
+  );
+  if (dart === null) return; // 只拿到 supabase/ 的时候（不是整个 repo）跳过
+  const m = dart.match(/importStartRefused\s*=\s*\{([^}]*)\}/);
+  assert(m, "api.dart 找不到 importStartRefused");
+  const app = new Set([...m[1].matchAll(/'([A-Z_]+)'/g)].map((x) => x[1]));
+  const src = await Deno.readTextFile(new URL("../parse-price-list/index.ts", import.meta.url));
+  const codes = new Set(
+    [...src.matchAll(/json\(\{\s*error:\s*"([A-Z_]+)"[^)]*?\},\s*(403|429|503)\b/g)].map((x) => x[1]),
+  );
+  assertEquals([...codes].sort(), ["QUOTA_UNAVAILABLE", "TOO_MANY_IMPORTS", "WHOLESALER_SUSPENDED"]);
+  for (const c of codes) assert(app.has(c), `App 认不得 ${c}`);
+});
+
+Deno.test("Auth 服务出问题（断线、5xx、429、回的不是 JSON）→ 503 QUOTA_UNAVAILABLE + cause AUTH（不是 401：JWT 可能是好的；App 认得的「没开始」代码）；JWT 真的不对才 401", async () => {
+  // App（WholesaleApi.importStartRefused）认得 QUOTA_UNAVAILABLE = 没开始、什么都没改：删掉导入和文件，显示「过几分钟再传」。
+  // 不能回 App 认不得的新代码（像 AUTH_UNAVAILABLE）：App 会把导入标 START_FAILED、文件留着、显示「不明错误」
+  const authDown = { error: "QUOTA_UNAVAILABLE", cause: "AUTH" };
+  const unauthorized = { error: "UNAUTHORIZED" };
+  const cases: [string, () => Response, number, Record<string, unknown>][] = [
+    ["503", () => Response.json({ code: 503, msg: "unavailable" }, { status: 503 }), 503, authDown],
+    ["500", () => Response.json({ code: 500, msg: "boom" }, { status: 500 }), 503, authDown],
+    ["502 HTML（gateway）", () => new Response("<html>Bad Gateway</html>", { status: 502 }), 503, authDown],
+    ["504 逾时", () => new Response("upstream timeout", { status: 504 }), 503, authDown],
     [
       "429 太忙",
       () => Response.json({ code: 429, error_code: "over_request_rate_limit", msg: "slow down" }, { status: 429 }),
       503,
-      "AUTH_UNAVAILABLE",
+      authDown,
     ],
-    ["回的不是 JSON（4xx）", () => new Response("<html>Forbidden</html>", { status: 403 }), 503, "AUTH_UNAVAILABLE"],
+    ["回的不是 JSON（4xx）", () => new Response("<html>Forbidden</html>", { status: 403 }), 503, authDown],
     [
       "断线",
       () => {
         throw new TypeError("connection refused");
       },
       503,
-      "AUTH_UNAVAILABLE",
+      authDown,
     ],
     [
       "JWT 不对（401）",
       () => Response.json({ code: 401, error_code: "bad_jwt", msg: "invalid JWT" }, { status: 401 }),
       401,
-      "UNAUTHORIZED",
+      unauthorized,
     ],
     [
       "用户删掉了（403 user_not_found）",
@@ -397,21 +418,21 @@ Deno.test("Auth 服务出问题（断线、5xx、429、回的不是 JSON）→ 5
           status: 403,
         }),
       401,
-      "UNAUTHORIZED",
+      unauthorized,
     ],
     [
       "session 不在了（登出）",
       () =>
         Response.json({ code: 403, error_code: "session_not_found", msg: "Session does not exist" }, { status: 403 }),
       401,
-      "UNAUTHORIZED",
+      unauthorized,
     ],
   ];
-  for (const [name, response, status, error] of cases) {
+  for (const [name, response, status, body] of cases) {
     const t = setup({ authResponse: response });
     try {
       const res = await call();
-      assertEquals([res.status, await res.json()], [status, { error }], name);
+      assertEquals([res.status, await res.json()], [status, body], name);
       assertEquals(res.headers.get("access-control-allow-origin"), "*", name);
       // 都还没碰导入：没读、没叫 reserve、没占位
       assertEquals(

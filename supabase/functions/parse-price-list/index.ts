@@ -9,8 +9,9 @@
 //         404 IMPORT_NOT_FOUND（RLS 读不到 / not_found / not_member）、403 WHOLESALER_SUSPENDED（suspended）、
 //         409 IMPORT_NOT_PROCESSING（not_processing，带 status）/ IMPORT_ALREADY_RUNNING（already_running）、
 //         429 TOO_MANY_IMPORTS（quota；retry_after 秒、window、Retry-After 头）、
-//         503 QUOTA_UNAVAILABLE（叫不到 reserve_price_list_run：暂时的，import 没动）、
-//         503 AUTH_UNAVAILABLE（Auth 服务暂时出错 / 断线 / 太忙，验不了 JWT：暂时的，不是登录过期，import 没动）、
+//         503 QUOTA_UNAVAILABLE（暂时的，import 没动：叫不到 reserve_price_list_run；
+//             Auth 服务暂时出错 / 断线 / 太忙、验不了 JWT 也是这个，多带 cause = "AUTH"，不是登录过期。
+//             App 认得 QUOTA_UNAVAILABLE = 没开始、什么都没改：删掉这份导入和文件，显示「系统太忙，过几分钟再上传」）、
 //         500 CONFIG_MISSING / DB_ERROR / INTERNAL_ERROR、405 METHOD_NOT_ALLOWED
 //   背景（EdgeRuntime.waitUntil；Opus 读一份价目表可能超过 150 秒）：
 //     下载（服务器身份，最多 10 MB）→ 魔术字节判断格式 → 图片 / PDF 直接给 Claude；
@@ -728,7 +729,8 @@ export function timeBudgetMs(): number {
 
 /**
  * auth.getUser 的错误是不是 Auth 服务自己的问题（断线、逾时、5xx、429 太忙、回的不是 JSON）：
- * 这时候 JWT 可能是好的，不能回 401（App 会当成登录过期、把导入标 AUTH 失败）。
+ * 这时候 JWT 可能是好的，不能回 401（App 会当成登录过期、把导入标 AUTH 失败）；回 503 QUOTA_UNAVAILABLE
+ * （cause = "AUTH"）：App 已经认得这个代码是「没开始、什么都没改，等一下再传」，不用另外加新的代码。
  * auth-js 不会丢错，是回 {error}：断线 / 5xx 是 AuthRetryableFetchError（status 0 / 5xx），
  * 回的不是 JSON 是 AuthUnknownError；JWT 不对（401 / 403、session 不在了）才是真的 UNAUTHORIZED。
  */
@@ -802,7 +804,8 @@ export async function handler(req: Request): Promise<Response> {
         status: (authError as { status?: unknown }).status ?? null,
         error: errorMessage(authError),
       });
-      return withCors(json({ error: "AUTH_UNAVAILABLE" }, 503));
+      // 不用新的代码（AUTH_UNAVAILABLE）：App 认不得的会当成别的错误、把导入标 START_FAILED、文件留着
+      return withCors(json({ error: "QUOTA_UNAVAILABLE", cause: "AUTH" }, 503));
     }
     if (authError || !auth?.user) return withCors(json({ error: "UNAUTHORIZED" }, 401));
 
