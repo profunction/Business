@@ -561,5 +561,20 @@
   "companyRoleAdmin": "Admin",
   "companyRoleApprover": "Approver",
   "companyRoleFinance": "Finance",
-  "companyRoleRequester": "Requester"
+  "companyRoleRequester": "Requester",
+
+  "navHome": "Home",
+  "navBrowse": "Browse",
+  "navCart": "Cart",
+  "navOrders": "Orders",
+  "navMe": "Account",
+  "homeFrequent": "Frequently bought",
+  "homeRecentOrders": "Recent orders",
+  "seeAll": "See all",
+  "lastOrdered": "Last: {qty} {unit}",
+  "colItem": "Item",
+  "colQty": "Qty",
+  "colAmount": "Amount",
+  "cheapestTag": "Lowest price",
+  "addShort": "Add"
 }

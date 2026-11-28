@@ -5,10 +5,10 @@ import 'package:wholesale_core/wholesale_core.dart';
 import '../../app/l10n_x.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
+import '../../app/theme.dart';
 import '../../widgets/common.dart';
-import 'cart_button.dart';
 
-/// 买东西：「看商品」（分类）或「看批发商」
+/// 分类（底部导航的分页）：搜索 +「看商品」（分类）或「看批发商」
 class BrowsePage extends ConsumerStatefulWidget {
   const BrowsePage({super.key, this.byWholesaler = false});
 
@@ -38,80 +38,93 @@ class _BrowsePageState extends ConsumerState<BrowsePage> {
   Widget build(BuildContext context) {
     final l = context.l10n;
     return Scaffold(
-      appBar: AppBar(title: Text(l.browseTitle), actions: const [CartButton()]),
-      body: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-            child: Row(
+      appBar: AppBar(
+        title: Text(l.navBrowse),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(116),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: Column(
               children: [
-                Expanded(
-                  child: ModeButton(
-                    label: l.browseByProduct,
-                    icon: Icons.category,
-                    selected: !_byWholesaler,
-                    onTap: () => setState(() => _byWholesaler = false),
+                TextField(
+                  key: const Key('search-field'),
+                  controller: _search,
+                  textInputAction: TextInputAction.search,
+                  decoration: InputDecoration(
+                    hintText: l.searchHint,
+                    prefixIcon: const Icon(Icons.search),
+                    suffixIcon: IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _doSearch),
                   ),
+                  onSubmitted: (_) => _doSearch(),
                 ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ModeButton(
-                    label: l.browseByWholesaler,
-                    icon: Icons.store,
-                    selected: _byWholesaler,
-                    onTap: () => setState(() => _byWholesaler = true),
-                  ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ModeButton(
+                        label: l.browseByProduct,
+                        icon: Icons.category_outlined,
+                        selected: !_byWholesaler,
+                        onTap: () => setState(() => _byWholesaler = false),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ModeButton(
+                        label: l.browseByWholesaler,
+                        icon: Icons.storefront_outlined,
+                        selected: _byWholesaler,
+                        onTap: () => setState(() => _byWholesaler = true),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
           ),
-          Expanded(child: _byWholesaler ? const _WholesalerList() : _categoryList(context)),
-        ],
+        ),
       ),
+      body: _byWholesaler ? const _WholesalerList() : _categoryList(context),
     );
   }
 
   Widget _categoryList(BuildContext context) {
     final l = context.l10n;
+    final t = Theme.of(context).textTheme;
     final cats = ref.watch(categoriesProvider);
     return AsyncView(
       value: cats,
       onRetry: () => ref.invalidate(categoriesProvider),
       builder: (list) => ListView(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         children: [
-          TextField(
-            key: const Key('search-field'),
-            controller: _search,
-            textInputAction: TextInputAction.search,
-            style: Theme.of(context).textTheme.titleMedium,
-            decoration: InputDecoration(
-              hintText: l.searchHint,
-              prefixIcon: const Icon(Icons.search, size: 30),
-              suffixIcon: IconButton(icon: const Icon(Icons.arrow_forward), onPressed: _doSearch),
-            ),
-            onSubmitted: (_) => _doSearch(),
-          ),
-          const SizedBox(height: 12),
           if (list.isEmpty)
             Padding(
               padding: const EdgeInsets.all(24),
               child: Text(l.noResults, textAlign: TextAlign.center),
+            )
+          else
+            GroupedCard(
+              dividerIndent: 64,
+              children: [
+                for (final c in list)
+                  ListTile(
+                    key: Key('category-${c.code}'),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14),
+                    leading: IconBadge(icon: _categoryIcon(c.code)),
+                    title: Text(c.name.of(l.lang)),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(l.categoryItemCount(c.itemCount), style: t.bodySmall),
+                        const SizedBox(width: 4),
+                        const Icon(Icons.chevron_right, size: 20),
+                      ],
+                    ),
+                    onTap: () => context.pushWithQuery('/browse/items', {'category': c.id, 'title': c.name.of(l.lang)}),
+                  ),
+              ],
             ),
-          for (final c in list) ...[
-            Card(
-              child: ListTile(
-                key: Key('category-${c.code}'),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
-                leading: Icon(_categoryIcon(c.code), size: 36, color: Theme.of(context).colorScheme.primary),
-                title: Text(c.name.of(l.lang), style: Theme.of(context).textTheme.titleLarge),
-                subtitle: Text(l.categoryItemCount(c.itemCount)),
-                trailing: const Icon(Icons.chevron_right, size: 32),
-                onTap: () => context.pushWithQuery('/browse/items', {'category': c.id, 'title': c.name.of(l.lang)}),
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
         ],
       ),
     );
@@ -142,9 +155,9 @@ class _WholesalerList extends ConsumerWidget {
       value: ws,
       onRetry: () => ref.invalidate(wholesalersProvider),
       builder: (list) => ListView.separated(
-        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
         itemCount: list.isEmpty ? 1 : list.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 12),
+        separatorBuilder: (_, _) => const SizedBox(height: 10),
         itemBuilder: (context, i) {
           if (list.isEmpty) {
             return Padding(
@@ -170,40 +183,49 @@ class _WholesalerCard extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     return Card(
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
         onTap: () => context.pushWithQuery('/browse/wholesaler/${w.id}', {'title': w.name}),
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
+          padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Row(
-                children: [
-                  Expanded(child: Text(w.name, style: t.titleLarge)),
-                  if (!w.priceVisible) const Icon(Icons.lock, color: Colors.black45),
-                  const Icon(Icons.chevron_right, size: 32),
-                ],
-              ),
-              if (w.isFounding)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Text('★ ${l.founding}', style: t.bodyMedium?.copyWith(color: const Color(0xFFB26A00))),
+              const IconBadge(icon: Icons.storefront_outlined, size: 40),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(w.name, style: t.titleSmall),
+                    const SizedBox(height: 2),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        RatingLine(avg: w.ratingAvg, count: w.ratingCount),
+                        if (w.isFounding) TagChip(label: l.founding, color: AppTheme.caution, icon: Icons.star),
+                        if (!w.priceVisible)
+                          TagChip(label: l.priceLocked, color: AppTheme.textSecondary, icon: Icons.lock_outline),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    InfoLine(
+                      icon: Icons.local_shipping_outlined,
+                      text: '${l.leadTime(w.leadTimeDays)} · ${l.deliveryDays(l.weekdays(w.deliveryWeekdays))}',
+                    ),
+                    InfoLine(
+                      icon: Icons.payments_outlined,
+                      text: [
+                        l.shippingFee(w.shippingFeeSen == 0 ? l.freeShipping : formatRm(w.shippingFeeSen)),
+                        if (w.freeShippingMinSen != null) l.freeShippingOver(formatRm(w.freeShippingMinSen!)),
+                        if (w.minOrderSen != null) l.minOrderAmount(formatRm(w.minOrderSen!)),
+                      ].join(' · '),
+                    ),
+                    InfoLine(icon: Icons.inventory_2_outlined, text: l.productCount(w.productCount)),
+                  ],
                 ),
-              const SizedBox(height: 6),
-              RatingLine(avg: w.ratingAvg, count: w.ratingCount),
-              const SizedBox(height: 6),
-              InfoLine(icon: Icons.local_shipping, text: l.leadTime(w.leadTimeDays)),
-              InfoLine(icon: Icons.event, text: l.deliveryDays(l.weekdays(w.deliveryWeekdays))),
-              InfoLine(
-                icon: Icons.payments,
-                text: [
-                  l.shippingFee(w.shippingFeeSen == 0 ? l.freeShipping : formatRm(w.shippingFeeSen)),
-                  if (w.freeShippingMinSen != null) l.freeShippingOver(formatRm(w.freeShippingMinSen!)),
-                ].join(' · '),
               ),
-              if (w.minOrderSen != null)
-                InfoLine(icon: Icons.shopping_cart_checkout, text: l.minOrderAmount(formatRm(w.minOrderSen!))),
-              InfoLine(icon: Icons.inventory_2, text: l.productCount(w.productCount)),
+              const Icon(Icons.chevron_right, size: 20, color: AppTheme.textSecondary),
             ],
           ),
         ),

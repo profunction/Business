@@ -1,4 +1,4 @@
-import 'dart:ui' show ImageFilter;
+import 'dart:ui' show FontFeature, ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -41,8 +41,8 @@ class ErrorView extends StatelessWidget {
           children: [
             Icon(
               error is AppError && (error as AppError).code == 'NETWORK' ? Icons.wifi_off : Icons.error_outline,
-              size: 64,
-              color: Colors.black45,
+              size: 48,
+              color: AppTheme.textSecondary,
             ),
             const SizedBox(height: 16),
             Text(l.error(error), textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleMedium),
@@ -55,7 +55,7 @@ class ErrorView extends StatelessWidget {
   }
 }
 
-/// 首页的大方块按钮
+/// 大方块按钮（批发商首页、上传价目表的选项）。买家端不用：买家用 [ActionTile]
 class BigTile extends StatelessWidget {
   const BigTile({
     super.key,
@@ -77,49 +77,179 @@ class BigTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
     final bg = color ?? scheme.primary;
     final fg = ThemeData.estimateBrightnessForColor(bg) == Brightness.dark ? Colors.white : Colors.black87;
     return Material(
       color: bg,
-      borderRadius: BorderRadius.circular(20),
+      borderRadius: BorderRadius.circular(AppTheme.cardRadius),
       child: InkWell(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(AppTheme.cardRadius),
         onTap: onTap,
         child: ConstrainedBox(
-          constraints: const BoxConstraints(minHeight: 96),
+          constraints: const BoxConstraints(minHeight: 76),
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
             child: Row(
               children: [
-                Icon(icon, size: 44, color: fg),
-                const SizedBox(width: 18),
+                Icon(icon, size: 30, color: fg),
+                const SizedBox(width: 14),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(color: fg)),
+                      Text(title, style: t.titleLarge?.copyWith(color: fg)),
                       if (subtitle != null) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          subtitle!,
-                          style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: fg.withValues(alpha: 0.9)),
-                        ),
+                        const SizedBox(height: 2),
+                        Text(subtitle!, style: t.bodyMedium?.copyWith(color: fg.withValues(alpha: 0.9))),
                       ],
                     ],
                   ),
                 ),
                 if (badge != null)
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(20)),
-                    child: Text(badge!, style: Theme.of(context).textTheme.titleMedium?.copyWith(color: bg)),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(12)),
+                    child: Text(badge!, style: t.titleSmall?.copyWith(color: bg)),
                   ),
-                Icon(Icons.chevron_right, size: 36, color: fg),
+                Icon(Icons.chevron_right, size: 26, color: fg),
               ],
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 白色小卡片动作（买家首页「跟上次一样」等）：主色图标 + 标题 + 一行说明
+class ActionTile extends StatelessWidget {
+  const ActionTile({super.key, required this.icon, required this.title, this.subtitle, required this.onTap, this.busy = false});
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final VoidCallback? onTap;
+  final bool busy;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
+    return Card(
+      child: InkWell(
+        onTap: busy ? null : onTap,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minHeight: 72),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                IconBadge(
+                  icon: icon,
+                  child: busy ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)) : null,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(title, style: t.titleSmall?.copyWith(color: scheme.onSurface)),
+                      if (subtitle != null) ...[
+                        const SizedBox(height: 2),
+                        Text(subtitle!, style: t.bodySmall, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// 浅主色底的圆角小方块 + 图标（列表、动作卡片前面）
+class IconBadge extends StatelessWidget {
+  const IconBadge({super.key, required this.icon, this.color, this.background, this.size = 36, this.child});
+
+  final IconData icon;
+  final Color? color;
+  final Color? background;
+  final double size;
+  final Widget? child;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Container(
+      width: size,
+      height: size,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: background ?? scheme.primaryContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: child ?? Icon(icon, size: size * 0.56, color: color ?? scheme.primary),
+    );
+  }
+}
+
+/// 小节标题：左边灰色粗体字，右边可以放「全部 >」
+class SectionHeader extends StatelessWidget {
+  const SectionHeader({super.key, required this.title, this.actionLabel, this.onAction, this.actionKey});
+
+  final String title;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  final Key? actionKey;
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 16, 0, 6),
+      child: Row(
+        children: [
+          Expanded(child: Text(title, style: t.titleMedium)),
+          if (actionLabel != null)
+            TextButton(
+              key: actionKey,
+              onPressed: onAction,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [Text(actionLabel!), const Icon(Icons.chevron_right, size: 18)],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// 一组白色卡片里的行，中间有细线（列表常用）
+class GroupedCard extends StatelessWidget {
+  const GroupedCard({super.key, required this.children, this.dividerIndent = 0});
+
+  final List<Widget> children;
+  final double dividerIndent;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final (i, c) in children.indexed) ...[
+            if (i > 0) Divider(height: 1, indent: dividerIndent),
+            c,
+          ],
+        ],
       ),
     );
   }
@@ -134,14 +264,20 @@ class BottomAction extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.white,
-      elevation: 8,
+    return DecoratedBox(
+      decoration: const BoxDecoration(
+        color: Colors.white,
+        border: Border(top: BorderSide(color: AppTheme.border)),
+      ),
       child: SafeArea(
         top: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [?above, child]),
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [?above, child],
+          ),
         ),
       ),
     );
@@ -157,6 +293,7 @@ class NoticeBanner extends StatelessWidget {
     required this.text,
     this.textStyle,
     this.action,
+    this.trailing,
   });
 
   final Color color;
@@ -165,23 +302,35 @@ class NoticeBanner extends StatelessWidget {
   final TextStyle? textStyle;
   final Widget? action;
 
+  /// 整条可以点的时候，右边的小箭头
+  final Widget? trailing;
+
   @override
   Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
-      decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(16)),
-      // 右边的按钮最多占四成宽（大字、马来文的时候按钮的字换行，不会把提示挤到看不见或撑爆）
+      constraints: const BoxConstraints(minHeight: 44),
+      padding: EdgeInsets.fromLTRB(12, 8, action == null ? 12 : 4, 8),
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: BorderRadius.circular(AppTheme.radius),
+        border: Border.all(color: Color.alphaBlend(Colors.black.withValues(alpha: 0.06), color)),
+      ),
+      // 右边的按钮最多占四成宽（马来文的时候按钮的字换行，不会把提示挤到看不见或撑爆）
       child: LayoutBuilder(
         builder: (context, constraints) => Row(
           children: [
-            Icon(icon, size: 30),
-            const SizedBox(width: 12),
-            Expanded(child: Text(text, style: textStyle ?? Theme.of(context).textTheme.titleMedium)),
+            Icon(icon, size: 20, color: AppTheme.textPrimary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(text, style: textStyle ?? t.bodyMedium?.copyWith(fontWeight: FontWeight.w500)),
+            ),
             if (action != null)
               ConstrainedBox(
                 constraints: BoxConstraints(maxWidth: constraints.maxWidth * 0.4),
                 child: action,
               ),
+            ?trailing,
           ],
         ),
       ),
@@ -201,16 +350,16 @@ class BusyButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final child = busy
-        ? const SizedBox(width: 28, height: 28, child: CircularProgressIndicator(strokeWidth: 3, color: Colors.white))
+        ? const SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
         : Text(label, textAlign: TextAlign.center);
     if (icon != null && !busy) {
-      return FilledButton.icon(onPressed: onPressed, icon: Icon(icon, size: 28), label: child);
+      return FilledButton.icon(onPressed: onPressed, icon: Icon(icon, size: 20), label: child);
     }
     return FilledButton(onPressed: busy ? null : onPressed, child: child);
   }
 }
 
-/// 几个一样大的切换按钮（「看商品」/「看批发商」、订单的「新订单 / 今天要送 / 全部」），选中的是实心。
+/// 几个一样大的切换按钮（「看商品」/「看批发商」、订单的「新订单 / 今天要送 / 全部」），选中的是浅主色底。
 /// 放在 Row 里，每个用 Expanded 包起来
 class ModeButton extends StatelessWidget {
   const ModeButton({
@@ -232,19 +381,20 @@ class ModeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const padding = EdgeInsets.symmetric(horizontal: 8, vertical: 8);
+    final scheme = Theme.of(context).colorScheme;
+    const padding = EdgeInsets.symmetric(horizontal: 8, vertical: 6);
     final text = Text(
       label,
       maxLines: maxLines,
       overflow: TextOverflow.ellipsis,
       textAlign: TextAlign.center,
-      style: maxLines > 1 ? const TextStyle(fontSize: 20, height: 1.15) : null,
+      style: maxLines > 1 ? const TextStyle(height: 1.15) : null,
     );
     final child = Row(
       mainAxisAlignment: MainAxisAlignment.center,
       mainAxisSize: MainAxisSize.min,
       children: [
-        if (icon != null) ...[Icon(icon, size: 24), const SizedBox(width: 6)],
+        if (icon != null) ...[Icon(icon, size: 18), const SizedBox(width: 6)],
         Flexible(child: text),
       ],
     );
@@ -253,12 +403,22 @@ class ModeButton extends StatelessWidget {
       button: true,
       child: selected
           ? FilledButton(
-              style: FilledButton.styleFrom(minimumSize: const Size.fromHeight(56), padding: padding),
+              style: FilledButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                padding: padding,
+                backgroundColor: scheme.primaryContainer,
+                foregroundColor: scheme.onPrimaryContainer,
+                side: BorderSide(color: scheme.primary),
+              ),
               onPressed: onTap,
               child: child,
             )
           : OutlinedButton(
-              style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(56), padding: padding),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(44),
+                padding: padding,
+                foregroundColor: AppTheme.textSecondary,
+              ),
               onPressed: onTap,
               child: child,
             ),
@@ -275,15 +435,37 @@ class StatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = AppTheme.statusColor(status);
+    return TagChip(label: context.l10n.status(status), color: color);
+  }
+}
+
+/// 小标签：浅底 + 同色字（状态、最便宜、快卖完……）
+class TagChip extends StatelessWidget {
+  const TagChip({super.key, required this.label, required this.color, this.icon});
+
+  final String label;
+  final Color color;
+  final IconData? icon;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-      child: Text(context.l10n.status(status), style: Theme.of(context).textTheme.titleSmall?.copyWith(color: color)),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(6)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[Icon(icon, size: 14, color: color), const SizedBox(width: 4)],
+          Flexible(
+            child: Text(label, style: Theme.of(context).textTheme.labelMedium?.copyWith(color: color)),
+          ),
+        ],
+      ),
     );
   }
 }
 
-/// ＋ / － 数量，不用打字
+/// ＋ / － 数量，不用打字。外框一条细线，按钮 44 × 44
 class QtyStepper extends StatelessWidget {
   const QtyStepper({
     super.key,
@@ -302,13 +484,14 @@ class QtyStepper extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = Theme.of(context).textTheme.headlineSmall;
+    final t = Theme.of(context).textTheme;
     Widget button(IconData icon, int next, String semantic) => SizedBox(
-      width: 64,
-      height: 64,
-      child: IconButton.filledTonal(
+      width: 44,
+      height: 44,
+      child: IconButton(
         tooltip: semantic,
-        iconSize: 34,
+        iconSize: 20,
+        color: Theme.of(context).colorScheme.primary,
         onPressed: onChanged == null || next < min || next > max ? null : () => onChanged!(next),
         icon: Icon(icon),
       ),
@@ -316,17 +499,31 @@ class QtyStepper extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        button(Icons.remove, value - 1, '-'),
-        ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 80),
-          child: Column(
+        DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(color: AppTheme.borderStrong),
+            borderRadius: BorderRadius.circular(AppTheme.radius),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Text('$value', textAlign: TextAlign.center, style: style),
-              if (unitLabel != null) Text(unitLabel!, style: Theme.of(context).textTheme.bodyMedium),
+              button(Icons.remove, value - 1, '-'),
+              ConstrainedBox(
+                constraints: const BoxConstraints(minWidth: 40),
+                child: Text(
+                  '$value',
+                  textAlign: TextAlign.center,
+                  style: t.titleMedium?.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
+                ),
+              ),
+              button(Icons.add, value + 1, '+'),
             ],
           ),
         ),
-        button(Icons.add, value + 1, '+'),
+        if (unitLabel != null) ...[
+          const SizedBox(width: 8),
+          Text(unitLabel!, style: t.bodyMedium?.copyWith(color: AppTheme.textSecondary)),
+        ],
       ],
     );
   }
@@ -340,19 +537,19 @@ class LockedPrice extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final style = (large ? Theme.of(context).textTheme.headlineSmall : Theme.of(context).textTheme.titleLarge)
-        ?.copyWith(color: Colors.black87);
+    final style = (large ? Theme.of(context).textTheme.titleLarge : Theme.of(context).textTheme.titleMedium)
+        ?.copyWith(color: AppTheme.textPrimary);
     return Semantics(
       label: context.l10n.priceLocked,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           ImageFiltered(
-            imageFilter: ImageFilter.blur(sigmaX: 7, sigmaY: 7),
+            imageFilter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
             child: ExcludeSemantics(child: Text('RM88.88', style: style)),
           ),
-          const SizedBox(width: 8),
-          const Icon(Icons.lock, size: 22, color: Colors.black54),
+          const SizedBox(width: 6),
+          const Icon(Icons.lock_outline, size: 18, color: AppTheme.textSecondary),
         ],
       ),
     );
@@ -369,14 +566,14 @@ class RatingLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
-    final style = Theme.of(context).textTheme.bodyLarge;
-    if (count == 0) return Text(l.noRatings, style: style?.copyWith(color: Colors.black54));
+    final style = Theme.of(context).textTheme.bodyMedium;
+    if (count == 0) return Text(l.noRatings, style: style?.copyWith(color: AppTheme.textSecondary));
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        const Icon(Icons.star_rounded, color: Color(0xFFF5A623), size: 26),
+        const Icon(Icons.star_rounded, color: Color(0xFFE8A317), size: 18),
         const SizedBox(width: 4),
-        Text(l.rating(avg.toStringAsFixed(1), count), style: style),
+        Flexible(child: Text(l.rating(avg.toStringAsFixed(1), count), style: style)),
       ],
     );
   }
@@ -393,14 +590,20 @@ class InfoLine extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 24, color: color ?? Colors.black54),
+          Padding(
+            padding: const EdgeInsets.only(top: 1),
+            child: Icon(icon, size: 18, color: color ?? AppTheme.textSecondary),
+          ),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(text, style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: color)),
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: color ?? AppTheme.textSecondary),
+            ),
           ),
         ],
       ),
@@ -408,7 +611,7 @@ class InfoLine extends StatelessWidget {
   }
 }
 
-/// 一个金额一行：左边名称，右边金额
+/// 一个金额一行：左边名称，右边金额（数字等宽，右对齐）
 class AmountRow extends StatelessWidget {
   const AmountRow({super.key, required this.label, required this.value, this.bold = false, this.valueColor});
 
@@ -420,15 +623,21 @@ class AmountRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
-    final style = bold ? t.titleLarge : t.bodyLarge;
+    final style = bold ? t.titleMedium : t.bodyMedium;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
+      padding: EdgeInsets.symmetric(vertical: bold ? 4 : 2),
       child: Row(
         children: [
-          Expanded(child: Text(label, style: style)),
+          Expanded(
+            child: Text(label, style: bold ? style : style?.copyWith(color: AppTheme.textSecondary)),
+          ),
           Text(
             value,
-            style: style?.copyWith(color: valueColor, fontWeight: bold ? FontWeight.w800 : FontWeight.w600),
+            style: (bold ? t.titleLarge : style)?.copyWith(
+              color: valueColor,
+              fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
         ],
       ),
@@ -462,14 +671,14 @@ Future<bool> confirmDialog(
   final ok = await showDialog<bool>(
     context: context,
     builder: (context) => AlertDialog(
-      title: Text(title, style: Theme.of(context).textTheme.titleLarge),
+      title: Text(title),
       content: content,
       actionsAlignment: MainAxisAlignment.spaceBetween,
       actions: [
         TextButton(onPressed: () => Navigator.pop(context, false), child: Text(cancelLabel ?? l.cancel)),
         FilledButton(
           style: FilledButton.styleFrom(
-            minimumSize: const Size(120, 56),
+            minimumSize: const Size(96, 44),
             backgroundColor: destructive ? AppTheme.problem : null,
           ),
           onPressed: () => Navigator.pop(context, true),

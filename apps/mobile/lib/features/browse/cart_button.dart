@@ -15,11 +15,12 @@ class CartButton extends ConsumerWidget {
     return IconButton(
       key: const Key('cart-button'),
       tooltip: context.l10n.cartTitle,
-      onPressed: () => context.push('/cart'),
+      // 购物车是底部导航的分页：用 go（不是 push）
+      onPressed: () => context.go('/cart'),
       icon: Badge(
         isLabelVisible: count > 0,
-        label: Text('$count', style: const TextStyle(fontSize: 14)),
-        child: const Icon(Icons.shopping_cart),
+        label: Text('$count'),
+        child: const Icon(Icons.shopping_cart_outlined),
       ),
     );
   }

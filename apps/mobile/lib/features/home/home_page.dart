@@ -6,12 +6,14 @@ import 'package:wholesale_core/wholesale_core.dart';
 
 import '../../app/l10n_x.dart';
 import '../../app/providers.dart';
+import '../../app/router.dart';
 import '../../app/theme.dart';
 import '../../widgets/common.dart';
+import '../orders/orders_page.dart';
 import '../voice/mic_button.dart';
 import '../voice/voice_draft_page.dart';
 
-/// 买家首页：几个大按钮，最上面是「跟上次一样」
+/// 买家首页：上面店名 + 搜索；快捷动作（跟上次一样、按住说话下单）；常买的商品；最近的订单
 class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
@@ -23,6 +25,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   RealtimeChannel? _channel;
   late final WholesaleApi _api;
   bool _reordering = false;
+  final _search = TextEditingController();
 
   @override
   void initState() {
@@ -44,6 +47,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   void dispose() {
     final c = _channel;
     if (c != null) _api.stopWatching(c);
+    _search.dispose();
     super.dispose();
   }
 
@@ -59,21 +63,56 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
+  void _doSearch() {
+    final q = _search.text.trim();
+    if (q.isEmpty) return;
+    context.pushWithQuery('/browse/items', {'q': q, 'title': q});
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
+    final t = Theme.of(context).textTheme;
     final home = ref.watch(buyerHomeProvider);
+    final h = home.value;
     return Scaffold(
       appBar: AppBar(
-        title: Text(home.value?.shopName ?? l.appTitle),
-        actions: [
-          IconButton(
-            key: const Key('open-settings'),
-            tooltip: l.settings,
-            icon: const Icon(Icons.settings),
-            onPressed: () => context.push('/settings'),
+        toolbarHeight: 60,
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(h?.shopName ?? l.appTitle, maxLines: 1, overflow: TextOverflow.ellipsis),
+            if (h != null)
+              Text(
+                h.zoneName.of(l.lang),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: t.bodySmall,
+              ),
+          ],
+        ),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(60),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: TextField(
+              key: const Key('home-search'),
+              controller: _search,
+              textInputAction: TextInputAction.search,
+              onSubmitted: (_) => _doSearch(),
+              decoration: InputDecoration(
+                hintText: l.searchHint,
+                prefixIcon: const Icon(Icons.search),
+                fillColor: Theme.of(context).colorScheme.surfaceContainer,
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppTheme.radius),
+                  borderSide: BorderSide.none,
+                ),
+              ),
+            ),
           ),
-        ],
+        ),
       ),
       body: AsyncView(
         value: home,
@@ -81,58 +120,47 @@ class _HomePageState extends ConsumerState<HomePage> {
         builder: (h) => RefreshIndicator(
           onRefresh: () {
             ref.invalidate(pendingDraftsProvider);
+            ref.invalidate(ordersProvider);
             return ref.refresh(buyerHomeProvider.future);
           },
           child: ListView(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             children: [
               _SubscriptionBanner(info: h.subscription),
-              const SizedBox(height: 16),
-              if (h.lastCheckout != null) ...[
-                BigTile(
-                  key: const Key('reorder'),
-                  icon: _reordering ? Icons.hourglass_top : Icons.replay,
-                  title: l.homeReorder,
-                  subtitle: l.homeReorderLast(
-                    l.dateOnly(h.lastCheckout!.createdAt),
-                    formatRm(h.lastCheckout!.totalSen),
-                  ),
-                  color: const Color(0xFFE8892B),
-                  onTap: _reordering ? null : _reorder,
-                ),
-                const SizedBox(height: 14),
-              ],
-              BigTile(
-                key: const Key('go-shop'),
-                icon: Icons.shopping_basket,
-                title: l.homeShop,
-                onTap: () => context.push('/browse'),
-              ),
-              const SizedBox(height: 14),
-              BigTile(
-                key: const Key('go-orders'),
-                icon: Icons.receipt_long,
-                title: l.homeOrders,
-                subtitle: h.activeOrderCount > 0 ? l.homeActiveOrders(h.activeOrderCount) : null,
-                color: const Color(0xFF1565C0),
-                badge: h.activeOrderCount > 0 ? '${h.activeOrderCount}' : null,
-                onTap: () => context.push('/orders'),
-              ),
-              if (h.cartCount > 0) ...[
-                const SizedBox(height: 14),
-                BigTile(
-                  key: const Key('go-cart'),
-                  icon: Icons.shopping_cart,
-                  title: l.homeCart(h.cartCount),
-                  color: const Color(0xFF455A64),
-                  onTap: () => context.push('/cart'),
-                ),
-              ],
-              // 语音下单（第六步）：按住说话，AI 做成草稿，老板确认后才下单
-              const SizedBox(height: 14),
-              const MicButton(),
-              const SizedBox(height: 14),
               const _PendingDrafts(),
+              // 快捷动作：跟上次一样 + 按住说话下单（第六步：AI 做成草稿，老板确认后才下单）
+              IntrinsicHeight(
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (h.lastCheckout != null) ...[
+                      Expanded(
+                        child: ActionTile(
+                          key: const Key('reorder'),
+                          icon: Icons.replay,
+                          title: l.homeReorder,
+                          subtitle: l.homeReorderLast(
+                            l.dateOnly(h.lastCheckout!.createdAt),
+                            formatRm(h.lastCheckout!.totalSen),
+                          ),
+                          busy: _reordering,
+                          onTap: _reorder,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                    ],
+                    const Expanded(child: MicButton()),
+                  ],
+                ),
+              ),
+              const _FrequentItems(),
+              SectionHeader(
+                title: l.homeRecentOrders,
+                actionLabel: l.seeAll,
+                actionKey: const Key('go-orders'),
+                onAction: () => context.go('/orders'),
+              ),
+              const _RecentOrders(),
             ],
           ),
         ),
@@ -141,7 +169,7 @@ class _HomePageState extends ConsumerState<HomePage> {
   }
 }
 
-/// 还没确认的语音订单（录完没按「确认下单」就离开了）
+/// 还没确认的语音订单（录完没按「确认下单」就离开了）：一条细的提示
 class _PendingDrafts extends ConsumerWidget {
   const _PendingDrafts();
 
@@ -150,14 +178,17 @@ class _PendingDrafts extends ConsumerWidget {
     final drafts = ref.watch(pendingDraftsProvider).value ?? const [];
     if (drafts.isEmpty) return const SizedBox.shrink();
     return Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: BigTile(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: InkWell(
         key: const Key('voice-pending'),
-        icon: Icons.record_voice_over,
-        title: context.l10n.voicePendingDrafts(drafts.length),
-        subtitle: drafts.first.transcript,
-        color: const Color(0xFFFFE0B2),
+        borderRadius: BorderRadius.circular(AppTheme.radius),
         onTap: () => context.push('/voice-draft/${drafts.first.id}'),
+        child: NoticeBanner(
+          color: AppTheme.warningBg,
+          icon: Icons.record_voice_over_outlined,
+          text: context.l10n.voicePendingDrafts(drafts.length),
+          trailing: const Icon(Icons.chevron_right, size: 20),
+        ),
       ),
     );
   }
@@ -171,33 +202,163 @@ class _SubscriptionBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = context.l10n;
-    final t = Theme.of(context).textTheme;
     final days = info.trialDaysLeft(DateTime.now());
     if (days != null) {
-      // 点一下看订阅（不加按钮：横幅不会变高，把下面的东西挤下去）
-      return InkWell(
-        key: const Key('banner-subscription'),
-        borderRadius: BorderRadius.circular(16),
-        onTap: () => context.push('/subscription'),
-        child: NoticeBanner(
-          color: AppTheme.successBg,
-          icon: Icons.celebration,
-          text: l.trialBanner(days),
-          textStyle: t.titleMedium,
+      // 点一下看订阅
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: InkWell(
+          key: const Key('banner-subscription'),
+          borderRadius: BorderRadius.circular(AppTheme.radius),
+          onTap: () => context.push('/subscription'),
+          child: NoticeBanner(
+            color: AppTheme.infoBg,
+            icon: Icons.workspace_premium_outlined,
+            text: l.trialBanner(days),
+            trailing: const Icon(Icons.chevron_right, size: 20),
+          ),
         ),
       );
     }
     if (info.hasFullAccess) return const SizedBox.shrink();
-    return NoticeBanner(
-      color: AppTheme.warningBg,
-      icon: Icons.lock_open,
-      text: l.freeBanner(info.freeUnlockedLimit),
-      textStyle: t.titleMedium,
-      action: TextButton(
-        key: const Key('banner-choose-wholesalers'),
-        onPressed: () => context.push('/free-wholesalers'),
-        child: Text(l.chooseWholesalers),
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: NoticeBanner(
+        color: AppTheme.warningBg,
+        icon: Icons.lock_open,
+        text: l.freeBanner(info.freeUnlockedLimit),
+        action: TextButton(
+          key: const Key('banner-choose-wholesalers'),
+          onPressed: () => context.push('/free-wholesalers'),
+          child: Text(l.chooseWholesalers, textAlign: TextAlign.center),
+        ),
       ),
+    );
+  }
+}
+
+/// 常买的商品：最近几张单里的商品，可以直接 + / − 放进购物车
+class _FrequentItems extends ConsumerWidget {
+  const _FrequentItems();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l = context.l10n;
+    final items = ref.watch(frequentItemsProvider);
+    final list = items.value;
+    if (list == null) {
+      // 读取中：一条会动的线（不是什么都不画，测试的 pumpAndSettle 才会等它读完）
+      if (items.hasError) return const SizedBox.shrink();
+      return const Padding(padding: EdgeInsets.only(top: 24), child: LinearProgressIndicator());
+    }
+    if (list.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SectionHeader(title: l.homeFrequent),
+        GroupedCard(children: [for (final f in list) _FrequentRow(item: f)]),
+      ],
+    );
+  }
+}
+
+class _FrequentRow extends ConsumerStatefulWidget {
+  const _FrequentRow({required this.item});
+
+  final FrequentItem item;
+
+  @override
+  ConsumerState<_FrequentRow> createState() => _FrequentRowState();
+}
+
+class _FrequentRowState extends ConsumerState<_FrequentRow> {
+  int? _pending;
+
+  Future<void> _set(int qty) async {
+    final l = context.l10n;
+    final adding = (ref.read(cartQuoteProvider).value?.qtyOf(widget.item.item.productId!) ?? 0) == 0;
+    setState(() => _pending = qty);
+    try {
+      await ref.read(buyerActionsProvider).setCartQty(widget.item.item.productId!, qty);
+      if (mounted && adding && qty > 0) showMessage(context, l.addedToCart);
+    } catch (e) {
+      if (mounted) showMessage(context, l.error(e), error: true);
+    } finally {
+      if (mounted) setState(() => _pending = null);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l = context.l10n;
+    final t = Theme.of(context).textTheme;
+    final f = widget.item;
+    final i = f.item;
+    final unitName = l.unit(i.unit);
+    final inCart = ref.watch(cartQuoteProvider.select((q) => q.value?.qtyOf(i.productId!) ?? 0));
+    final qty = _pending ?? inCart;
+    return InkWell(
+      key: Key('frequent-${i.productId}'),
+      onTap: () => context.pushWithQuery('/browse/wholesaler/${f.wholesalerId}', {'title': f.wholesalerName}),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(i.name, style: t.titleSmall, maxLines: 2, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${l.pricePerSellUnit(formatRm(i.unitPriceSen), unitName)} · ${l.lastOrdered(i.qty, unitName)}',
+                    style: t.bodySmall,
+                  ),
+                  Text(f.wholesalerName, style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            if (qty > 0)
+              QtyStepper(value: qty, min: 0, onChanged: _pending != null ? null : _set)
+            else
+              OutlinedButton.icon(
+                key: Key('frequent-add-${i.productId}'),
+                style: OutlinedButton.styleFrom(minimumSize: const Size(72, 40)),
+                // 第一次加：照上次买的数量（一定够起订量）
+                onPressed: _pending != null ? null : () => _set(i.qty < 1 ? 1 : i.qty),
+                icon: const Icon(Icons.add, size: 18),
+                label: Text(l.addShort),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// 最近的三张订单
+class _RecentOrders extends ConsumerWidget {
+  const _RecentOrders();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l = context.l10n;
+    final orders = ref.watch(ordersProvider);
+    return AsyncView(
+      value: orders,
+      onRetry: () => ref.invalidate(ordersProvider),
+      builder: (list) {
+        if (list.isEmpty) {
+          return Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Text(l.noOrders, textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
+            ),
+          );
+        }
+        return GroupedCard(children: [for (final o in list.take(3)) OrderSummaryTile(order: o)]);
+      },
     );
   }
 }

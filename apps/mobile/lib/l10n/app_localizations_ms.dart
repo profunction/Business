@@ -1913,4 +1913,48 @@ class L10nMs extends L10n {
 
   @override
   String get companyRoleRequester => 'Pemohon';
+
+  @override
+  String get navHome => 'Utama';
+
+  @override
+  String get navBrowse => 'Kategori';
+
+  @override
+  String get navCart => 'Troli';
+
+  @override
+  String get navOrders => 'Pesanan';
+
+  @override
+  String get navMe => 'Akaun';
+
+  @override
+  String get homeFrequent => 'Kerap dibeli';
+
+  @override
+  String get homeRecentOrders => 'Pesanan terkini';
+
+  @override
+  String get seeAll => 'Lihat semua';
+
+  @override
+  String lastOrdered(int qty, String unit) {
+    return 'Kali lepas: $qty $unit';
+  }
+
+  @override
+  String get colItem => 'Barang';
+
+  @override
+  String get colQty => 'Kuantiti';
+
+  @override
+  String get colAmount => 'Amaun';
+
+  @override
+  String get cheapestTag => 'Harga terendah';
+
+  @override
+  String get addShort => 'Tambah';
 }

@@ -149,3 +149,46 @@ class BuyerActions {
 }
 
 final buyerActionsProvider = Provider<BuyerActions>(BuyerActions.new);
+
+/// 首页「常买的商品」的一行
+class FrequentItem {
+  const FrequentItem({required this.item, required this.wholesalerId, required this.wholesalerName, required this.times});
+
+  /// 最近一次买的那一行（名字、单位、价钱、数量）
+  final OrderItem item;
+  final String wholesalerId;
+  final String wholesalerName;
+
+  /// 最近几张单里出现几次
+  final int times;
+}
+
+/// 首页「常买的商品」：最近几张订单（不算取消的）里的商品，出现越多次排越前面。
+/// 只用已经有的订单列表和订单明细（listOrders / getOrder），没有另外的接口
+final frequentItemsProvider = FutureProvider.autoDispose<List<FrequentItem>>((ref) async {
+  final orders = await ref.watch(ordersProvider.future);
+  final recent = orders.where((o) => o.status != OrderStatus.cancelled).take(3).toList();
+  final details = await Future.wait([for (final o in recent) ref.watch(orderDetailProvider(o.id).future)]);
+  final byProduct = <String, FrequentItem>{};
+  for (final d in details) {
+    for (final i in d.items) {
+      final id = i.productId;
+      if (id == null) continue;
+      final seen = byProduct[id];
+      // 订单是新的在前面：第一次看到的就是最近一次买的
+      byProduct[id] = seen == null
+          ? FrequentItem(item: i, wholesalerId: d.wholesalerId, wholesalerName: d.wholesalerName, times: 1)
+          : FrequentItem(
+              item: seen.item,
+              wholesalerId: seen.wholesalerId,
+              wholesalerName: seen.wholesalerName,
+              times: seen.times + 1,
+            );
+    }
+  }
+  final list = byProduct.values.toList();
+  // sort 不稳定：同样次数的照原来（最近）的顺序
+  final order = {for (final (i, f) in list.indexed) f: i};
+  list.sort((a, b) => b.times != a.times ? b.times - a.times : order[a]! - order[b]!);
+  return list.take(6).toList();
+});

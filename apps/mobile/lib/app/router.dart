@@ -34,6 +34,7 @@ import '../features/seller/seller_settings_page.dart';
 import '../features/settings/free_wholesalers_page.dart';
 import '../features/settings/settings_page.dart';
 import '../features/voice/voice_draft_page.dart';
+import 'buyer_shell.dart';
 import 'seller_providers.dart';
 import 'session.dart';
 
@@ -150,11 +151,25 @@ GoRouter buildRouter(SessionController session) {
         ],
       ),
       GoRoute(path: '/admin', builder: (_, _) => const AdminPlaceholderPage()),
-      GoRoute(path: '/home', builder: (_, _) => const HomePage()),
-      GoRoute(
-        path: '/browse',
-        builder: (_, s) => BrowsePage(byWholesaler: s.uri.queryParameters['by'] == 'wholesaler'),
+      // 买家：底部导航的五个分页（各自记住状态）
+      StatefulShellRoute.indexedStack(
+        builder: (_, _, shell) => BuyerShell(shell: shell),
+        branches: [
+          StatefulShellBranch(routes: [GoRoute(path: '/home', builder: (_, _) => const HomePage())]),
+          StatefulShellBranch(
+            routes: [
+              GoRoute(
+                path: '/browse',
+                builder: (_, s) => BrowsePage(byWholesaler: s.uri.queryParameters['by'] == 'wholesaler'),
+              ),
+            ],
+          ),
+          StatefulShellBranch(routes: [GoRoute(path: '/cart', builder: (_, _) => const CartPage())]),
+          StatefulShellBranch(routes: [GoRoute(path: '/orders', builder: (_, _) => const OrdersPage())]),
+          StatefulShellBranch(routes: [GoRoute(path: '/settings', builder: (_, _) => const SettingsPage())]),
+        ],
       ),
+      // 买家的详情页：盖在分页上面（没有底部导航），按返回回到原来的分页
       GoRoute(
         path: '/browse/items',
         builder: (_, s) => CatalogItemsPage(
@@ -173,7 +188,6 @@ GoRouter buildRouter(SessionController session) {
         builder: (_, s) =>
             WholesalerProductsPage(wholesalerId: s.pathParameters['id']!, title: s.uri.queryParameters['title'] ?? ''),
       ),
-      GoRoute(path: '/cart', builder: (_, _) => const CartPage()),
       GoRoute(
         path: '/checkout',
         builder: (_, s) => CheckoutPage(reorder: s.extra is ReorderResult ? s.extra! as ReorderResult : null),
@@ -186,7 +200,6 @@ GoRouter buildRouter(SessionController session) {
         path: '/voice-draft/:id',
         builder: (_, s) => VoiceDraftPage(draftId: s.pathParameters['id']!),
       ),
-      GoRoute(path: '/orders', builder: (_, _) => const OrdersPage()),
       GoRoute(
         path: '/orders/:id',
         builder: (_, s) => OrderDetailPage(orderId: s.pathParameters['id']!),
@@ -196,7 +209,6 @@ GoRouter buildRouter(SessionController session) {
         builder: (_, s) => ReviewPage(orderId: s.pathParameters['id']!),
       ),
       GoRoute(path: '/free-wholesalers', builder: (_, _) => const FreeWholesalersPage()),
-      GoRoute(path: '/settings', builder: (_, _) => const SettingsPage()),
       GoRoute(path: '/subscription', builder: (_, _) => const SubscriptionPage()),
     ],
     errorBuilder: (_, _) => session.stage == SessionStage.seller ? const SellerHomePage() : const HomePage(),

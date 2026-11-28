@@ -561,5 +561,20 @@
   "companyRoleAdmin": "Pentadbir",
   "companyRoleApprover": "Pelulus",
   "companyRoleFinance": "Kewangan",
-  "companyRoleRequester": "Pemohon"
+  "companyRoleRequester": "Pemohon",
+
+  "navHome": "Utama",
+  "navBrowse": "Kategori",
+  "navCart": "Troli",
+  "navOrders": "Pesanan",
+  "navMe": "Akaun",
+  "homeFrequent": "Kerap dibeli",
+  "homeRecentOrders": "Pesanan terkini",
+  "seeAll": "Lihat semua",
+  "lastOrdered": "Kali lepas: {qty} {unit}",
+  "colItem": "Barang",
+  "colQty": "Kuantiti",
+  "colAmount": "Amaun",
+  "cheapestTag": "Harga terendah",
+  "addShort": "Tambah"
 }

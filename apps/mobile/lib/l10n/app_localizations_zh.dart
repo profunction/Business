@@ -1860,4 +1860,48 @@ class L10nZh extends L10n {
 
   @override
   String get companyRoleRequester => '申请人';
+
+  @override
+  String get navHome => '首页';
+
+  @override
+  String get navBrowse => '分类';
+
+  @override
+  String get navCart => '购物车';
+
+  @override
+  String get navOrders => '订单';
+
+  @override
+  String get navMe => '我的';
+
+  @override
+  String get homeFrequent => '常买的商品';
+
+  @override
+  String get homeRecentOrders => '最近的订单';
+
+  @override
+  String get seeAll => '全部';
+
+  @override
+  String lastOrdered(int qty, String unit) {
+    return '上次 $qty $unit';
+  }
+
+  @override
+  String get colItem => '商品';
+
+  @override
+  String get colQty => '数量';
+
+  @override
+  String get colAmount => '金额';
+
+  @override
+  String get cheapestTag => '最便宜';
+
+  @override
+  String get addShort => '加入';
 }

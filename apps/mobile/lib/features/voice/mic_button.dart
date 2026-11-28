@@ -6,11 +6,12 @@ import 'package:go_router/go_router.dart';
 
 import '../../app/l10n_x.dart';
 import '../../app/providers.dart';
+import '../../app/theme.dart';
 import '../../widgets/common.dart';
 import 'voice_recorder.dart';
 
-/// 语音下单的大按钮：按住说话、放开就送出。AI 做好草稿后打开「确认语音订单」页（不会自己下单）。
-/// 首页用大的，购物车用小的（compact）。
+/// 语音下单的按钮：按住说话、放开就送出。AI 做好草稿后打开「确认语音订单」页（不会自己下单）。
+/// 首页是快捷动作卡片，购物车是一条细的按钮（compact）。
 class MicButton extends ConsumerStatefulWidget {
   const MicButton({super.key, this.compact = false});
 
@@ -122,17 +123,43 @@ class _MicButtonState extends ConsumerState<MicButton> {
   Widget build(BuildContext context) {
     final l = context.l10n;
     final t = Theme.of(context).textTheme;
+    final scheme = Theme.of(context).colorScheme;
     final recording = _phase == _Phase.recording || _phase == _Phase.starting;
     final sending = _phase == _Phase.sending;
-    final bg = recording ? const Color(0xFFC62828) : const Color(0xFF6A1B9A);
+    // 录音中：红色（一定跟「正在录音 n 秒」的字一起出现）
+    final accent = recording ? AppTheme.problem : scheme.primary;
     final label = sending
         ? l.voiceListening
         : recording
         ? l.voiceRecording(_seconds)
         : l.voiceHold;
     final icon = sending
-        ? const SizedBox(width: 40, height: 40, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 4))
-        : Icon(recording ? Icons.graphic_eq : Icons.mic, size: widget.compact ? 34 : 48, color: Colors.white);
+        ? SizedBox(width: 18, height: 18, child: CircularProgressIndicator(color: accent, strokeWidth: 2))
+        : Icon(recording ? Icons.graphic_eq : Icons.mic_none, size: 20, color: accent);
+    final labelText = Text(
+      label,
+      key: const Key('voice-mic-label'),
+      style: t.titleSmall?.copyWith(color: recording ? AppTheme.problem : scheme.onSurface),
+    );
+    final Widget content = widget.compact
+        // 购物车：一条细的按钮
+        ? Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [icon, const SizedBox(width: 8), Flexible(child: labelText)],
+          )
+        // 首页：跟「跟上次一样」一样大的卡片
+        : Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              IconBadge(
+                icon: Icons.mic_none,
+                background: recording ? AppTheme.problem.withValues(alpha: 0.1) : null,
+                child: icon,
+              ),
+              const SizedBox(width: 10),
+              Expanded(child: labelText),
+            ],
+          );
     return Semantics(
       button: true,
       label: l.voiceHold,
@@ -146,32 +173,16 @@ class _MicButtonState extends ConsumerState<MicButton> {
         onLongPressCancel: _cancel,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          constraints: BoxConstraints(minHeight: widget.compact ? 64 : 96),
-          padding: EdgeInsets.symmetric(horizontal: 20, vertical: widget.compact ? 10 : 18),
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
-          child: Row(
-            children: [
-              icon,
-              const SizedBox(width: 18),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      label,
-                      key: const Key('voice-mic-label'),
-                      style: (widget.compact ? t.titleLarge : t.headlineSmall)?.copyWith(color: Colors.white),
-                    ),
-                    if (!widget.compact && !recording && !sending) ...[
-                      const SizedBox(height: 4),
-                      Text(l.voiceHoldHint, style: t.bodyMedium?.copyWith(color: Colors.white70)),
-                    ],
-                  ],
-                ),
-              ),
-            ],
+          constraints: BoxConstraints(minHeight: widget.compact ? 48 : 72),
+          padding: widget.compact
+              ? const EdgeInsets.symmetric(horizontal: 14, vertical: 8)
+              : const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: recording ? const Color(0xFFFDF0EF) : Colors.white,
+            borderRadius: BorderRadius.circular(widget.compact ? AppTheme.radius : AppTheme.cardRadius),
+            border: Border.all(color: recording ? AppTheme.problem : (widget.compact ? AppTheme.borderStrong : AppTheme.border)),
           ),
+          child: content,
         ),
       ),
     );

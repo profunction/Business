@@ -3320,6 +3320,90 @@ abstract class L10n {
   /// In zh, this message translates to:
   /// **'申请人'**
   String get companyRoleRequester;
+
+  /// No description provided for @navHome.
+  ///
+  /// In zh, this message translates to:
+  /// **'首页'**
+  String get navHome;
+
+  /// No description provided for @navBrowse.
+  ///
+  /// In zh, this message translates to:
+  /// **'分类'**
+  String get navBrowse;
+
+  /// No description provided for @navCart.
+  ///
+  /// In zh, this message translates to:
+  /// **'购物车'**
+  String get navCart;
+
+  /// No description provided for @navOrders.
+  ///
+  /// In zh, this message translates to:
+  /// **'订单'**
+  String get navOrders;
+
+  /// No description provided for @navMe.
+  ///
+  /// In zh, this message translates to:
+  /// **'我的'**
+  String get navMe;
+
+  /// No description provided for @homeFrequent.
+  ///
+  /// In zh, this message translates to:
+  /// **'常买的商品'**
+  String get homeFrequent;
+
+  /// No description provided for @homeRecentOrders.
+  ///
+  /// In zh, this message translates to:
+  /// **'最近的订单'**
+  String get homeRecentOrders;
+
+  /// No description provided for @seeAll.
+  ///
+  /// In zh, this message translates to:
+  /// **'全部'**
+  String get seeAll;
+
+  /// No description provided for @lastOrdered.
+  ///
+  /// In zh, this message translates to:
+  /// **'上次 {qty} {unit}'**
+  String lastOrdered(int qty, String unit);
+
+  /// No description provided for @colItem.
+  ///
+  /// In zh, this message translates to:
+  /// **'商品'**
+  String get colItem;
+
+  /// No description provided for @colQty.
+  ///
+  /// In zh, this message translates to:
+  /// **'数量'**
+  String get colQty;
+
+  /// No description provided for @colAmount.
+  ///
+  /// In zh, this message translates to:
+  /// **'金额'**
+  String get colAmount;
+
+  /// No description provided for @cheapestTag.
+  ///
+  /// In zh, this message translates to:
+  /// **'最便宜'**
+  String get cheapestTag;
+
+  /// No description provided for @addShort.
+  ///
+  /// In zh, this message translates to:
+  /// **'加入'**
+  String get addShort;
 }
 
 class _L10nDelegate extends LocalizationsDelegate<L10n> {

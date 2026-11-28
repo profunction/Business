@@ -674,5 +674,21 @@
   "companyRoleAdmin": "管理员",
   "companyRoleApprover": "审批",
   "companyRoleFinance": "财务",
-  "companyRoleRequester": "申请人"
+  "companyRoleRequester": "申请人",
+
+  "navHome": "首页",
+  "navBrowse": "分类",
+  "navCart": "购物车",
+  "navOrders": "订单",
+  "navMe": "我的",
+  "homeFrequent": "常买的商品",
+  "homeRecentOrders": "最近的订单",
+  "seeAll": "全部",
+  "lastOrdered": "上次 {qty} {unit}",
+  "@lastOrdered": {"placeholders": {"qty": {"type": "int"}, "unit": {"type": "String"}}},
+  "colItem": "商品",
+  "colQty": "数量",
+  "colAmount": "金额",
+  "cheapestTag": "最便宜",
+  "addShort": "加入"
 }

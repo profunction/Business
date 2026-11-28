@@ -1941,4 +1941,48 @@ class L10nEn extends L10n {
 
   @override
   String get companyRoleRequester => 'Requester';
+
+  @override
+  String get navHome => 'Home';
+
+  @override
+  String get navBrowse => 'Browse';
+
+  @override
+  String get navCart => 'Cart';
+
+  @override
+  String get navOrders => 'Orders';
+
+  @override
+  String get navMe => 'Account';
+
+  @override
+  String get homeFrequent => 'Frequently bought';
+
+  @override
+  String get homeRecentOrders => 'Recent orders';
+
+  @override
+  String get seeAll => 'See all';
+
+  @override
+  String lastOrdered(int qty, String unit) {
+    return 'Last: $qty $unit';
+  }
+
+  @override
+  String get colItem => 'Item';
+
+  @override
+  String get colQty => 'Qty';
+
+  @override
+  String get colAmount => 'Amount';
+
+  @override
+  String get cheapestTag => 'Lowest price';
+
+  @override
+  String get addShort => 'Add';
 }
