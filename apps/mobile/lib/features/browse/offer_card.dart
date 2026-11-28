@@ -4,18 +4,28 @@ import 'package:wholesale_core/wholesale_core.dart';
 
 import '../../app/l10n_x.dart';
 import '../../app/providers.dart';
+import '../../app/theme.dart';
 import '../../widgets/common.dart';
 
 /// 一家批发商的一样商品。比价页（标题是批发商）和批发商页（标题是商品）都用这个。
-/// 看不到价钱时：模糊方块 + 「把这家加进免费名单」（不是付款按钮）。
+/// 价钱靠右；看不到价钱时：模糊方块 + 「把这家加进免费名单」（不是付款按钮）。
 class OfferCard extends ConsumerWidget {
-  const OfferCard({super.key, required this.offer, this.titleIsWholesaler = true, this.highlight = false});
+  const OfferCard({
+    super.key,
+    required this.offer,
+    this.titleIsWholesaler = true,
+    this.highlight = false,
+    this.showTerms = true,
+  });
 
   final Offer offer;
   final bool titleIsWholesaler;
 
   /// 比价页的第一名（最便宜）
   final bool highlight;
+
+  /// 送货天数、运费、最低消费（批发商页已经写在最上面，就不用每样都写）
+  final bool showTerms;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -25,72 +35,117 @@ class OfferCard extends ConsumerWidget {
     final unitName = l.unit(o.unit);
     final inCart = ref.watch(cartQuoteProvider).value?.qtyOf(o.productId) ?? 0;
     final scheme = Theme.of(context).colorScheme;
+    final tags = [
+      if (highlight) TagChip(label: l.cheapestTag, color: scheme.primary, icon: Icons.trending_down),
+      if (titleIsWholesaler && o.isFounding) TagChip(label: l.founding, color: AppTheme.caution, icon: Icons.star),
+      if (o.stockStatus == StockStatus.lowStock)
+        TagChip(label: l.lowStock, color: AppTheme.caution, icon: Icons.warning_amber),
+    ];
+    final smallButton = const Size(0, 40);
 
     return Card(
       shape: highlight
           ? RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(18),
-              side: BorderSide(color: scheme.primary, width: 3),
+              borderRadius: BorderRadius.circular(AppTheme.cardRadius),
+              side: BorderSide(color: scheme.primary, width: 1.5),
             )
           : null,
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(titleIsWholesaler ? o.wholesalerName : o.productName, style: t.titleLarge),
-            if (titleIsWholesaler) Text(o.productName, style: t.bodyMedium?.copyWith(color: Colors.black54)),
-            if (titleIsWholesaler && o.isFounding)
-              Text('★ ${l.founding}', style: t.bodyMedium?.copyWith(color: const Color(0xFFB26A00))),
-            const SizedBox(height: 10),
-            // ---- 价钱 ----
-            if (o.priceVisible) ...[
-              Text(
-                l.perUnit(formatSen(o.pricePerBaseUnitSen ?? 0)),
-                style: t.headlineSmall?.copyWith(color: scheme.primary),
-              ),
-              Text(
-                '${l.pricePerSellUnit(formatRm(o.priceSen ?? 0), unitName)} · ${l.packQty(unitName, o.packQty)}',
-                style: t.bodyLarge,
-              ),
-            ] else ...[
-              const LockedPrice(large: true),
-              Text(l.packQty(unitName, o.packQty), style: t.bodyLarge),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(titleIsWholesaler ? o.wholesalerName : o.productName, style: t.titleSmall),
+                      const SizedBox(height: 2),
+                      Text(
+                        titleIsWholesaler ? '${o.productName} · ${l.packQty(unitName, o.packQty)}' : l.packQty(unitName, o.packQty),
+                        style: t.bodySmall,
+                      ),
+                      if (titleIsWholesaler) ...[
+                        const SizedBox(height: 2),
+                        RatingLine(avg: o.ratingAvg, count: o.ratingCount),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                // ---- 价钱（靠右）----
+                if (o.priceVisible)
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        l.pricePerSellUnit(formatRm(o.priceSen ?? 0), unitName),
+                        style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+                      ),
+                      Text(
+                        l.perUnit(formatSen(o.pricePerBaseUnitSen ?? 0)),
+                        style: t.bodySmall?.copyWith(color: scheme.primary, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  )
+                else
+                  const LockedPrice(),
+              ],
+            ),
+            if (tags.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(spacing: 6, runSpacing: 6, children: tags),
             ],
             const SizedBox(height: 8),
-            if (titleIsWholesaler) RatingLine(avg: o.ratingAvg, count: o.ratingCount),
-            InfoLine(icon: Icons.local_shipping, text: l.leadTime(o.leadTimeDays)),
-            InfoLine(icon: Icons.production_quantity_limits, text: l.minOrderQty(o.minOrderQty, unitName)),
-            InfoLine(
-              icon: Icons.payments,
-              text: [
-                l.shippingFee(o.shippingFeeSen == 0 ? l.freeShipping : formatRm(o.shippingFeeSen)),
-                if (o.freeShippingMinSen != null) l.freeShippingOver(formatRm(o.freeShippingMinSen!)),
-              ].join(' · '),
-            ),
-            if (o.minOrderSen != null)
-              InfoLine(icon: Icons.shopping_cart_checkout, text: l.minOrderAmount(formatRm(o.minOrderSen!))),
-            if (o.stockStatus == StockStatus.lowStock)
-              InfoLine(icon: Icons.warning_amber, text: l.lowStock, color: const Color(0xFFB26A00)),
-            const SizedBox(height: 12),
+            if (showTerms)
+              InfoLine(
+                icon: Icons.local_shipping_outlined,
+                text: [
+                  l.leadTime(o.leadTimeDays),
+                  l.shippingFee(o.shippingFeeSen == 0 ? l.freeShipping : formatRm(o.shippingFeeSen)),
+                  if (o.freeShippingMinSen != null) l.freeShippingOver(formatRm(o.freeShippingMinSen!)),
+                  if (o.minOrderSen != null) l.minOrderAmount(formatRm(o.minOrderSen!)),
+                ].join(' · '),
+              ),
             // ---- 动作 ----
             if (!o.priceVisible)
-              _UnlockAction(wholesalerId: o.wholesalerId)
-            else if (o.stockStatus == StockStatus.outOfStock)
-              FilledButton(onPressed: null, child: Text(l.outOfStock))
-            else if (inCart > 0)
-              OutlinedButton.icon(
-                key: Key('offer-${o.productId}'),
-                icon: const Icon(Icons.shopping_cart),
-                onPressed: () => showAddToCart(context, o, inCart),
-                label: Text(l.inCart(inCart)),
-              )
+              Padding(padding: const EdgeInsets.only(top: 6), child: _UnlockAction(wholesalerId: o.wholesalerId))
             else
-              FilledButton.icon(
-                key: Key('offer-${o.productId}'),
-                icon: const Icon(Icons.add_shopping_cart),
-                onPressed: () => showAddToCart(context, o, 0),
-                label: Text(l.addToCart),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(l.minOrderQty(o.minOrderQty, unitName), style: t.bodySmall),
+                  ),
+                  const SizedBox(width: 8),
+                  if (o.stockStatus == StockStatus.outOfStock)
+                    FilledButton(
+                      style: FilledButton.styleFrom(minimumSize: smallButton),
+                      onPressed: null,
+                      child: Text(l.outOfStock),
+                    )
+                  else if (inCart > 0)
+                    OutlinedButton.icon(
+                      key: Key('offer-${o.productId}'),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: smallButton,
+                        side: BorderSide(color: scheme.primary),
+                      ),
+                      icon: const Icon(Icons.shopping_cart_outlined, size: 18),
+                      onPressed: () => showAddToCart(context, o, inCart),
+                      label: Text(l.inCart(inCart)),
+                    )
+                  else
+                    FilledButton.icon(
+                      key: Key('offer-${o.productId}'),
+                      style: FilledButton.styleFrom(minimumSize: smallButton),
+                      icon: const Icon(Icons.add_shopping_cart, size: 18),
+                      onPressed: () => showAddToCart(context, o, 0),
+                      label: Text(l.addToCart),
+                    ),
+                ],
               ),
           ],
         ),
@@ -119,12 +174,12 @@ class _UnlockActionState extends ConsumerState<_UnlockAction> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text(l.lockedHint, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Colors.black54)),
+        Text(l.lockedHint, style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: 8),
         if (hasSlot)
           OutlinedButton.icon(
             key: Key('unlock-${widget.wholesalerId}'),
-            icon: const Icon(Icons.lock_open),
+            icon: const Icon(Icons.lock_open, size: 18),
             onPressed: _busy
                 ? null
                 : () async {
@@ -143,7 +198,7 @@ class _UnlockActionState extends ConsumerState<_UnlockAction> {
             label: Text(l.chooseThisWholesaler),
           )
         else if (sub != null)
-          Text(l.freeSlotsFull, style: Theme.of(context).textTheme.bodyLarge),
+          Text(l.freeSlotsFull, style: Theme.of(context).textTheme.bodyMedium),
       ],
     );
   }
@@ -154,7 +209,6 @@ Future<void> showAddToCart(BuildContext context, Offer offer, int currentQty) {
   return showModalBottomSheet<void>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: true,
     builder: (_) => _AddToCartSheet(offer: offer, currentQty: currentQty),
   );
 }
@@ -196,30 +250,39 @@ class _AddToCartSheetState extends ConsumerState<_AddToCartSheet> {
     final unitName = l.unit(o.unit);
     return SafeArea(
       child: Padding(
-        padding: EdgeInsets.fromLTRB(20, 0, 20, 16 + MediaQuery.viewInsetsOf(context).bottom),
+        padding: EdgeInsets.fromLTRB(16, 0, 16, 12 + MediaQuery.viewInsetsOf(context).bottom),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(o.productName, style: t.titleLarge),
-            Text(o.wholesalerName, style: t.bodyLarge?.copyWith(color: Colors.black54)),
-            const SizedBox(height: 8),
+            const SizedBox(height: 2),
+            Text(o.wholesalerName, style: t.bodyMedium?.copyWith(color: AppTheme.textSecondary)),
+            const SizedBox(height: 4),
             Text(
               '${l.pricePerSellUnit(formatRm(o.priceSen ?? 0), unitName)} · ${l.packQty(unitName, o.packQty)}',
-              style: t.bodyLarge,
+              style: t.bodyMedium,
             ),
-            const SizedBox(height: 20),
-            Center(
-              child: QtyStepper(
-                key: const Key('qty-stepper'),
-                value: _qty,
-                min: o.minOrderQty,
-                unitLabel: unitName,
-                onChanged: _busy ? null : (v) => setState(() => _qty = v),
-              ),
+            const Divider(height: 28),
+            Row(
+              children: [
+                QtyStepper(
+                  key: const Key('qty-stepper'),
+                  value: _qty,
+                  min: o.minOrderQty,
+                  unitLabel: unitName,
+                  onChanged: _busy ? null : (v) => setState(() => _qty = v),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    formatRm((o.priceSen ?? 0) * _qty),
+                    textAlign: TextAlign.right,
+                    style: t.headlineSmall,
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 12),
-            Text(formatRm((o.priceSen ?? 0) * _qty), textAlign: TextAlign.center, style: t.headlineSmall),
             const SizedBox(height: 16),
             BusyButton(
               key: const Key('confirm-add'),

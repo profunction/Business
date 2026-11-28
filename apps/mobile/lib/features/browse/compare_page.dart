@@ -29,9 +29,9 @@ class ComparePage extends ConsumerWidget {
         builder: (list) {
           if (list.isEmpty) return Center(child: Text(l.noResults));
           return ListView.separated(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
             itemCount: list.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
+            separatorBuilder: (_, _) => const SizedBox(height: 10),
             itemBuilder: (_, i) =>
                 OfferCard(offer: list[i], highlight: i == 0 && list[i].priceVisible && list.length > 1),
           );

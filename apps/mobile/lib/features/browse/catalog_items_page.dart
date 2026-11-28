@@ -5,6 +5,7 @@ import 'package:wholesale_core/wholesale_core.dart';
 import '../../app/l10n_x.dart';
 import '../../app/providers.dart';
 import '../../app/router.dart';
+import '../../app/theme.dart';
 import '../../widgets/common.dart';
 import 'cart_button.dart';
 
@@ -31,11 +32,9 @@ class CatalogItemsPage extends ConsumerWidget {
           if (list.isEmpty) {
             return Center(child: Text(l.noResults, style: t.titleMedium));
           }
-          return ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: list.length,
-            separatorBuilder: (_, _) => const SizedBox(height: 12),
-            itemBuilder: (context, i) => _ItemCard(item: list[i]),
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+            children: [GroupedCard(children: [for (final i in list) _ItemRow(item: i)])],
           );
         },
       ),
@@ -43,8 +42,8 @@ class CatalogItemsPage extends ConsumerWidget {
   }
 }
 
-class _ItemCard extends StatelessWidget {
-  const _ItemCard({required this.item});
+class _ItemRow extends StatelessWidget {
+  const _ItemRow({required this.item});
 
   final CatalogItemSummary item;
 
@@ -53,46 +52,50 @@ class _ItemCard extends StatelessWidget {
     final l = context.l10n;
     final t = Theme.of(context).textTheme;
     final name = item.name.of(l.lang);
-    return Card(
-      child: InkWell(
-        key: Key('item-${item.id}'),
-        borderRadius: BorderRadius.circular(18),
-        onTap: () => context.pushWithQuery('/browse/item/${item.id}', {'title': name}),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(name, style: t.titleLarge),
-                    const SizedBox(height: 6),
-                    Text(l.sellerCount(item.offerCount), style: t.bodyLarge),
-                    const SizedBox(height: 4),
-                    if (item.minPricePerBaseUnitSen != null)
-                      Text(
-                        l.cheapestPerUnit(formatSen(item.minPricePerBaseUnitSen!)),
-                        style: t.titleMedium?.copyWith(color: Theme.of(context).colorScheme.primary),
-                      )
-                    else
-                      Row(
-                        children: [
-                          const Icon(Icons.lock, size: 20, color: Colors.black45),
-                          const SizedBox(width: 6),
-                          Text(l.priceLocked, style: t.bodyLarge?.copyWith(color: Colors.black54)),
-                        ],
-                      ),
-                    if (item.fastestLeadTimeDays != null) ...[
-                      const SizedBox(height: 4),
-                      Text(l.leadTime(item.fastestLeadTimeDays!), style: t.bodyMedium?.copyWith(color: Colors.black54)),
-                    ],
-                  ],
-                ),
+    return InkWell(
+      key: Key('item-${item.id}'),
+      onTap: () => context.pushWithQuery('/browse/item/${item.id}', {'title': name}),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 12, 6, 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: t.titleSmall),
+                  const SizedBox(height: 2),
+                  Text(
+                    [
+                      l.sellerCount(item.offerCount),
+                      if (item.fastestLeadTimeDays != null) l.leadTime(item.fastestLeadTimeDays!),
+                    ].join(' · '),
+                    style: t.bodySmall,
+                  ),
+                ],
               ),
-              const Icon(Icons.chevron_right, size: 32),
-            ],
-          ),
+            ),
+            const SizedBox(width: 8),
+            // 价钱靠右
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 130),
+              child: item.minPricePerBaseUnitSen != null
+                  ? Text(
+                      l.cheapestPerUnit(formatSen(item.minPricePerBaseUnitSen!)),
+                      textAlign: TextAlign.right,
+                      style: t.titleSmall?.copyWith(color: Theme.of(context).colorScheme.primary),
+                    )
+                  : Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.lock_outline, size: 16, color: AppTheme.textSecondary),
+                        const SizedBox(width: 4),
+                        Flexible(child: Text(l.priceLocked, style: t.bodySmall)),
+                      ],
+                    ),
+            ),
+            const Icon(Icons.chevron_right, size: 20, color: AppTheme.textSecondary),
+          ],
         ),
       ),
     );
